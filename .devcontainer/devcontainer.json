@@ -1,0 +1,19 @@
+{
+  "name": "Concord (server)",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "forwardPorts": [4000],
+  "portsAttributes": {
+    "4000": {
+      "label": "Concord API + Gateway",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    }
+  },
+  "postCreateCommand": "cp -n .env.example .env || true && npm install && npm run db:generate && npm run db:migrate && npm run db:seed",
+  "postAttachCommand": "echo 'Run the server with: npm run dev:server  (port 4000 is forwarded — set it PUBLIC, then point the desktop app at the forwarded URL)'",
+  "customizations": {
+    "vscode": {
+      "extensions": ["Prisma.prisma", "dbaeumer.vscode-eslint"]
+    }
+  }
+}

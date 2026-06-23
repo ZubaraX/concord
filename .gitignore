@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+npm-debug.log*
+.DS_Store
+coverage/
+.vite/
+
+# Local SQLite database + migrations data
+server/prisma/*.db
+server/prisma/*.db-journal
+data/
+uploads/
+
+# Electron build output (large installers; not source)
+client/release/
+release/
+
+# Keep client/build/ (icon source assets) tracked.

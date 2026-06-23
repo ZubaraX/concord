@@ -1,0 +1,47 @@
+// Centralized, validated configuration. Everything is env-driven so the app
+// is fully self-hostable per the spec.
+import { z } from "zod";
+import dotenv from "dotenv";
+import { resolve } from "node:path";
+
+// Load the repo-root .env (server runs from server/), then any local override.
+dotenv.config({ path: resolve(process.cwd(), "../.env") });
+dotenv.config();
+
+const schema = z.object({
+  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  SERVER_PORT: z.coerce.number().default(4000),
+  CLIENT_URL: z.string().default("http://localhost:5173"),
+  PUBLIC_URL: z.string().default("http://localhost:4000"),
+
+  JWT_ACCESS_SECRET: z.string().min(8).default("dev_access_secret_change_me"),
+  JWT_REFRESH_SECRET: z.string().min(8).default("dev_refresh_secret_change_me"),
+  ACCESS_TOKEN_TTL: z.coerce.number().default(900),
+  REFRESH_TOKEN_TTL: z.coerce.number().default(2_592_000),
+
+  // Local SQLite by default — no external database service required.
+  DATABASE_URL: z.string().default("file:./dev.db"),
+
+  // Storage: local filesystem by default; point at S3/MinIO for production.
+  STORAGE_DIR: z.string().default("./uploads"),
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().default("us-east-1"),
+  S3_ACCESS_KEY: z.string().optional(),
+  S3_SECRET_KEY: z.string().optional(),
+  S3_BUCKET: z.string().default("concord-media"),
+
+  // The "no limits" knobs. 0 = unlimited.
+  MAX_MESSAGE_LENGTH: z.coerce.number().default(100_000),
+  MAX_UPLOAD_BYTES: z.coerce.number().default(0),
+});
+
+const parsed = schema.safeParse(process.env);
+
+if (!parsed.success) {
+  console.error("✖ Invalid environment configuration:");
+  console.error(parsed.error.flatten().fieldErrors);
+  process.exit(1);
+}
+
+export const config = parsed.data;
+export const isProd = config.NODE_ENV === "production";

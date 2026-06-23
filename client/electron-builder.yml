@@ -1,0 +1,35 @@
+appId: dev.concord.desktop
+productName: Concord
+copyright: Concord (open source)
+# Pinned because electron is hoisted to the workspace-root node_modules,
+# so electron-builder can't auto-detect the version from client/.
+electronVersion: 33.4.11
+directories:
+  output: release
+  buildResources: build
+# The renderer is fully bundled by Vite into dist/, so no node_modules need
+# packaging — only the built app + the Electron main scripts.
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+asar: true
+# Renderer is fully bundled by Vite — never rebuild/install node modules.
+npmRebuild: false
+buildDependenciesFromSource: false
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+    - portable
+mac:
+  target:
+    - dmg
+  category: public.app-category.social-networking
+linux:
+  target:
+    - AppImage
+  category: Network
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

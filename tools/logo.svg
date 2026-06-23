@@ -1,0 +1,22 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5865f2"/>
+      <stop offset="1" stop-color="#4044ed"/>
+    </linearGradient>
+  </defs>
+  <!-- Blurple squircle -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#bg)"/>
+  <!-- Chat bubble -->
+  <g fill="#ffffff">
+    <rect x="236" y="268" width="552" height="392" rx="96"/>
+    <!-- tail -->
+    <path d="M324 636 L324 792 L452 660 Z"/>
+  </g>
+  <!-- Three dots -->
+  <g fill="#5865f2">
+    <circle cx="404" cy="464" r="40"/>
+    <circle cx="512" cy="464" r="40"/>
+    <circle cx="620" cy="464" r="40"/>
+  </g>
+</svg>
