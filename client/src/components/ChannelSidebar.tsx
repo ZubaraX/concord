@@ -8,7 +8,7 @@ import type { Channel, Guild } from "../types";
 import UserPanel from "./UserPanel";
 
 export default function ChannelSidebar() {
-  const { currentGuildId, currentChannelId, setChannel } = useUI();
+  const { currentGuildId, currentChannelId, setChannel, openModal } = useUI();
   const qc = useQueryClient();
 
   const { data: guild } = useQuery<Guild>({
@@ -54,10 +54,17 @@ export default function ChannelSidebar() {
 
   return (
     <aside className="flex w-60 flex-col bg-discord-sidebar">
-      <button className="flex h-12 items-center justify-between border-b border-black/20 px-4 font-semibold shadow-sm transition hover:bg-discord-hover">
+      <div className="flex h-12 items-center justify-between border-b border-black/20 px-4 font-semibold shadow-sm">
         <span className="truncate">{guild?.name ?? "…"}</span>
-        <span className="text-discord-muted">⌄</span>
-      </button>
+        <button
+          onClick={() => openModal("invite")}
+          title="Invite People"
+          className="rounded p-1 text-discord-muted transition hover:bg-discord-hover hover:text-white"
+        >
+          {/* person-plus glyph */}
+          <span className="text-base">＋👤</span>
+        </button>
+      </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-3">
         {grouped.map((group) => (

@@ -13,6 +13,9 @@ export const getIO = (): Server => {
   return io;
 };
 
+/** Non-throwing accessor for code paths that may run before the gateway boots. */
+export const getIOorNull = (): Server | null => io;
+
 export const channelRoom = (channelId: string) => `channel:${channelId}`;
 export const guildRoom = (guildId: string) => `guild:${guildId}`;
 export const userRoom = (userId: string) => `user:${userId}`;

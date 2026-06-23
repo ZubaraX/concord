@@ -23,14 +23,26 @@ export class MessageError extends Error {
   }
 }
 
+export interface AttachmentInput {
+  url: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  width?: number | null;
+  height?: number | null;
+}
+
 export async function createMessage(opts: {
   channelId: string;
   authorId: string;
   content: string;
   replyToId?: string;
+  attachments?: AttachmentInput[];
 }) {
   const content = opts.content?.trim() ?? "";
-  if (!content) throw new MessageError(400, "Message is empty");
+  const attachments = opts.attachments ?? [];
+  // A message must have text or at least one attachment.
+  if (!content && attachments.length === 0) throw new MessageError(400, "Message is empty");
   if (content.length > config.MAX_MESSAGE_LENGTH) {
     throw new MessageError(413, `Message exceeds ${config.MAX_MESSAGE_LENGTH} chars`);
   }
@@ -49,6 +61,18 @@ export async function createMessage(opts: {
       authorId: opts.authorId,
       content,
       replyToId: opts.replyToId,
+      attachments: attachments.length
+        ? {
+            create: attachments.map((a) => ({
+              url: a.url,
+              filename: a.filename,
+              size: a.size,
+              mimeType: a.mimeType,
+              width: a.width ?? null,
+              height: a.height ?? null,
+            })),
+          }
+        : undefined,
     },
     include: messageInclude,
   });

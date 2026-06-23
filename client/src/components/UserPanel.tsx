@@ -1,9 +1,11 @@
 import { useAuth } from "../store/auth";
+import { useUI } from "../store/ui";
 import Avatar from "./Avatar";
 
-// Bottom-left user panel: avatar, name, mute/deafen/settings (logout for now).
+// Bottom-left user panel: avatar, name, custom status, settings gear.
 export default function UserPanel() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const { openModal } = useUI();
   if (!user) return null;
 
   return (
@@ -14,15 +16,15 @@ export default function UserPanel() {
           {user.displayName ?? user.username}
         </div>
         <div className="truncate text-xs text-discord-muted">
-          {user.username}#{user.discriminator}
+          {user.customStatus || `${user.username}#${user.discriminator}`}
         </div>
       </div>
       <button
-        onClick={() => logout()}
-        title="Log out"
+        onClick={() => openModal("settings")}
+        title="User Settings"
         className="rounded p-1.5 text-discord-muted transition hover:bg-discord-hover hover:text-white"
       >
-        ⏻
+        ⚙
       </button>
     </div>
   );

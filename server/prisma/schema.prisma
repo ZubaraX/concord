@@ -65,8 +65,22 @@ model Guild {
   channels    Channel[]
   members     GuildMember[]
   roles       Role[]
+  invites     Invite[]
 
   @@index([ownerId])
+}
+
+model Invite {
+  code      String    @id
+  guildId   String
+  guild     Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  inviterId String
+  uses      Int       @default(0)
+  maxUses   Int       @default(0) // 0 = unlimited
+  expiresAt DateTime?             // null = never expires
+  createdAt DateTime  @default(now())
+
+  @@index([guildId])
 }
 
 model Role {

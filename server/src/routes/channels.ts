@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../lib/db.js";
 import { authenticate } from "../lib/auth.js";
+import { emitToGuild } from "../services/guilds.js";
 
 const createBody = z.object({
   guildId: z.string(),
@@ -35,6 +36,7 @@ export async function channelRoutes(app: FastifyInstance) {
     const channel = await prisma.channel.create({
       data: { guildId, position: count, ...data },
     });
+    emitToGuild(guildId, "guild:channelsUpdate", { guildId });
     return reply.code(201).send(channel);
   });
 
@@ -56,6 +58,7 @@ export async function channelRoutes(app: FastifyInstance) {
       .parse(req.body ?? {});
 
     const updated = await prisma.channel.update({ where: { id: channelId }, data: body });
+    emitToGuild(channel.guildId, "guild:channelsUpdate", { guildId: channel.guildId });
     return reply.send(updated);
   });
 
@@ -67,6 +70,7 @@ export async function channelRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: "Not a member" });
     }
     await prisma.channel.delete({ where: { id: channelId } });
+    emitToGuild(channel.guildId, "guild:channelsUpdate", { guildId: channel.guildId });
     return reply.code(204).send();
   });
 }

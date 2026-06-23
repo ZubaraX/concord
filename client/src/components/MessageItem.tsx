@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../store/auth";
-import type { Message } from "../types";
+import { serverPath } from "../lib/serverUrl";
+import type { Attachment, Message } from "../types";
 import Avatar from "./Avatar";
 import { renderMarkdown } from "../lib/markdown";
 
@@ -60,10 +61,20 @@ function MessageItem({
           </div>
         )}
 
-        <div className="whitespace-pre-wrap break-words text-discord-text">
-          {body}
-          {message.editedAt && <span className="ml-1 text-[10px] text-discord-faint">(edited)</span>}
-        </div>
+        {message.content && (
+          <div className="whitespace-pre-wrap break-words text-discord-text">
+            {body}
+            {message.editedAt && <span className="ml-1 text-[10px] text-discord-faint">(edited)</span>}
+          </div>
+        )}
+
+        {message.attachments?.length > 0 && (
+          <div className="mt-1 flex flex-col gap-2">
+            {message.attachments.map((a) => (
+              <AttachmentView key={a.id} attachment={a} />
+            ))}
+          </div>
+        )}
       </div>
 
       {hover && mine && (
@@ -77,6 +88,49 @@ function MessageItem({
       )}
     </div>
   );
+}
+
+function AttachmentView({ attachment }: { attachment: Attachment }) {
+  const src = serverPath(attachment.url);
+  const isImage = attachment.mimeType?.startsWith("image/");
+  const isVideo = attachment.mimeType?.startsWith("video/");
+  const isAudio = attachment.mimeType?.startsWith("audio/");
+
+  if (isImage) {
+    return (
+      <a href={src} target="_blank" rel="noreferrer">
+        <img src={src} alt={attachment.filename} className="max-h-96 max-w-full rounded-lg object-contain" loading="lazy" />
+      </a>
+    );
+  }
+  if (isVideo) {
+    return <video src={src} controls className="max-h-96 max-w-full rounded-lg" />;
+  }
+  if (isAudio) {
+    return <audio src={src} controls className="w-72" />;
+  }
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noreferrer"
+      download
+      className="flex w-fit max-w-md items-center gap-3 rounded-lg bg-discord-card px-3 py-2.5 hover:bg-discord-hover"
+    >
+      <span className="text-2xl">📄</span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm text-[#00a8fc]">{attachment.filename}</span>
+        <span className="block text-xs text-discord-faint">{prettySize(attachment.size)}</span>
+      </span>
+    </a>
+  );
+}
+
+function prettySize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
 // Re-render a message only when its identity, content, edit state, or grouping

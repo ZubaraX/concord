@@ -62,3 +62,24 @@ export async function api<T = unknown>(
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
+export interface UploadedFile {
+  url: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  width?: number | null;
+  height?: number | null;
+}
+
+/** Upload a single file (no size cap server-side). Returns attachment metadata. */
+export async function uploadFile(file: File): Promise<UploadedFile> {
+  const form = new FormData();
+  form.append("file", file);
+  const headers = new Headers();
+  if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
+  // Note: do NOT set Content-Type; the browser adds the multipart boundary.
+  const res = await fetch(serverPath("/api/upload"), { method: "POST", body: form, headers });
+  if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+  return res.json();
+}

@@ -27,8 +27,20 @@ export async function messageRoutes(app: FastifyInstance) {
   // POST a message (REST path; the socket gateway shares createMessage()).
   app.post("/channels/:channelId/messages", async (req, reply) => {
     const { channelId } = req.params as { channelId: string };
+    const attachmentSchema = z.object({
+      url: z.string(),
+      filename: z.string(),
+      size: z.number().int(),
+      mimeType: z.string(),
+      width: z.number().int().nullable().optional(),
+      height: z.number().int().nullable().optional(),
+    });
     const body = z
-      .object({ content: z.string(), replyToId: z.string().optional() })
+      .object({
+        content: z.string().default(""),
+        replyToId: z.string().optional(),
+        attachments: z.array(attachmentSchema).optional(),
+      })
       .safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
 
@@ -38,6 +50,7 @@ export async function messageRoutes(app: FastifyInstance) {
         authorId: req.userId,
         content: body.data.content,
         replyToId: body.data.replyToId,
+        attachments: body.data.attachments,
       });
       getIO().to(channelRoom(channelId)).emit("message:new", message);
       return reply.code(201).send(message);

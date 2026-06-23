@@ -1,31 +1,10 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import type { Guild } from "../types";
 
 // The 72px server rail: round guild icons, add-server, home.
 export default function ServerRail({ guilds }: { guilds: Guild[] }) {
-  const { currentGuildId, setGuild } = useUI();
-  const qc = useQueryClient();
-  const [creating, setCreating] = useState(false);
-
-  async function createGuild() {
-    const name = window.prompt("Server name?")?.trim();
-    if (!name) return;
-    setCreating(true);
-    try {
-      const guild = await api<Guild>("/api/guilds", {
-        method: "POST",
-        body: JSON.stringify({ name }),
-      });
-      await qc.invalidateQueries({ queryKey: ["guilds"] });
-      setGuild(guild.id);
-    } finally {
-      setCreating(false);
-    }
-  }
+  const { currentGuildId, setGuild, openModal } = useUI();
 
   return (
     <nav className="flex w-[72px] flex-col items-center gap-2 bg-discord-rail py-3">
@@ -52,7 +31,7 @@ export default function ServerRail({ guilds }: { guilds: Guild[] }) {
         ))}
       </div>
 
-      <RailButton label="Add a Server" onClick={createGuild} accent disabled={creating}>
+      <RailButton label="Add or Join a Server" onClick={() => openModal("addServer")} accent>
         <span className="text-2xl leading-none text-discord-green">+</span>
       </RailButton>
     </nav>

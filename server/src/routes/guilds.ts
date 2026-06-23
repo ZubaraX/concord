@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { prisma } from "../lib/db.js";
 import { authenticate } from "../lib/auth.js";
 import { DEFAULT_EVERYONE_PERMISSIONS, ALL_PERMISSIONS } from "../lib/permissions.js";
+import { joinGuild, joinGuildRoom } from "../services/guilds.js";
 
 const createBody = z.object({
   name: z.string().min(1).max(100),
@@ -76,6 +78,8 @@ export async function guildRoutes(app: FastifyInstance) {
       },
     });
 
+    // Creator's live socket should immediately receive this guild's events.
+    joinGuildRoom(guild.id, req.userId);
     return reply.code(201).send(guild);
   });
 
@@ -114,25 +118,36 @@ export async function guildRoutes(app: FastifyInstance) {
     return reply.send(guild);
   });
 
-  // Join an existing guild (open join for the MVP; invites come later).
+  // Join an existing guild directly by id (open join).
   app.post("/:guildId/join", async (req, reply) => {
     const { guildId } = req.params as { guildId: string };
     const guild = await prisma.guild.findUnique({ where: { id: guildId } });
     if (!guild) return reply.code(404).send({ error: "Not found" });
+    const member = await joinGuild(guildId, req.userId);
+    return reply.code(201).send(member);
+  });
 
-    const everyone = await prisma.role.findFirst({
-      where: { guildId, isDefault: true },
-    });
-
-    const member = await prisma.guildMember.upsert({
+  // Create an invite code for a guild (members only). No expiry/limit by default.
+  app.post("/:guildId/invites", async (req, reply) => {
+    const { guildId } = req.params as { guildId: string };
+    const isMember = await prisma.guildMember.findUnique({
       where: { guildId_userId: { guildId, userId: req.userId } },
-      update: {},
-      create: {
+    });
+    if (!isMember) return reply.code(403).send({ error: "Not a member" });
+
+    const body = z
+      .object({ maxUses: z.number().int().min(0).optional(), expiresInSec: z.number().int().min(0).optional() })
+      .parse(req.body ?? {});
+
+    const invite = await prisma.invite.create({
+      data: {
+        code: nanoid(8),
         guildId,
-        userId: req.userId,
-        roles: everyone ? { connect: { id: everyone.id } } : undefined,
+        inviterId: req.userId,
+        maxUses: body.maxUses ?? 0,
+        expiresAt: body.expiresInSec ? new Date(Date.now() + body.expiresInSec * 1000) : null,
       },
     });
-    return reply.code(201).send(member);
+    return reply.code(201).send({ code: invite.code });
   });
 }

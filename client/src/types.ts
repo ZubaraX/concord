@@ -15,6 +15,10 @@ export interface User {
   email?: string;
   displayName: string | null;
   avatarUrl: string | null;
+  bannerUrl?: string | null;
+  accentColor?: string | null;
+  bio?: string | null;
+  customStatus?: string | null;
   status?: PresenceStatus;
 }
 

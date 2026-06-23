@@ -9,6 +9,7 @@ interface AuthState {
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>;
+  updateProfile: (patch: Partial<User>) => Promise<void>;
 }
 
 export const useAuth = create<AuthState>((set) => ({
@@ -51,5 +52,13 @@ export const useAuth = create<AuthState>((set) => ({
       tokens.clear();
       set({ user: null, loading: false });
     }
+  },
+
+  async updateProfile(patch) {
+    const { user } = await api<{ user: User }>("/api/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    set({ user });
   },
 }));

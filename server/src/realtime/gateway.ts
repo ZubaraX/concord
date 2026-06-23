@@ -71,6 +71,14 @@ export function attachGateway(app: FastifyInstance) {
       channelId: string;
       content: string;
       replyToId?: string;
+      attachments?: {
+        url: string;
+        filename: string;
+        size: number;
+        mimeType: string;
+        width?: number | null;
+        height?: number | null;
+      }[];
     }
     socket.on("message:send", async (payload: SendPayload, ack?: (res: unknown) => void) => {
       try {
@@ -79,6 +87,7 @@ export function attachGateway(app: FastifyInstance) {
           authorId: userId,
           content: payload?.content,
           replyToId: payload?.replyToId,
+          attachments: payload?.attachments,
         });
         io.to(channelRoom(message.channelId)).emit("message:new", message);
         ack?.({ ok: true, message });
