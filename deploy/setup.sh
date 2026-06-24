@@ -43,7 +43,8 @@ if [ ! -f .env ]; then
 fi
 
 echo "▶ Installing dependencies + database…"
-npm install --no-fund --no-audit
+# Only the server workspace — avoids pulling the desktop/Electron toolchain.
+npm install --workspace server --no-fund --no-audit
 npm run db:generate
 npm run db:deploy
 npm run db:seed || true   # ok if already seeded
