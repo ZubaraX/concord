@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { api } from "../api/client";
 import { useUI } from "../store/ui";
@@ -7,11 +7,12 @@ import { useVoice } from "../store/voice";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen } from "../lib/voice";
 import type { Channel, Guild } from "../types";
 import UserPanel from "./UserPanel";
+import CreateChannelModal from "./CreateChannelModal";
 
 export default function ChannelSidebar() {
   const { currentGuildId, currentChannelId, setChannel, openModal } = useUI();
   const voice = useVoice();
-  const qc = useQueryClient();
+  const [createCtx, setCreateCtx] = useState<{ type: "TEXT" | "VOICE"; parentId?: string } | null>(null);
 
   const { data: guild } = useQuery<Guild>({
     queryKey: ["guild", currentGuildId],
@@ -38,15 +39,7 @@ export default function ChannelSidebar() {
     }
   }, [currentGuildId, currentChannelId, channels, setChannel]);
 
-  async function createChannel(type: "TEXT" | "VOICE", parentId?: string) {
-    const name = window.prompt(`New ${type.toLowerCase()} channel name?`)?.trim();
-    if (!name || !currentGuildId) return;
-    await api("/api/channels", {
-      method: "POST",
-      body: JSON.stringify({ guildId: currentGuildId, name, type, parentId }),
-    });
-    qc.invalidateQueries({ queryKey: ["guild", currentGuildId] });
-  }
+  const openCreate = (type: "TEXT" | "VOICE", parentId?: string) => setCreateCtx({ type, parentId });
 
   if (!currentGuildId) {
     return (
@@ -83,7 +76,7 @@ export default function ChannelSidebar() {
                 </span>
                 <button
                   onClick={() =>
-                    createChannel(
+                    openCreate(
                       group.category!.name.toLowerCase().includes("voice") ? "VOICE" : "TEXT",
                       group.category!.id
                     )
@@ -115,12 +108,21 @@ export default function ChannelSidebar() {
         ))}
 
         <button
-          onClick={() => createChannel("TEXT")}
+          onClick={() => openCreate("TEXT")}
           className="mt-2 w-full rounded px-2 py-1 text-left text-sm text-discord-muted hover:bg-discord-hover hover:text-white"
         >
           + Create channel
         </button>
       </div>
+
+      {createCtx && currentGuildId && (
+        <CreateChannelModal
+          guildId={currentGuildId}
+          defaultType={createCtx.type}
+          parentId={createCtx.parentId}
+          onClose={() => setCreateCtx(null)}
+        />
+      )}
 
       {voice.channelId && (
         <VoiceControlBar
