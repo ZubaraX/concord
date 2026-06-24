@@ -6,12 +6,13 @@ import { useSettings } from "../store/settings";
 // shows a grid of any screen-share video. Click a tile to expand; expanded
 // view has a true-fullscreen button.
 export default function VoiceOverlay() {
-  const { remotes, localScreen, screenOn, effects, channelId } = useVoice();
+  const { remotes, localScreen, localCamera, screenOn, cameraOn, effects, channelId } = useVoice();
   const [expanded, setExpanded] = useState<{ stream: MediaStream; label: string } | null>(null);
 
   const audioStreams = remotes.filter((r) => r.audio);
-  const videoTiles = remotes.filter((r) => r.video);
-  const showGrid = screenOn || videoTiles.length > 0;
+  const screenTiles = remotes.filter((r) => r.video);
+  const cameraTiles = remotes.filter((r) => r.camera);
+  const showGrid = screenOn || cameraOn || screenTiles.length > 0 || cameraTiles.length > 0;
 
   return (
     <>
@@ -41,8 +42,14 @@ export default function VoiceOverlay() {
           {screenOn && localScreen && (
             <VideoTile stream={localScreen} label="Your screen" muted onExpand={setExpanded} />
           )}
-          {videoTiles.map((r) => (
-            <VideoTile key={r.socketId} stream={r.video!} label="Screen share" onExpand={setExpanded} />
+          {cameraOn && localCamera && (
+            <VideoTile stream={localCamera} label="You" muted onExpand={setExpanded} />
+          )}
+          {screenTiles.map((r) => (
+            <VideoTile key={`s-${r.socketId}`} stream={r.video!} label="Screen share" onExpand={setExpanded} />
+          ))}
+          {cameraTiles.map((r) => (
+            <VideoTile key={`c-${r.socketId}`} stream={r.camera!} label="Camera" onExpand={setExpanded} />
           ))}
         </div>
       )}

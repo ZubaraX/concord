@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
-import { joinVoice, leaveVoice, toggleMute, toggleScreen, sendVoiceEmoji } from "../lib/voice";
+import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, sendVoiceEmoji } from "../lib/voice";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
@@ -120,37 +120,16 @@ export default function ChannelSidebar() {
       )}
 
       {voice.channelId && (
-        <VoiceControlBar
-          channelName={channels.find((c) => c.id === voice.channelId)?.name ?? "Voice"}
-          muted={voice.muted}
-          screenOn={voice.screenOn}
-          onMute={toggleMute}
-          onScreen={toggleScreen}
-          onLeave={leaveVoice}
-        />
+        <VoiceControlBar channelName={channels.find((c) => c.id === voice.channelId)?.name ?? "Voice"} />
       )}
       <UserPanel />
     </aside>
   );
 }
 
-function VoiceControlBar({
-  channelName,
-  muted,
-  screenOn,
-  onMute,
-  onScreen,
-  onLeave,
-}: {
-  channelName: string;
-  muted: boolean;
-  screenOn: boolean;
-  onMute: () => void;
-  onScreen: () => void;
-  onLeave: () => void;
-}) {
+function VoiceControlBar({ channelName }: { channelName: string }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const conn = useVoice((s) => s.connState);
+  const { connState: conn, muted, screenOn, cameraOn } = useVoice();
   const status =
     conn === "failed"
       ? { color: "bg-discord-danger", text: "No media — needs TURN", textColor: "text-discord-danger" }
@@ -171,7 +150,7 @@ function VoiceControlBar({
           <div className="truncate text-xs text-discord-muted">🔊 {channelName}</div>
         </div>
         <button
-          onClick={onLeave}
+          onClick={leaveVoice}
           title="Disconnect"
           className="flex h-8 w-8 items-center justify-center rounded-full bg-discord-danger/90 text-white transition hover:bg-discord-danger"
         >
@@ -179,11 +158,14 @@ function VoiceControlBar({
         </button>
       </div>
 
-      <div className="mt-2 grid grid-cols-3 gap-1.5">
-        <CallBtn active={muted} danger={muted} onClick={onMute} label={muted ? "Unmute" : "Mute"}>
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
+        <CallBtn active={muted} danger={muted} onClick={toggleMute} label={muted ? "Unmute" : "Mute"}>
           {muted ? "🔇" : "🎙"}
         </CallBtn>
-        <CallBtn active={screenOn} onClick={onScreen} label={screenOn ? "Stop" : "Share"}>
+        <CallBtn active={cameraOn} onClick={toggleCamera} label="Cam">
+          📷
+        </CallBtn>
+        <CallBtn active={screenOn} onClick={toggleScreen} label={screenOn ? "Stop" : "Share"}>
           🖥
         </CallBtn>
         <CallBtn active={emojiOpen} onClick={() => setEmojiOpen((v) => !v)} label="React">
@@ -324,14 +306,7 @@ function HomeSidebar({
         })}
       </div>
       {voice.channelId && (
-        <VoiceControlBar
-          channelName={dms.find((d) => d.id === voice.channelId)?.name ?? "Call"}
-          muted={voice.muted}
-          screenOn={voice.screenOn}
-          onMute={toggleMute}
-          onScreen={toggleScreen}
-          onLeave={leaveVoice}
-        />
+        <VoiceControlBar channelName={dms.find((d) => d.id === voice.channelId)?.name ?? "Call"} />
       )}
       <UserPanel />
     </aside>

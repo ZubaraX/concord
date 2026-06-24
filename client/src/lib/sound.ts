@@ -39,6 +39,13 @@ export function playRing() {
   }
 }
 
+// Looping ring for incoming calls. Returns a stop function.
+export function startRing(): () => void {
+  playRing();
+  const iv = setInterval(playRing, 2500);
+  return () => clearInterval(iv);
+}
+
 export function desktopNotify(title: string, body?: string) {
   try {
     if (typeof Notification === "undefined") return;

@@ -21,9 +21,17 @@ let captureCtx: AudioContext | null = null;
 let captureGain: GainNode | null = null;
 let captureNode: ScriptProcessorNode | null = null;
 let silentSink: GainNode | null = null;
-let screenStream: MediaStream | null = null;
-let screenRecorder: MediaRecorder | null = null;
-let firstScreenChunk = true;
+
+// Outgoing video senders (screen + webcam), each its own capture + recorder.
+interface VideoSender {
+  stream: MediaStream | null;
+  recorder: MediaRecorder | null;
+  first: boolean;
+}
+const senders: Record<"screen" | "camera", VideoSender> = {
+  screen: { stream: null, recorder: null, first: true },
+  camera: { stream: null, recorder: null, first: true },
+};
 
 let micEnabled = true; // gates sending (mute / push-to-talk)
 let pttDown = false;
@@ -47,6 +55,7 @@ interface AudioPlayer {
   gain: GainNode;
   nextTime: number;
 }
+type VideoKind = "screen" | "camera";
 interface VideoPlayer {
   ms: MediaSource;
   sb: SourceBuffer | null;
@@ -54,9 +63,11 @@ interface VideoPlayer {
   el: HTMLVideoElement;
   url: string;
   userId: string;
+  kind: VideoKind;
 }
 const audioPlayers = new Map<string, AudioPlayer>();
-const videoPlayers = new Map<string, VideoPlayer>();
+const videoPlayers = new Map<string, VideoPlayer>(); // key: `${from}|${kind}`
+const vpKey = (from: string, kind: VideoKind) => `${from}|${kind}`;
 
 // ── Remote tiles (so VoiceOverlay renders screen video unchanged) ────────────
 function patchRemote(socketId: string, userId: string, patch: Partial<RemoteEntry>) {
@@ -68,7 +79,7 @@ function dropRemote(socketId: string) {
   st().set({ remotes: st().remotes.filter((r) => r.socketId !== socketId) });
 }
 
-function emitChunk(kind: "audio" | "screen", data: ArrayBuffer, extra: { sampleRate?: number; first?: boolean } = {}) {
+function emitChunk(kind: "audio" | VideoKind, data: ArrayBuffer, extra: { sampleRate?: number; first?: boolean } = {}) {
   const channelId = st().channelId;
   if (channelId) getSocket()?.emit("media:chunk", { channelId, kind, data, ...extra });
 }
@@ -200,11 +211,12 @@ function appendVideo(vp: VideoPlayer) {
   }
 }
 
-function playScreen(from: string, userId: string, first: boolean, data: ArrayBuffer) {
-  let vp = videoPlayers.get(from);
+function playVideo(from: string, userId: string, kind: VideoKind, first: boolean, data: ArrayBuffer) {
+  const key = vpKey(from, kind);
+  let vp = videoPlayers.get(key);
   // A fresh "first" chunk means a new recorder session → rebuild the player.
   if (first && vp) {
-    stopScreenPlayer(from);
+    stopVideoPlayer(from, kind);
     vp = undefined;
   }
   if (!vp) {
@@ -215,8 +227,8 @@ function playScreen(from: string, userId: string, first: boolean, data: ArrayBuf
     el.autoplay = true;
     (el as HTMLVideoElement & { playsInline: boolean }).playsInline = true;
     el.src = URL.createObjectURL(ms);
-    const player: VideoPlayer = { ms, sb: null, queue: [], el, url: el.src, userId };
-    videoPlayers.set(from, player);
+    const player: VideoPlayer = { ms, sb: null, queue: [], el, url: el.src, userId, kind };
+    videoPlayers.set(key, player);
     ms.addEventListener("sourceopen", () => {
       try {
         player.sb = ms.addSourceBuffer('video/webm;codecs="vp8"');
@@ -228,10 +240,9 @@ function playScreen(from: string, userId: string, first: boolean, data: ArrayBuf
       }
     });
     el.play().catch(() => {});
-    // Expose the decoded frames as a MediaStream for the existing video tile.
     try {
       const stream = (el as HTMLVideoElement & { captureStream: () => MediaStream }).captureStream();
-      patchRemote(from, userId, { video: stream });
+      patchRemote(from, userId, kind === "camera" ? { camera: stream } : { video: stream });
     } catch {
       /* captureStream unsupported */
     }
@@ -241,8 +252,9 @@ function playScreen(from: string, userId: string, first: boolean, data: ArrayBuf
   appendVideo(vp);
 }
 
-function stopScreenPlayer(from: string) {
-  const vp = videoPlayers.get(from);
+function stopVideoPlayer(from: string, kind: VideoKind) {
+  const key = vpKey(from, kind);
+  const vp = videoPlayers.get(key);
   if (!vp) return;
   try {
     vp.el.pause();
@@ -250,8 +262,13 @@ function stopScreenPlayer(from: string) {
   } catch {
     /* ignore */
   }
-  videoPlayers.delete(from);
-  patchRemote(from, vp.userId, { video: undefined });
+  videoPlayers.delete(key);
+  patchRemote(from, vp.userId, kind === "camera" ? { camera: undefined } : { video: undefined });
+}
+
+function stopAllVideoPlayers(from: string) {
+  stopVideoPlayer(from, "screen");
+  stopVideoPlayer(from, "camera");
 }
 
 // ── Auto-leave when alone ────────────────────────────────────────────────────
@@ -282,16 +299,19 @@ export function initVoice() {
 
   socket.on("voice:peerLeft", ({ socketId }: { socketId: string }) => {
     stopAudioPlayer(socketId);
-    stopScreenPlayer(socketId);
+    stopAllVideoPlayers(socketId);
     dropRemote(socketId);
   });
 
-  // Someone joined while we're sharing → restart the recorder so they get a
-  // fresh init segment (PCM audio needs no init, so only screen matters).
+  // Someone joined while we're sharing → restart recorders so they get a
+  // fresh init segment (PCM audio needs no init, only video does).
   socket.on("voice:peerJoined", () => {
-    if (st().screenOn) {
+    if (st().screenOn || st().cameraOn) {
       if (restartTimer) clearTimeout(restartTimer);
-      restartTimer = setTimeout(() => restartScreenRecorder(), 400);
+      restartTimer = setTimeout(() => {
+        if (st().screenOn) restartRecorder("screen");
+        if (st().cameraOn) restartRecorder("camera");
+      }, 400);
     }
   });
 
@@ -312,17 +332,17 @@ export function initVoice() {
   // Incoming media from other participants.
   socket.on(
     "media:chunk",
-    (p: { from: string; userId: string; kind: "audio" | "screen"; sampleRate?: number; first?: boolean; data: ArrayBuffer }) => {
+    (p: { from: string; userId: string; kind: "audio" | VideoKind; sampleRate?: number; first?: boolean; data: ArrayBuffer }) => {
       if (!st().channelId) return;
       const data = p.data instanceof ArrayBuffer ? p.data : (p.data as { buffer?: ArrayBuffer })?.buffer;
       if (!data) return;
       if (p.kind === "audio") playAudio(p.from, p.sampleRate ?? 48000, data);
-      else playScreen(p.from, p.userId, !!p.first, data);
+      else playVideo(p.from, p.userId, p.kind, !!p.first, data);
     }
   );
-  socket.on("media:stop", ({ from, kind }: { from: string; kind: "audio" | "screen" }) => {
-    if (kind === "screen") stopScreenPlayer(from);
-    else stopAudioPlayer(from);
+  socket.on("media:stop", ({ from, kind }: { from: string; kind: "audio" | VideoKind }) => {
+    if (kind === "audio") stopAudioPlayer(from);
+    else stopVideoPlayer(from, kind);
   });
 
   const onKey = (down: boolean) => (e: KeyboardEvent) => {
@@ -358,13 +378,19 @@ export async function leaveVoice() {
   if (channelId) {
     getSocket()?.emit("media:stop", { channelId, kind: "audio" });
     if (st().screenOn) getSocket()?.emit("media:stop", { channelId, kind: "screen" });
+    if (st().cameraOn) getSocket()?.emit("media:stop", { channelId, kind: "camera" });
     getSocket()?.emit("voice:leave", { channelId });
   }
   stopMicCapture();
-  stopScreen();
-  audioPlayers.forEach((_, k) => stopAudioPlayer(k));
-  videoPlayers.forEach((_, k) => stopScreenPlayer(k));
-  st().set({ channelId: null, remotes: [], screenOn: false, muted: false, localScreen: null, effects: [], connState: "idle" });
+  stopSender("screen");
+  stopSender("camera");
+  audioPlayers.forEach((p) => p.ctx.close().catch(() => {}));
+  audioPlayers.clear();
+  videoPlayers.forEach((vp) => {
+    try { vp.el.pause(); URL.revokeObjectURL(vp.url); } catch { /* ignore */ }
+  });
+  videoPlayers.clear();
+  st().set({ channelId: null, remotes: [], screenOn: false, cameraOn: false, muted: false, localScreen: null, localCamera: null, effects: [], connState: "idle" });
 }
 
 export function toggleMute() {
@@ -372,7 +398,7 @@ export function toggleMute() {
   applyMicState();
 }
 
-// ── Screen share ─────────────────────────────────────────────────────────────
+// ── Video senders (screen + camera) ──────────────────────────────────────────
 function screenBitrate(): number {
   switch (cfg().screenResolution) {
     case "720p": return 4_000_000;
@@ -383,54 +409,54 @@ function screenBitrate(): number {
   }
 }
 
-function startScreenRecorder() {
-  if (!screenStream) return;
-  const videoOnly = new MediaStream(screenStream.getVideoTracks());
+function startRecorder(kind: "screen" | "camera") {
+  const snd = senders[kind];
+  if (!snd.stream) return;
+  const videoOnly = new MediaStream(snd.stream.getVideoTracks());
   let recorder: MediaRecorder;
+  const opts = { mimeType: 'video/webm;codecs="vp8"', videoBitsPerSecond: kind === "screen" ? screenBitrate() : 2_500_000 };
   try {
-    recorder = new MediaRecorder(videoOnly, {
-      mimeType: 'video/webm;codecs="vp8"',
-      videoBitsPerSecond: screenBitrate(),
-    });
+    recorder = new MediaRecorder(videoOnly, opts);
   } catch {
     recorder = new MediaRecorder(videoOnly);
   }
-  firstScreenChunk = true;
+  snd.first = true;
   recorder.ondataavailable = async (e) => {
     if (!e.data || e.data.size === 0) return;
     const buf = await e.data.arrayBuffer();
-    emitChunk("screen", buf, { first: firstScreenChunk });
-    firstScreenChunk = false;
+    emitChunk(kind, buf, { first: snd.first });
+    snd.first = false;
   };
-  recorder.start(250); // 250ms segments
-  screenRecorder = recorder;
+  recorder.start(250);
+  snd.recorder = recorder;
 }
 
-function restartScreenRecorder() {
-  if (!screenStream) return;
+function restartRecorder(kind: "screen" | "camera") {
+  if (!senders[kind].stream) return;
   try {
-    screenRecorder?.stop();
+    senders[kind].recorder?.stop();
   } catch {
     /* ignore */
   }
-  startScreenRecorder();
+  startRecorder(kind);
 }
 
-function stopScreen() {
+function stopSender(kind: "screen" | "camera") {
+  const snd = senders[kind];
   try {
-    screenRecorder?.stop();
+    snd.recorder?.stop();
   } catch {
     /* ignore */
   }
-  screenRecorder = null;
-  screenStream?.getTracks().forEach((t) => t.stop());
-  screenStream = null;
+  snd.recorder = null;
+  snd.stream?.getTracks().forEach((t) => t.stop());
+  snd.stream = null;
 }
 
 export async function toggleScreen() {
   if (st().screenOn) {
     const channelId = st().channelId;
-    stopScreen();
+    stopSender("screen");
     if (channelId) getSocket()?.emit("media:stop", { channelId, kind: "screen" });
     st().set({ screenOn: false, localScreen: null });
     return;
@@ -440,6 +466,7 @@ export async function toggleScreen() {
     s.screenResolution === "source"
       ? { frameRate: { ideal: s.screenFps } }
       : { ...RES_MAP[s.screenResolution], frameRate: { ideal: s.screenFps } };
+  let screenStream: MediaStream;
   try {
     screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: false });
   } catch {
@@ -456,8 +483,35 @@ export async function toggleScreen() {
       if (st().screenOn) toggleScreen();
     });
   }
-  startScreenRecorder();
+  senders.screen.stream = screenStream;
+  startRecorder("screen");
   st().set({ screenOn: true, localScreen: screenStream });
+}
+
+export async function toggleCamera() {
+  if (st().cameraOn) {
+    const channelId = st().channelId;
+    stopSender("camera");
+    if (channelId) getSocket()?.emit("media:stop", { channelId, kind: "camera" });
+    st().set({ cameraOn: false, localCamera: null });
+    return;
+  }
+  let cam: MediaStream;
+  try {
+    cam = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      audio: false,
+    });
+  } catch {
+    return;
+  }
+  const vt = cam.getVideoTracks()[0];
+  vt?.addEventListener("ended", () => {
+    if (st().cameraOn) toggleCamera();
+  });
+  senders.camera.stream = cam;
+  startRecorder("camera");
+  st().set({ cameraOn: true, localCamera: cam });
 }
 
 // ── Settings helpers (unchanged API) ─────────────────────────────────────────

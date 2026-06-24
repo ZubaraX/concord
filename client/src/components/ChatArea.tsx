@@ -4,7 +4,7 @@ import { api, uploadFile, type UploadedFile } from "../api/client";
 import { getSocket } from "../lib/socket";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
-import { joinVoice, leaveVoice, toggleMute, toggleScreen } from "../lib/voice";
+import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera } from "../lib/voice";
 import type { Message as Msg } from "../types";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
@@ -177,6 +177,7 @@ export default function ChatArea() {
             ) : (
               <>
                 <HeaderBtn active={voice.muted} onClick={toggleMute}>{voice.muted ? "Unmute" : "Mute"}</HeaderBtn>
+                <HeaderBtn active={voice.cameraOn} onClick={toggleCamera}>{voice.cameraOn ? "Cam Off" : "Camera"}</HeaderBtn>
                 <HeaderBtn active={voice.screenOn} onClick={toggleScreen}>{voice.screenOn ? "Stop Share" : "Share"}</HeaderBtn>
                 <button onClick={leaveVoice} className="rounded bg-discord-danger px-3 py-1.5 text-sm font-medium text-white hover:brightness-110">
                   Leave

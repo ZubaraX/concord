@@ -5,6 +5,7 @@ export interface RemoteEntry {
   userId: string;
   audio?: MediaStream; // mic
   video?: MediaStream; // screen share (present only while sharing)
+  camera?: MediaStream; // webcam (present only while camera on)
 }
 
 interface VoiceStore {
@@ -12,7 +13,9 @@ interface VoiceStore {
   connecting: boolean;
   muted: boolean;
   screenOn: boolean;
+  cameraOn: boolean;
   localScreen: MediaStream | null; // preview of our own shared screen
+  localCamera: MediaStream | null; // preview of our own webcam
   occupancy: Record<string, string[]>; // channelId -> userIds (for the sidebar)
   remotes: RemoteEntry[]; // active call peers' streams
   effects: { id: number; emoji: string }[]; // floating emoji reactions in-call
@@ -25,7 +28,9 @@ export const useVoice = create<VoiceStore>((set) => ({
   connecting: false,
   muted: false,
   screenOn: false,
+  cameraOn: false,
   localScreen: null,
+  localCamera: null,
   occupancy: {},
   remotes: [],
   effects: [],

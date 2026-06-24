@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { connectSocket, disconnectSocket, getSocket } from "../lib/socket";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
 import { useNotify } from "../store/notify";
-import { playPing, playRing, desktopNotify, requestNotifyPermission } from "../lib/sound";
+import { playPing, desktopNotify, requestNotifyPermission } from "../lib/sound";
 import { joinVoice } from "../lib/voice";
 import type { DMSummary, Guild, Message } from "../types";
 import ServerRail from "../components/ServerRail";
@@ -18,6 +18,7 @@ import SettingsModal from "../components/SettingsModal";
 import InviteModal from "../components/InviteModal";
 import VoiceOverlay from "../components/VoiceOverlay";
 import Toasts from "../components/Toasts";
+import IncomingCallModal from "../components/IncomingCallModal";
 import { initVoice } from "../lib/voice";
 
 export default function AppLayout() {
@@ -25,6 +26,7 @@ export default function AppLayout() {
   const qc = useQueryClient();
   const initialized = useRef(false);
   const ringingChannels = useRef<Set<string>>(new Set());
+  const [incoming, setIncoming] = useState<{ channelId: string; name: string } | null>(null);
 
   useEffect(() => {
     connectSocket();
@@ -75,7 +77,7 @@ export default function AppLayout() {
       desktopNotify(who, body);
     };
 
-    // Someone joined a DM voice channel I'm not in → incoming call.
+    // Someone joined a DM voice channel I'm not in → incoming call modal.
     const onVoiceState = (p: { channelId: string; userIds: string[] }) => {
       const dm = dmName(p.channelId);
       if (!dm) return; // guild voice, ignore
@@ -83,16 +85,11 @@ export default function AppLayout() {
       if (p.userIds.length > 0 && !inThisCall) {
         if (ringingChannels.current.has(p.channelId)) return;
         ringingChannels.current.add(p.channelId);
-        push({
-          title: "Incoming call",
-          body: `${dm.name} is calling you`,
-          actionLabel: "Join Call",
-          onAction: () => { openDM(p.channelId); joinVoice(p.channelId); },
-        });
-        playRing();
+        setIncoming({ channelId: p.channelId, name: dm.name });
         desktopNotify("Incoming call", `${dm.name} is calling you`);
       } else if (p.userIds.length === 0) {
         ringingChannels.current.delete(p.channelId);
+        setIncoming((cur) => (cur?.channelId === p.channelId ? null : cur));
       }
     };
 
@@ -138,6 +135,13 @@ export default function AppLayout() {
 
       <VoiceOverlay />
       <Toasts />
+      {incoming && (
+        <IncomingCallModal
+          name={incoming.name}
+          onAccept={() => { openDM(incoming.channelId); joinVoice(incoming.channelId); setIncoming(null); }}
+          onDecline={() => setIncoming(null)}
+        />
+      )}
 
       {modal === "addServer" && <AddServerModal onClose={closeModal} />}
       {modal === "settings" && <SettingsModal onClose={closeModal} />}
