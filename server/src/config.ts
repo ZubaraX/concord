@@ -42,9 +42,10 @@ const schema = z.object({
   TURN_USERNAME: z.string().optional(),
   TURN_PASSWORD: z.string().optional(),
 
-  // GIF search proxy (Tenor). Default is Tenor's public test key (zero-setup);
-  // set your own TENOR_KEY for production volume.
-  TENOR_KEY: z.string().default("LIVDSRZULELA"),
+  // GIF search proxy (Tenor v2 — tenor.googleapis.com). Requires a free Google
+  // API key with the "Tenor API" enabled. Empty by default: the GIF picker
+  // simply returns no results until TENOR_KEY is set in the server .env.
+  TENOR_KEY: z.string().default(""),
 });
 
 const parsed = schema.safeParse(process.env);
