@@ -142,6 +142,18 @@ function patchRemote(socketId: string, userId: string, patch: Partial<RemoteEntr
 function dropRemote(socketId: string) {
   st().set({ remotes: st().remotes.filter((r) => r.socketId !== socketId) });
 }
+
+// Aggregate every peer's connection state into one indicator for the UI.
+function updateConnState() {
+  if (!st().channelId) return;
+  const states = [...peers.values()].map((p) => p.pc.connectionState);
+  let next: "idle" | "connecting" | "connected" | "failed";
+  if (states.length === 0) next = "connected"; // in the call, just nobody else yet
+  else if (states.some((s) => s === "connected")) next = "connected";
+  else if (states.every((s) => s === "failed")) next = "failed";
+  else next = "connecting";
+  if (st().connState !== next) st().set({ connState: next });
+}
 function signal(to: string, data: Record<string, unknown>) {
   getSocket()?.emit("voice:signal", { to, ...data });
 }
@@ -219,7 +231,9 @@ function createPeer(socketId: string, userId: string): Peer {
   };
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === "failed") pc.restartIce();
+    updateConnState();
   };
+  pc.oniceconnectionstatechange = updateConnState;
   return peer;
 }
 
@@ -270,6 +284,7 @@ export function initVoice() {
     peers.get(socketId)?.pc.close();
     peers.delete(socketId);
     dropRemote(socketId);
+    updateConnState();
   });
   socket.on("voice:signal", onSignal);
   socket.on("voice:state", ({ channelId, userIds }: { channelId: string; userIds: string[] }) => {
@@ -304,6 +319,7 @@ export async function joinVoice(channelId: string) {
   if (st().channelId === channelId) return;
   await leaveVoice();
   st().set({ connecting: true });
+  await loadIceConfig(); // pick up latest TURN/STUN config each call
   try {
     await buildMicStream();
   } catch {
@@ -311,7 +327,7 @@ export async function joinVoice(channelId: string) {
     alert("Microphone access was denied.");
     return;
   }
-  st().set({ channelId, connecting: false, muted: false });
+  st().set({ channelId, connecting: false, muted: false, connState: "connecting" });
   applyMicState();
 
   getSocket()?.emit(
@@ -337,7 +353,7 @@ export async function leaveVoice() {
   sentStream = null;
   gainNode = null;
   screenStream = null;
-  st().set({ channelId: null, remotes: [], screenOn: false, muted: false, localScreen: null, effects: [] });
+  st().set({ channelId: null, remotes: [], screenOn: false, muted: false, localScreen: null, effects: [], connState: "idle" });
 }
 
 export function toggleMute() {

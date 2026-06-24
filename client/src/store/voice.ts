@@ -16,6 +16,7 @@ interface VoiceStore {
   occupancy: Record<string, string[]>; // channelId -> userIds (for the sidebar)
   remotes: RemoteEntry[]; // active call peers' streams
   effects: { id: number; emoji: string }[]; // floating emoji reactions in-call
+  connState: "idle" | "connecting" | "connected" | "failed"; // WebRTC media link
   set: (p: Partial<VoiceStore>) => void;
 }
 
@@ -28,5 +29,6 @@ export const useVoice = create<VoiceStore>((set) => ({
   occupancy: {},
   remotes: [],
   effects: [],
+  connState: "idle",
   set: (p) => set(p),
 }));

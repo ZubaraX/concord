@@ -150,15 +150,24 @@ function VoiceControlBar({
   onLeave: () => void;
 }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const conn = useVoice((s) => s.connState);
+  const status =
+    conn === "failed"
+      ? { color: "bg-discord-danger", text: "No media — needs TURN", textColor: "text-discord-danger" }
+      : conn === "connecting"
+      ? { color: "bg-yellow-500", text: "Connecting…", textColor: "text-white" }
+      : { color: "bg-discord-green", text: "Voice Connected", textColor: "text-white" };
   return (
     <div className="relative border-t border-black/30 bg-[#232428] px-2 py-2">
       <div className="flex items-center gap-2 px-1">
         <span className="relative flex h-2.5 w-2.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-discord-green opacity-60" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-discord-green" />
+          {conn !== "failed" && (
+            <span className={clsx("absolute inline-flex h-full w-full animate-ping rounded-full opacity-60", status.color)} />
+          )}
+          <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", status.color)} />
         </span>
         <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate text-sm font-semibold text-white">Voice Connected</div>
+          <div className={clsx("truncate text-sm font-semibold", status.textColor)}>{status.text}</div>
           <div className="truncate text-xs text-discord-muted">🔊 {channelName}</div>
         </div>
         <button
