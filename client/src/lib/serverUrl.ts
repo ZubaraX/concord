@@ -22,6 +22,7 @@ export function setServerUrl(url: string): void {
 
 /** Build a full URL for an API/socket path against the configured server. */
 export function serverPath(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path; // already absolute (e.g. GIF/embed)
   const base = getServerUrl();
   if (!base) return path; // same-origin (web dev via proxy)
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;

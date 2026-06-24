@@ -41,6 +41,10 @@ const schema = z.object({
   TURN_URLS: z.string().optional(),
   TURN_USERNAME: z.string().optional(),
   TURN_PASSWORD: z.string().optional(),
+
+  // GIF search proxy (Giphy). Default is Giphy's public beta key (rate-limited
+  // but zero-setup); set your own GIPHY_KEY for production.
+  GIPHY_KEY: z.string().default("dc6zaTOxFJmzC"),
 });
 
 const parsed = schema.safeParse(process.env);

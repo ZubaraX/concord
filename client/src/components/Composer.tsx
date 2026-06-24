@@ -3,6 +3,7 @@ import { getSocket } from "../lib/socket";
 import type { UploadedFile } from "../api/client";
 import type { Message } from "../types";
 import EmojiPicker from "./EmojiPicker";
+import GifPicker from "./GifPicker";
 
 interface SendPayload {
   channelId: string;
@@ -36,6 +37,7 @@ export default function Composer({
 }) {
   const [value, setValue] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showGif, setShowGif] = useState(false);
   const lastTyping = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -63,6 +65,12 @@ export default function Composer({
       lastTyping.current = now;
       getSocket()?.emit("typing:start", channelId);
     }
+  }
+
+  function sendGif(url: string) {
+    setShowGif(false);
+    onSend({ channelId, content: "", attachments: [{ url, filename: "giphy.gif", size: 0, mimeType: "image/gif" }], replyToId: replyingTo?.id });
+    onClearReply();
   }
 
   function onPaste(e: React.ClipboardEvent) {
@@ -132,6 +140,13 @@ export default function Composer({
           className="max-h-48 flex-1 resize-none bg-transparent py-1 text-discord-text outline-none placeholder:text-discord-faint"
         />
         <button
+          onClick={() => setShowGif((v) => !v)}
+          className="pb-1 text-sm font-bold leading-none text-discord-muted hover:text-discord-text"
+          title="GIF"
+        >
+          GIF
+        </button>
+        <button
           onClick={() => setShowEmoji((v) => !v)}
           className="pb-1 text-xl leading-none text-discord-muted hover:text-discord-text"
           title="Emoji"
@@ -139,6 +154,7 @@ export default function Composer({
           😀
         </button>
         {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
+        {showGif && <GifPicker onPick={sendGif} onClose={() => setShowGif(false)} />}
       </div>
     </div>
   );

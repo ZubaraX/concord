@@ -17,6 +17,7 @@ import { uploadRoutes } from "./routes/uploads.js";
 import { friendRoutes } from "./routes/friends.js";
 import { dmRoutes } from "./routes/dms.js";
 import { userRoutes } from "./routes/users.js";
+import { gifRoutes } from "./routes/gifs.js";
 import { attachGateway } from "./realtime/gateway.js";
 
 async function main() {
@@ -109,6 +110,7 @@ async function main() {
   await app.register(friendRoutes, { prefix: "/api/friends" });
   await app.register(dmRoutes, { prefix: "/api/dms" });
   await app.register(userRoutes, { prefix: "/api/users" });
+  await app.register(gifRoutes, { prefix: "/api/gifs" });
 
   // SQLite tuning: WAL gives concurrent reads during writes; busy_timeout
   // avoids transient "database is locked" under load. journal_mode returns a

@@ -3,6 +3,7 @@
 const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { autoUpdater } = require("electron-updater");
 
 // App/window icon (embedded into the .exe by electron-builder; also used for
 // the dev taskbar icon when the source file is present).
@@ -68,6 +69,14 @@ function wireScreenShare() {
 app.whenReady().then(() => {
   wireScreenShare();
   createWindow();
+
+  // Auto-update from GitHub Releases: download in the background, install on
+  // quit. Only meaningful in a packaged build.
+  if (app.isPackaged) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 60 * 60 * 1000);
+  }
 
   // Global hotkey: toggle window visibility (native API per spec).
   globalShortcut.register("CommandOrControl+Shift+C", () => {

@@ -7,16 +7,22 @@ electronVersion: 33.4.11
 directories:
   output: release
   buildResources: build
-# The renderer is fully bundled by Vite into dist/, so no node_modules need
-# packaging — only the built app + the Electron main scripts.
+# Renderer is bundled by Vite (dist/), and the Electron main/preload are
+# bundled by esbuild (dist-electron/, electron-updater inlined) — so no
+# node_modules need packaging.
 files:
   - dist/**/*
-  - electron/**/*
+  - dist-electron/**/*
   - package.json
 asar: true
-# Renderer is fully bundled by Vite — never rebuild/install node modules.
 npmRebuild: false
 buildDependenciesFromSource: false
+# Auto-update source: this repo's GitHub Releases (public, so no auth needed).
+publish:
+  provider: github
+  owner: ZubaraX
+  repo: concord
+  releaseType: release
 win:
   icon: build/icon.ico
   target:
