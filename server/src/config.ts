@@ -42,9 +42,9 @@ const schema = z.object({
   TURN_USERNAME: z.string().optional(),
   TURN_PASSWORD: z.string().optional(),
 
-  // GIF search proxy (Giphy). Default is Giphy's public beta key (rate-limited
-  // but zero-setup); set your own GIPHY_KEY for production.
-  GIPHY_KEY: z.string().default("dc6zaTOxFJmzC"),
+  // GIF search proxy (Tenor). Default is Tenor's public test key (zero-setup);
+  // set your own TENOR_KEY for production volume.
+  TENOR_KEY: z.string().default("LIVDSRZULELA"),
 });
 
 const parsed = schema.safeParse(process.env);
