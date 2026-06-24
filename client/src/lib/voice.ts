@@ -1,93 +1,99 @@
-// Voice + screen-share via a SERVER RELAY over the existing Socket.io
-// connection (no WebRTC / no TURN). Each client captures media and streams
-// chunks to the server, which forwards them to everyone else in the voice
-// room. This works anywhere the server is reachable (including Codespaces),
-// because there is no peer-to-peer connection to negotiate.
+// Voice + screen-share + camera over WebRTC (P2P mesh) with Socket.io
+// signaling and the "perfect negotiation" pattern. ICE/TURN comes from the
+// server's /api/ice (self-hosted coturn), so calls are low-latency and the
+// media never touches the server unless a relay (TURN) is actually required.
 //
-//   • Audio: Web Audio capture → Int16 PCM frames → scheduled playback
-//            (low latency, no codec/MSE fuss).
-//   • Screen: MediaRecorder (VP8) chunks → MediaSource playback → captureStream
-//            so the existing <video> tiles render it unchanged.
+// Each peer sends up to three streams — mic (audio), screen (video), camera
+// (video). Since screen and camera are both video, we tell peers which
+// MediaStream id is which "kind" via a `voice:streamkinds` signaling message,
+// and classify incoming tracks by their stream id (msid).
 import { getSocket } from "./socket";
+import { api } from "../api/client";
 import { useVoice, type RemoteEntry } from "../store/voice";
-import { useSettings, RES_MAP } from "../store/settings";
+import { useSettings } from "../store/settings";
+import { RES_MAP } from "../store/settings";
+
+type Kind = "audio" | "screen" | "camera";
 
 const st = () => useVoice.getState();
 const cfg = () => useSettings.getState();
 
-// ── Local capture ──────────────────────────────────────────────────────────
-let micStream: MediaStream | null = null;
-let captureCtx: AudioContext | null = null;
-let captureGain: GainNode | null = null;
-let captureNode: ScriptProcessorNode | null = null;
-let silentSink: GainNode | null = null;
-
-// Outgoing video senders (screen + webcam), each its own capture + recorder.
-interface VideoSender {
-  stream: MediaStream | null;
-  recorder: MediaRecorder | null;
-  first: boolean;
-}
-const senders: Record<"screen" | "camera", VideoSender> = {
-  screen: { stream: null, recorder: null, first: true },
-  camera: { stream: null, recorder: null, first: true },
+const DEFAULT_ICE: RTCConfiguration = {
+  iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }],
 };
+let iceConfig: RTCConfiguration = DEFAULT_ICE;
+async function loadIceConfig() {
+  try {
+    const r = await api<{ iceServers: RTCIceServer[] }>("/api/ice");
+    if (r?.iceServers?.length) iceConfig = { iceServers: r.iceServers };
+  } catch {
+    /* keep defaults */
+  }
+}
 
-let micEnabled = true; // gates sending (mute / push-to-talk)
+interface Peer {
+  pc: RTCPeerConnection;
+  polite: boolean;
+  makingOffer: boolean;
+  ignoreOffer: boolean;
+  userId: string;
+  pendingCandidates: RTCIceCandidateInit[]; // queued until remoteDescription is set
+}
+const peers = new Map<string, Peer>();
+
+// Local outgoing streams (stable MediaStream objects → stable msid).
+const micStream = new MediaStream();
+let micRawTrack: MediaStreamTrack | null = null;
+let screenStream: MediaStream | null = null;
+let cameraStream: MediaStream | null = null;
+
+// Remote classification: streamId -> kind (learned from voice:streamkinds).
+const kindByStream = new Map<string, Kind>();
+const pendingTracks: { socketId: string; userId: string; stream: MediaStream; track: MediaStreamTrack }[] = [];
+
 let pttDown = false;
-
-// Noise gate (extra suppression on top of the browser's noiseSuppression):
-// while the input is below the threshold we stop transmitting, so steady
-// background noise / silence isn't sent. Hangover keeps it open briefly after
-// speech so word endings aren't clipped.
-let gateHangover = 0;
-const GATE_HANGOVER_FRAMES = 10; // ~0.4s at 2048-sample frames
-// Sensitivity (0–100) → RMS threshold. Higher sensitivity = lower threshold
-// (transmits quieter sounds); 100 = gate effectively off.
-const gateThreshold = () => (1 - cfg().micSensitivity / 100) * 0.05;
 let inited = false;
 let aloneTimer: ReturnType<typeof setTimeout> | null = null;
-let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
-// ── Playback (per remote sender socketId) ───────────────────────────────────
-interface AudioPlayer {
-  ctx: AudioContext;
-  gain: GainNode;
-  nextTime: number;
-}
-type VideoKind = "screen" | "camera";
-interface VideoPlayer {
-  ms: MediaSource;
-  sb: SourceBuffer | null;
-  queue: ArrayBuffer[];
-  el: HTMLVideoElement;
-  url: string;
-  userId: string;
-  kind: VideoKind;
-}
-const audioPlayers = new Map<string, AudioPlayer>();
-const videoPlayers = new Map<string, VideoPlayer>(); // key: `${from}|${kind}`
-const vpKey = (from: string, kind: VideoKind) => `${from}|${kind}`;
-
-// ── Remote tiles (so VoiceOverlay renders screen video unchanged) ────────────
+// ── store helpers ────────────────────────────────────────────────────────────
 function patchRemote(socketId: string, userId: string, patch: Partial<RemoteEntry>) {
   const prev = st().remotes.find((r) => r.socketId === socketId) ?? { socketId, userId };
-  const next = { ...prev, ...patch, socketId, userId };
-  st().set({ remotes: [...st().remotes.filter((r) => r.socketId !== socketId), next] });
+  st().set({ remotes: [...st().remotes.filter((r) => r.socketId !== socketId), { ...prev, ...patch, socketId, userId }] });
 }
 function dropRemote(socketId: string) {
   st().set({ remotes: st().remotes.filter((r) => r.socketId !== socketId) });
 }
-
-function emitChunk(kind: "audio" | VideoKind, data: ArrayBuffer, extra: { sampleRate?: number; first?: boolean } = {}) {
-  const channelId = st().channelId;
-  if (channelId) getSocket()?.emit("media:chunk", { channelId, kind, data, ...extra });
+function signal(to: string, data: Record<string, unknown>) {
+  getSocket()?.emit("voice:signal", { to, ...data });
 }
 
-// ── Mic capture (Int16 PCM frames) ───────────────────────────────────────────
-async function startMicCapture() {
+function myStreamKinds(): Record<string, Kind> {
+  const m: Record<string, Kind> = {};
+  if (micRawTrack) m[micStream.id] = "audio";
+  if (screenStream) m[screenStream.id] = "screen";
+  if (cameraStream) m[cameraStream.id] = "camera";
+  return m;
+}
+function broadcastStreamKinds(to?: string) {
+  const channelId = st().channelId;
+  if (channelId) getSocket()?.emit("voice:streamkinds", { channelId, to, streams: myStreamKinds() });
+}
+
+function updateConnState() {
+  if (!st().channelId) return;
+  const states = [...peers.values()].map((p) => p.pc.connectionState);
+  let next: "idle" | "connecting" | "connected" | "failed";
+  if (states.length === 0) next = "connected";
+  else if (states.some((s) => s === "connected")) next = "connected";
+  else if (states.every((s) => s === "failed")) next = "failed";
+  else next = "connecting";
+  if (st().connState !== next) st().set({ connState: next });
+}
+
+// ── mic ──────────────────────────────────────────────────────────────────────
+async function buildMic() {
   const s = cfg();
-  micStream = await navigator.mediaDevices.getUserMedia({
+  const raw = await navigator.mediaDevices.getUserMedia({
     audio: {
       deviceId: s.inputDeviceId ? { exact: s.inputDeviceId } : undefined,
       echoCancellation: s.echoCancellation,
@@ -95,187 +101,152 @@ async function startMicCapture() {
       autoGainControl: s.autoGainControl,
     },
   });
-  captureCtx = new AudioContext();
-  await captureCtx.resume();
-  const source = captureCtx.createMediaStreamSource(micStream);
-  captureGain = captureCtx.createGain();
-  captureGain.gain.value = s.inputVolume / 100;
-  captureNode = captureCtx.createScriptProcessor(2048, 1, 1);
-  silentSink = captureCtx.createGain();
-  silentSink.gain.value = 0; // run the processor without echoing locally
-
-  source.connect(captureGain);
-  captureGain.connect(captureNode);
-  captureNode.connect(silentSink);
-  silentSink.connect(captureCtx.destination);
-
-  captureNode.onaudioprocess = (e) => {
-    if (!micEnabled) return;
-    const f32 = e.inputBuffer.getChannelData(0);
-
-    // Noise gate: don't transmit while it's just background noise.
-    if (cfg().noiseSuppression) {
-      let sum = 0;
-      for (let i = 0; i < f32.length; i++) sum += f32[i] * f32[i];
-      const rms = Math.sqrt(sum / f32.length);
-      if (rms >= gateThreshold()) gateHangover = GATE_HANGOVER_FRAMES;
-      else if (gateHangover > 0) gateHangover--;
-      if (gateHangover === 0) return; // gated → silence
-    }
-
-    const i16 = new Int16Array(f32.length);
-    for (let i = 0; i < f32.length; i++) {
-      const v = Math.max(-1, Math.min(1, f32[i]));
-      i16[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
-    }
-    emitChunk("audio", i16.buffer, { sampleRate: captureCtx!.sampleRate });
-  };
+  micRawTrack = raw.getAudioTracks()[0];
+  micStream.addTrack(micRawTrack);
+  applyMicState();
 }
-
-function stopMicCapture() {
-  try {
-    captureNode?.disconnect();
-    captureGain?.disconnect();
-    silentSink?.disconnect();
-  } catch {
-    /* ignore */
-  }
-  micStream?.getTracks().forEach((t) => t.stop());
-  captureCtx?.close().catch(() => {});
-  captureNode = null;
-  captureGain = null;
-  silentSink = null;
-  captureCtx = null;
-  micStream = null;
-}
-
 function applyMicState() {
+  if (!micRawTrack) return;
   const ptt = cfg().voiceMode === "ptt";
-  micEnabled = !st().muted && (!ptt || pttDown);
+  micRawTrack.enabled = !st().muted && (!ptt || pttDown);
 }
-
 export function setInputVolume(percent: number) {
-  cfg().set({ inputVolume: percent });
-  if (captureGain) captureGain.gain.value = percent / 100;
+  cfg().set({ inputVolume: percent }); // (gain only applies in the mic-test monitor)
 }
-
 export async function refreshMic() {
-  if (!st().channelId) return;
-  stopMicCapture();
-  await startMicCapture();
+  if (!st().channelId || !micRawTrack) return;
+  const old = micRawTrack;
+  const s = cfg();
+  const raw = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      deviceId: s.inputDeviceId ? { exact: s.inputDeviceId } : undefined,
+      echoCancellation: s.echoCancellation,
+      noiseSuppression: s.noiseSuppression,
+      autoGainControl: s.autoGainControl,
+    },
+  });
+  const next = raw.getAudioTracks()[0];
+  micStream.removeTrack(old);
+  micStream.addTrack(next);
+  micRawTrack = next;
+  peers.forEach((p) => {
+    const sender = p.pc.getSenders().find((se) => se.track?.kind === "audio");
+    sender?.replaceTrack(next);
+  });
+  old.stop();
   applyMicState();
 }
 
-// ── Audio playback ───────────────────────────────────────────────────────────
-function playAudio(from: string, sampleRate: number, data: ArrayBuffer) {
-  let p = audioPlayers.get(from);
-  if (!p) {
-    const ctx = new AudioContext();
-    const gain = ctx.createGain();
-    gain.connect(ctx.destination);
-    p = { ctx, gain, nextTime: 0 };
-    audioPlayers.set(from, p);
-  }
-  p.gain.gain.value = Math.min(cfg().outputVolume / 100, 2);
-
-  const i16 = new Int16Array(data);
-  const f32 = new Float32Array(i16.length);
-  for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 0x8000;
-
-  const buf = p.ctx.createBuffer(1, f32.length, sampleRate || 48000);
-  buf.copyToChannel(f32, 0);
-  const src = p.ctx.createBufferSource();
-  src.buffer = buf;
-  src.connect(p.gain);
-  // ~150ms jitter buffer to absorb network variance (less choppy). If we've
-  // fallen behind (stall), resync to a fresh buffer instead of playing late.
-  const JITTER = 0.15;
-  if (p.nextTime < p.ctx.currentTime) p.nextTime = p.ctx.currentTime + JITTER;
-  const startAt = Math.max(p.ctx.currentTime + JITTER, p.nextTime);
-  src.start(startAt);
-  p.nextTime = startAt + buf.duration;
+// ── peer (perfect negotiation) ────────────────────────────────────────────────
+function addStreamToPeer(pc: RTCPeerConnection, stream: MediaStream) {
+  stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 }
 
-function stopAudioPlayer(from: string) {
-  const p = audioPlayers.get(from);
-  if (p) {
-    p.ctx.close().catch(() => {});
-    audioPlayers.delete(from);
-  }
-}
+function createPeer(socketId: string, userId: string): Peer {
+  const existing = peers.get(socketId);
+  if (existing) return existing;
+  const myId = getSocket()?.id ?? "";
+  const pc = new RTCPeerConnection(iceConfig);
+  const peer: Peer = { pc, polite: myId < socketId, makingOffer: false, ignoreOffer: false, userId, pendingCandidates: [] };
+  peers.set(socketId, peer);
 
-// ── Screen playback (MediaSource) ────────────────────────────────────────────
-function appendVideo(vp: VideoPlayer) {
-  if (!vp.sb || vp.sb.updating || vp.queue.length === 0) return;
-  try {
-    vp.sb.appendBuffer(vp.queue.shift()!);
-  } catch {
-    /* sequence/quota hiccup — drop a chunk */
-    vp.queue.shift();
-  }
-}
+  addStreamToPeer(pc, micStream);
+  if (screenStream) addStreamToPeer(pc, screenStream);
+  if (cameraStream) addStreamToPeer(pc, cameraStream);
 
-function playVideo(from: string, userId: string, kind: VideoKind, first: boolean, data: ArrayBuffer) {
-  const key = vpKey(from, kind);
-  let vp = videoPlayers.get(key);
-  // A fresh "first" chunk means a new recorder session → rebuild the player.
-  if (first && vp) {
-    stopVideoPlayer(from, kind);
-    vp = undefined;
-  }
-  if (!vp) {
-    if (!first) return; // wait for an init segment before starting
-    const ms = new MediaSource();
-    const el = document.createElement("video");
-    el.muted = true;
-    el.autoplay = true;
-    (el as HTMLVideoElement & { playsInline: boolean }).playsInline = true;
-    el.src = URL.createObjectURL(ms);
-    const player: VideoPlayer = { ms, sb: null, queue: [], el, url: el.src, userId, kind };
-    videoPlayers.set(key, player);
-    ms.addEventListener("sourceopen", () => {
-      try {
-        player.sb = ms.addSourceBuffer('video/webm;codecs="vp8"');
-        player.sb.mode = "sequence";
-        player.sb.addEventListener("updateend", () => appendVideo(player));
-        appendVideo(player);
-      } catch {
-        /* unsupported */
-      }
-    });
-    el.play().catch(() => {});
+  pc.ontrack = (e) => {
+    const stream = e.streams[0];
+    if (!stream) return;
+    const attach = () => {
+      const kind = kindByStream.get(stream.id);
+      if (!kind) return false;
+      patchRemote(socketId, userId, { [kind]: stream });
+      const clear = () => patchRemote(socketId, userId, { [kind]: undefined });
+      e.track.addEventListener("mute", clear);
+      e.track.addEventListener("ended", clear);
+      e.track.addEventListener("unmute", () => patchRemote(socketId, userId, { [kind]: stream }));
+      return true;
+    };
+    if (!attach()) pendingTracks.push({ socketId, userId, stream, track: e.track });
+  };
+  pc.onicecandidate = (e) => {
+    if (e.candidate) signal(socketId, { candidate: e.candidate });
+  };
+  pc.onnegotiationneeded = async () => {
     try {
-      const stream = (el as HTMLVideoElement & { captureStream: () => MediaStream }).captureStream();
-      patchRemote(from, userId, kind === "camera" ? { camera: stream } : { video: stream });
-    } catch {
-      /* captureStream unsupported */
+      peer.makingOffer = true;
+      await pc.setLocalDescription();
+      signal(socketId, { description: pc.localDescription });
+    } catch (err) {
+      console.error("[voice] negotiation", err);
+    } finally {
+      peer.makingOffer = false;
     }
-    vp = player;
-  }
-  vp.queue.push(data);
-  appendVideo(vp);
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === "failed") pc.restartIce();
+    updateConnState();
+  };
+  pc.oniceconnectionstatechange = updateConnState;
+
+  // Tell the new peer which of our streams is which kind.
+  broadcastStreamKinds(socketId);
+  return peer;
 }
 
-function stopVideoPlayer(from: string, kind: VideoKind) {
-  const key = vpKey(from, kind);
-  const vp = videoPlayers.get(key);
-  if (!vp) return;
+async function onSignal(p: { from: string; fromUserId: string; description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit }) {
+  const peer = createPeer(p.from, p.fromUserId);
+  const pc = peer.pc;
   try {
-    vp.el.pause();
-    URL.revokeObjectURL(vp.url);
-  } catch {
-    /* ignore */
+    if (p.description) {
+      const collision = p.description.type === "offer" && (peer.makingOffer || pc.signalingState !== "stable");
+      peer.ignoreOffer = !peer.polite && collision;
+      if (peer.ignoreOffer) return;
+      await pc.setRemoteDescription(p.description);
+      // Now that the remote description is set, flush any queued candidates.
+      for (const c of peer.pendingCandidates.splice(0)) {
+        await pc.addIceCandidate(c).catch((err) => console.error("[voice] flush candidate", err));
+      }
+      if (p.description.type === "offer") {
+        await pc.setLocalDescription();
+        signal(p.from, { description: pc.localDescription });
+      }
+    } else if (p.candidate) {
+      // Queue candidates that arrive before the remote description is set,
+      // otherwise addIceCandidate throws and ICE never completes (stuck on
+      // "Connecting…").
+      if (!pc.remoteDescription) {
+        peer.pendingCandidates.push(p.candidate);
+        return;
+      }
+      try {
+        await pc.addIceCandidate(p.candidate);
+      } catch (err) {
+        if (!peer.ignoreOffer) console.error("[voice] addIceCandidate", err);
+      }
+    }
+  } catch (err) {
+    console.error("[voice] signal", err);
   }
-  videoPlayers.delete(key);
-  patchRemote(from, vp.userId, kind === "camera" ? { camera: undefined } : { video: undefined });
 }
 
-function stopAllVideoPlayers(from: string) {
-  stopVideoPlayer(from, "screen");
-  stopVideoPlayer(from, "camera");
+function onStreamKinds(p: { from: string; userId: string; streams: Record<string, Kind> }) {
+  for (const [streamId, kind] of Object.entries(p.streams ?? {})) kindByStream.set(streamId, kind);
+  // Resolve any tracks that arrived before we knew their kind.
+  for (let i = pendingTracks.length - 1; i >= 0; i--) {
+    const t = pendingTracks[i];
+    const kind = kindByStream.get(t.stream.id);
+    if (kind) {
+      patchRemote(t.socketId, t.userId, { [kind]: t.stream });
+      const clear = () => patchRemote(t.socketId, t.userId, { [kind]: undefined });
+      t.track.addEventListener("mute", clear);
+      t.track.addEventListener("ended", clear);
+      pendingTracks.splice(i, 1);
+    }
+  }
 }
 
-// ── Auto-leave when alone ────────────────────────────────────────────────────
+// ── alone timer / emoji ───────────────────────────────────────────────────────
 function startAloneTimer() {
   if (aloneTimer) return;
   aloneTimer = setTimeout(() => {
@@ -288,37 +259,30 @@ function clearAloneTimer() {
   if (aloneTimer) clearTimeout(aloneTimer);
   aloneTimer = null;
 }
-
 export function sendVoiceEmoji(emoji: string) {
   const channelId = st().channelId;
   if (channelId) getSocket()?.emit("voice:emoji", { channelId, emoji });
 }
 
-// ── Socket wiring ────────────────────────────────────────────────────────────
+// ── socket wiring ──────────────────────────────────────────────────────────────
 export function initVoice() {
   if (inited) return;
   const socket = getSocket();
   if (!socket) return;
   inited = true;
+  loadIceConfig();
 
+  socket.on("voice:peerJoined", ({ socketId, userId }: { socketId: string; userId: string }) => {
+    if (st().channelId) createPeer(socketId, userId);
+  });
   socket.on("voice:peerLeft", ({ socketId }: { socketId: string }) => {
-    stopAudioPlayer(socketId);
-    stopAllVideoPlayers(socketId);
+    peers.get(socketId)?.pc.close();
+    peers.delete(socketId);
     dropRemote(socketId);
+    updateConnState();
   });
-
-  // Someone joined while we're sharing → restart recorders so they get a
-  // fresh init segment (PCM audio needs no init, only video does).
-  socket.on("voice:peerJoined", () => {
-    if (st().screenOn || st().cameraOn) {
-      if (restartTimer) clearTimeout(restartTimer);
-      restartTimer = setTimeout(() => {
-        if (st().screenOn) restartRecorder("screen");
-        if (st().cameraOn) restartRecorder("camera");
-      }, 400);
-    }
-  });
-
+  socket.on("voice:signal", onSignal);
+  socket.on("voice:streamkinds", onStreamKinds);
   socket.on("voice:state", ({ channelId, userIds }: { channelId: string; userIds: string[] }) => {
     st().set({ occupancy: { ...st().occupancy, [channelId]: userIds } });
     if (channelId === st().channelId) {
@@ -326,27 +290,10 @@ export function initVoice() {
       else clearAloneTimer();
     }
   });
-
   socket.on("voice:emoji", ({ emoji }: { emoji: string }) => {
     const id = Date.now() + Math.random();
     st().set({ effects: [...st().effects, { id, emoji }] });
     setTimeout(() => st().set({ effects: st().effects.filter((e) => e.id !== id) }), 4500);
-  });
-
-  // Incoming media from other participants.
-  socket.on(
-    "media:chunk",
-    (p: { from: string; userId: string; kind: "audio" | VideoKind; sampleRate?: number; first?: boolean; data: ArrayBuffer }) => {
-      if (!st().channelId) return;
-      const data = p.data instanceof ArrayBuffer ? p.data : (p.data as { buffer?: ArrayBuffer })?.buffer;
-      if (!data) return;
-      if (p.kind === "audio") playAudio(p.from, p.sampleRate ?? 48000, data);
-      else playVideo(p.from, p.userId, p.kind, !!p.first, data);
-    }
-  );
-  socket.on("media:stop", ({ from, kind }: { from: string; kind: "audio" | VideoKind }) => {
-    if (kind === "audio") stopAudioPlayer(from);
-    else stopVideoPlayer(from, kind);
   });
 
   const onKey = (down: boolean) => (e: KeyboardEvent) => {
@@ -359,41 +306,42 @@ export function initVoice() {
   window.addEventListener("keyup", onKey(false));
 }
 
-// ── Join / leave ─────────────────────────────────────────────────────────────
+// ── join / leave ────────────────────────────────────────────────────────────────
 export async function joinVoice(channelId: string) {
   if (st().channelId === channelId) return;
   await leaveVoice();
   st().set({ connecting: true });
+  await loadIceConfig();
   try {
-    await startMicCapture();
+    await buildMic();
   } catch {
     st().set({ connecting: false });
     alert("Microphone access was denied.");
     return;
   }
-  st().set({ channelId, connecting: false, muted: false, connState: "connected" });
-  applyMicState();
-  getSocket()?.emit("voice:join", { channelId }, () => {});
+  st().set({ channelId, connecting: false, muted: false, connState: "connecting" });
+  getSocket()?.emit(
+    "voice:join",
+    { channelId },
+    (res: { ok: boolean; peers?: { socketId: string; userId: string }[] }) => {
+      if (res?.ok) res.peers?.forEach((p) => createPeer(p.socketId, p.userId));
+    }
+  );
 }
 
 export async function leaveVoice() {
   clearAloneTimer();
   const channelId = st().channelId;
-  if (channelId) {
-    getSocket()?.emit("media:stop", { channelId, kind: "audio" });
-    if (st().screenOn) getSocket()?.emit("media:stop", { channelId, kind: "screen" });
-    if (st().cameraOn) getSocket()?.emit("media:stop", { channelId, kind: "camera" });
-    getSocket()?.emit("voice:leave", { channelId });
-  }
-  stopMicCapture();
-  stopSender("screen");
-  stopSender("camera");
-  audioPlayers.forEach((p) => p.ctx.close().catch(() => {}));
-  audioPlayers.clear();
-  videoPlayers.forEach((vp) => {
-    try { vp.el.pause(); URL.revokeObjectURL(vp.url); } catch { /* ignore */ }
-  });
-  videoPlayers.clear();
+  if (channelId) getSocket()?.emit("voice:leave", { channelId });
+  peers.forEach((p) => p.pc.close());
+  peers.clear();
+  pendingTracks.length = 0;
+  micStream.getTracks().forEach((t) => { t.stop(); micStream.removeTrack(t); });
+  micRawTrack = null;
+  screenStream?.getTracks().forEach((t) => t.stop());
+  cameraStream?.getTracks().forEach((t) => t.stop());
+  screenStream = null;
+  cameraStream = null;
   st().set({ channelId: null, remotes: [], screenOn: false, cameraOn: false, muted: false, localScreen: null, localCamera: null, effects: [], connState: "idle" });
 }
 
@@ -402,7 +350,72 @@ export function toggleMute() {
   applyMicState();
 }
 
-// ── Video senders (screen + camera) ──────────────────────────────────────────
+// ── screen / camera ──────────────────────────────────────────────────────────────
+function removeStreamFromPeers(stream: MediaStream) {
+  peers.forEach((p) => {
+    const tracks = new Set(stream.getTracks());
+    p.pc.getSenders().forEach((sender) => {
+      if (sender.track && tracks.has(sender.track)) {
+        try { p.pc.removeTrack(sender); } catch { /* ignore */ }
+      }
+    });
+  });
+}
+
+export async function toggleScreen() {
+  if (st().screenOn) {
+    if (screenStream) removeStreamFromPeers(screenStream);
+    screenStream?.getTracks().forEach((t) => t.stop());
+    screenStream = null;
+    st().set({ screenOn: false, localScreen: null });
+    broadcastStreamKinds();
+    return;
+  }
+  const s = cfg();
+  const video: MediaTrackConstraints =
+    s.screenResolution === "source"
+      ? { frameRate: { ideal: s.screenFps } }
+      : { ...RES_MAP[s.screenResolution], frameRate: { ideal: s.screenFps } };
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: false });
+  } catch {
+    return;
+  }
+  const vt = screenStream.getVideoTracks()[0];
+  if (vt) {
+    try { (vt as MediaStreamTrack & { contentHint: string }).contentHint = "detail"; } catch { /* ignore */ }
+    vt.addEventListener("ended", () => { if (st().screenOn) toggleScreen(); });
+  }
+  st().set({ screenOn: true, localScreen: screenStream });
+  broadcastStreamKinds(); // announce kind BEFORE tracks arrive at peers
+  peers.forEach((p) => addStreamToPeer(p.pc, screenStream!));
+  // Raise the screen-share bitrate cap so fullscreen stays sharp.
+  setTimeout(() => peers.forEach((p) => tuneVideoSender(p.pc, vt, screenBitrate())), 300);
+}
+
+export async function toggleCamera() {
+  if (st().cameraOn) {
+    if (cameraStream) removeStreamFromPeers(cameraStream);
+    cameraStream?.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+    st().set({ cameraOn: false, localCamera: null });
+    broadcastStreamKinds();
+    return;
+  }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      audio: false,
+    });
+  } catch {
+    return;
+  }
+  cameraStream.getVideoTracks()[0]?.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
+  st().set({ cameraOn: true, localCamera: cameraStream });
+  broadcastStreamKinds();
+  peers.forEach((p) => addStreamToPeer(p.pc, cameraStream!));
+}
+
 function screenBitrate(): number {
   switch (cfg().screenResolution) {
     case "720p": return 4_000_000;
@@ -412,113 +425,20 @@ function screenBitrate(): number {
     default: return 20_000_000;
   }
 }
-
-function startRecorder(kind: "screen" | "camera") {
-  const snd = senders[kind];
-  if (!snd.stream) return;
-  const videoOnly = new MediaStream(snd.stream.getVideoTracks());
-  let recorder: MediaRecorder;
-  const opts = { mimeType: 'video/webm;codecs="vp8"', videoBitsPerSecond: kind === "screen" ? screenBitrate() : 2_500_000 };
+async function tuneVideoSender(pc: RTCPeerConnection, track: MediaStreamTrack | undefined, maxBitrate: number) {
+  if (!track) return;
+  const sender = pc.getSenders().find((s) => s.track === track);
+  if (!sender) return;
   try {
-    recorder = new MediaRecorder(videoOnly, opts);
-  } catch {
-    recorder = new MediaRecorder(videoOnly);
-  }
-  snd.first = true;
-  recorder.ondataavailable = async (e) => {
-    if (!e.data || e.data.size === 0) return;
-    const buf = await e.data.arrayBuffer();
-    emitChunk(kind, buf, { first: snd.first });
-    snd.first = false;
-  };
-  recorder.start(250);
-  snd.recorder = recorder;
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+    params.encodings[0].maxBitrate = maxBitrate;
+    params.degradationPreference = "maintain-resolution";
+    await sender.setParameters(params);
+  } catch { /* best effort */ }
 }
 
-function restartRecorder(kind: "screen" | "camera") {
-  if (!senders[kind].stream) return;
-  try {
-    senders[kind].recorder?.stop();
-  } catch {
-    /* ignore */
-  }
-  startRecorder(kind);
-}
-
-function stopSender(kind: "screen" | "camera") {
-  const snd = senders[kind];
-  try {
-    snd.recorder?.stop();
-  } catch {
-    /* ignore */
-  }
-  snd.recorder = null;
-  snd.stream?.getTracks().forEach((t) => t.stop());
-  snd.stream = null;
-}
-
-export async function toggleScreen() {
-  if (st().screenOn) {
-    const channelId = st().channelId;
-    stopSender("screen");
-    if (channelId) getSocket()?.emit("media:stop", { channelId, kind: "screen" });
-    st().set({ screenOn: false, localScreen: null });
-    return;
-  }
-  const s = cfg();
-  const video: MediaTrackConstraints =
-    s.screenResolution === "source"
-      ? { frameRate: { ideal: s.screenFps } }
-      : { ...RES_MAP[s.screenResolution], frameRate: { ideal: s.screenFps } };
-  let screenStream: MediaStream;
-  try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: false });
-  } catch {
-    return;
-  }
-  const vt = screenStream.getVideoTracks()[0];
-  if (vt) {
-    try {
-      (vt as MediaStreamTrack & { contentHint: string }).contentHint = "detail";
-    } catch {
-      /* ignore */
-    }
-    vt.addEventListener("ended", () => {
-      if (st().screenOn) toggleScreen();
-    });
-  }
-  senders.screen.stream = screenStream;
-  startRecorder("screen");
-  st().set({ screenOn: true, localScreen: screenStream });
-}
-
-export async function toggleCamera() {
-  if (st().cameraOn) {
-    const channelId = st().channelId;
-    stopSender("camera");
-    if (channelId) getSocket()?.emit("media:stop", { channelId, kind: "camera" });
-    st().set({ cameraOn: false, localCamera: null });
-    return;
-  }
-  let cam: MediaStream;
-  try {
-    cam = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-      audio: false,
-    });
-  } catch {
-    return;
-  }
-  const vt = cam.getVideoTracks()[0];
-  vt?.addEventListener("ended", () => {
-    if (st().cameraOn) toggleCamera();
-  });
-  senders.camera.stream = cam;
-  startRecorder("camera");
-  st().set({ cameraOn: true, localCamera: cam });
-}
-
-// ── Settings helpers (unchanged API) ─────────────────────────────────────────
+// ── mic test (Settings) — monitor + level meter ──────────────────────────────────
 export async function startMicTest(onLevel: (level: number) => void): Promise<() => void> {
   const s = cfg();
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -537,7 +457,7 @@ export async function startMicTest(onLevel: (level: number) => void): Promise<()
   analyser.fftSize = 512;
   src.connect(gain);
   gain.connect(analyser);
-  gain.connect(ctx.destination); // monitor: hear yourself during the test
+  gain.connect(ctx.destination);
   const data = new Uint8Array(analyser.frequencyBinCount);
   let raf = 0;
   const loop = () => {

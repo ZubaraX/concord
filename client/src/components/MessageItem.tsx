@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { useAuth } from "../store/auth";
 import { useUI } from "../store/ui";
 import { serverPath } from "../lib/serverUrl";
-import type { Attachment, Message } from "../types";
+import type { Attachment, LinkEmbed, Message } from "../types";
 import Avatar from "./Avatar";
 import { renderMarkdown } from "../lib/markdown";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
@@ -29,6 +29,15 @@ function MessageItem({
 
   // Parse markdown once per content change, not on every parent re-render.
   const body = useMemo(() => renderMarkdown(message.content), [message.content]);
+
+  const embeds = useMemo<LinkEmbed[]>(() => {
+    if (!message.embedsJson) return [];
+    try {
+      return JSON.parse(message.embedsJson);
+    } catch {
+      return [];
+    }
+  }, [message.embedsJson]);
 
   function saveEdit() {
     const content = draft.trim();
@@ -148,6 +157,23 @@ function MessageItem({
           </div>
         )}
 
+        {embeds.map((e, i) => (
+          <a
+            key={i}
+            href={e.url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 flex max-w-md gap-3 rounded border-l-4 border-discord-accent bg-discord-card p-3 hover:bg-discord-hover"
+          >
+            {e.image && <img src={e.image} alt="" className="h-16 w-16 shrink-0 rounded object-cover" loading="lazy" />}
+            <div className="min-w-0">
+              {e.site && <div className="text-xs text-discord-faint">{e.site}</div>}
+              {e.title && <div className="truncate font-medium text-[#00a8fc]">{e.title}</div>}
+              {e.description && <div className="line-clamp-2 text-sm text-discord-muted">{e.description}</div>}
+            </div>
+          </a>
+        ))}
+
         {reactionGroups.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {reactionGroups.map(([emoji, g]) => (
@@ -248,6 +274,7 @@ export default memo(MessageItem, (a, b) => {
     a.message.content === b.message.content &&
     a.message.editedAt === b.message.editedAt &&
     a.message.pinned === b.message.pinned &&
+    a.message.embedsJson === b.message.embedsJson &&
     a.grouped === b.grouped &&
     reactionSig(a.message) === reactionSig(b.message)
   );

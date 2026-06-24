@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { connectSocket, disconnectSocket, getSocket } from "../lib/socket";
 import { useUI } from "../store/ui";
+import { useAuth } from "../store/auth";
 import { useVoice } from "../store/voice";
 import { useNotify } from "../store/notify";
+import { useUnread } from "../store/unread";
 import { playPing, desktopNotify, requestNotifyPermission } from "../lib/sound";
 import { joinVoice } from "../lib/voice";
 import type { DMSummary, Guild, Message } from "../types";
@@ -67,10 +69,17 @@ export default function AppLayout() {
     const dmName = (channelId: string) =>
       (qc.getQueryData<DMSummary[]>(["dms"]) ?? []).find((d) => d.id === channelId);
 
-    // New DM message while not viewing that conversation → toast + ping.
+    // Guild channel activity → unread indicator (unless viewing it).
+    const onActivity = (p: { channelId: string; authorId: string }) => {
+      if (p.authorId === useAuth.getState().user?.id) return;
+      if (useUI.getState().currentChannelId !== p.channelId) useUnread.getState().bump(p.channelId);
+    };
+
+    // New DM message while not viewing that conversation → toast + ping + unread.
     const onDmMessage = (p: { channelId: string; message: Message }) => {
       invalidateDms();
       if (useUI.getState().currentChannelId === p.channelId) return; // already reading it
+      useUnread.getState().bump(p.channelId);
       const who = p.message.author.displayName ?? p.message.author.username;
       const body = p.message.content || (p.message.attachments?.length ? "📎 Attachment" : "");
       push({ title: who, body, actionLabel: "Open", onAction: () => openDM(p.channelId) });
@@ -95,6 +104,7 @@ export default function AppLayout() {
     };
 
     socket.on("notify:dm", onDmMessage);
+    socket.on("channel:activity", onActivity);
     socket.on("voice:state", onVoiceState);
 
     return () => {
@@ -107,6 +117,7 @@ export default function AppLayout() {
       socket.off("friend:remove", invalidateFriends);
       socket.off("dm:new", invalidateDms);
       socket.off("notify:dm", onDmMessage);
+      socket.off("channel:activity", onActivity);
       socket.off("voice:state", onVoiceState);
     };
   }, [qc, currentGuildId, setGuild, openDM]);

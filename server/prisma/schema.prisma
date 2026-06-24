@@ -170,6 +170,7 @@ model Message {
   pinned    Boolean   @default(false)
   editedAt  DateTime?
   createdAt DateTime  @default(now())
+  embedsJson String?  // JSON-encoded link-preview embeds (fetched server-side)
 
   attachments Attachment[]
   reactions   Reaction[]

@@ -75,6 +75,15 @@ export interface Message {
   createdAt: string;
   attachments: Attachment[];
   reactions?: { emoji: string; userId: string }[];
+  embedsJson?: string | null;
+}
+
+export interface LinkEmbed {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  site?: string;
 }
 
 export interface Friend {

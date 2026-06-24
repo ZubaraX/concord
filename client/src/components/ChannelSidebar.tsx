@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
+import { useUnread } from "../store/unread";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, sendVoiceEmoji } from "../lib/voice";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
@@ -15,6 +16,7 @@ import Avatar from "./Avatar";
 export default function ChannelSidebar() {
   const { currentGuildId, currentChannelId, setChannel, openModal, openDM, openFriends } = useUI();
   const voice = useVoice();
+  const unread = useUnread((s) => s.counts);
   const [createCtx, setCreateCtx] = useState<{ type: "TEXT" | "VOICE"; parentId?: string } | null>(null);
 
   const { data: guild } = useQuery<Guild>({
@@ -88,6 +90,7 @@ export default function ChannelSidebar() {
                 <ChannelRow
                   channel={c}
                   active={c.type === "VOICE" ? voice.channelId === c.id : currentChannelId === c.id}
+                  unread={c.type === "TEXT" ? unread[c.id] || 0 : 0}
                   onClick={() => (c.type === "VOICE" ? joinVoice(c.id) : c.type === "TEXT" && setChannel(c.id))}
                 />
                 {c.type === "VOICE" &&
@@ -228,25 +231,34 @@ function CallBtn({
 function ChannelRow({
   channel,
   active,
+  unread = 0,
   onClick,
 }: {
   channel: Channel;
   active: boolean;
+  unread?: number;
   onClick: () => void;
 }) {
   const icon = channel.type === "VOICE" ? "🔊" : channel.type === "ANNOUNCEMENT" ? "📢" : "#";
+  const hasUnread = unread > 0 && !active;
   return (
     <button
       onClick={onClick}
       className={clsx(
-        "mt-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition",
+        "group relative mt-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition",
         active
           ? "bg-discord-active text-white"
+          : hasUnread
+          ? "font-semibold text-white hover:bg-discord-hover"
           : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
       )}
     >
+      {hasUnread && <span className="absolute -left-1 h-2 w-2 rounded-full bg-white" />}
       <span className="w-4 text-center text-discord-faint">{icon}</span>
       <span className="truncate">{channel.name}</span>
+      {hasUnread && (
+        <span className="ml-auto rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white">{unread}</span>
+      )}
     </button>
   );
 }
@@ -262,6 +274,7 @@ function HomeSidebar({
   onDM: (id: string) => void;
 }) {
   const voice = useVoice();
+  const unread = useUnread((s) => s.counts);
   const { data: dms = [] } = useQuery<DMSummary[]>({
     queryKey: ["dms"],
     queryFn: () => api<DMSummary[]>("/api/dms"),
@@ -289,18 +302,24 @@ function HomeSidebar({
         {dms.length === 0 && <div className="px-2 py-1 text-sm text-discord-faint">No DMs yet.</div>}
         {dms.map((dm) => {
           const inCall = (voice.occupancy[dm.id] ?? []).length > 0;
+          const n = activeChannelId === dm.id ? 0 : unread[dm.id] || 0;
           return (
             <button
               key={dm.id}
               onClick={() => onDM(dm.id)}
               className={clsx(
                 "mt-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm",
-                activeChannelId === dm.id ? "bg-discord-active text-white" : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+                activeChannelId === dm.id
+                  ? "bg-discord-active text-white"
+                  : n > 0
+                  ? "font-semibold text-white hover:bg-discord-hover"
+                  : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
               )}
             >
               <Avatar user={dm.otherUser} size={28} status={dm.otherUser?.status ?? "OFFLINE"} />
               <span className="truncate">{dm.name}</span>
               {inCall && <span className="ml-auto text-xs text-discord-green">📞</span>}
+              {n > 0 && <span className={clsx("rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white", inCall ? "ml-1" : "ml-auto")}>{n}</span>}
             </button>
           );
         })}

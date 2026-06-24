@@ -3,7 +3,7 @@
 import { prisma } from "../lib/db.js";
 import { config } from "../config.js";
 import { getAccessibleChannel } from "./access.js";
-import { getIOorNull, channelRoom, userRoom } from "../realtime/io.js";
+import { getIOorNull, channelRoom, guildRoom, userRoom } from "../realtime/io.js";
 
 const authorSelect = {
   id: true,
@@ -91,10 +91,58 @@ export async function broadcastNewMessage(message: CreatedMessage) {
     where: { id: message.channelId },
     select: { guildId: true, dmParticipants: { select: { id: true } } },
   });
-  if (channel && !channel.guildId) {
+  if (channel?.guildId) {
+    // Unread: let every guild member know this channel had activity.
+    io.to(guildRoom(channel.guildId)).emit("channel:activity", {
+      channelId: message.channelId,
+      guildId: channel.guildId,
+      authorId: message.authorId,
+    });
+  } else if (channel) {
     for (const p of channel.dmParticipants) {
       if (p.id !== message.authorId) io.to(userRoom(p.id)).emit("notify:dm", { channelId: message.channelId, message });
     }
+  }
+
+  // Link previews: fetch OG metadata in the background, then update the message.
+  void enrichEmbeds(message.id, message.content, message.channelId);
+}
+
+// ── Link-preview embeds ────────────────────────────────────────────────────
+function pickMeta(html: string, prop: string): string | undefined {
+  const re = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, "i");
+  const m = html.match(re) || html.match(
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, "i")
+  );
+  return m?.[1];
+}
+
+async function enrichEmbeds(messageId: string, content: string, channelId: string) {
+  try {
+    const url = content.match(/https?:\/\/[^\s<]+/)?.[0];
+    if (!url) return;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "ConcordBot/1.0" } }).catch(() => null);
+    clearTimeout(timer);
+    if (!res || !res.ok) return;
+    if (!(res.headers.get("content-type") || "").includes("text/html")) return;
+    const html = (await res.text()).slice(0, 200_000);
+    const decode = (s?: string) =>
+      s?.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const embed = {
+      url,
+      title: decode(pickMeta(html, "og:title") || html.match(/<title>([^<]*)<\/title>/i)?.[1]),
+      description: decode(pickMeta(html, "og:description") || pickMeta(html, "description")),
+      image: pickMeta(html, "og:image"),
+      site: decode(pickMeta(html, "og:site_name")),
+    };
+    if (!embed.title && !embed.image) return;
+    const embedsJson = JSON.stringify([embed]);
+    const updated = await prisma.message.update({ where: { id: messageId }, data: { embedsJson }, include: messageInclude });
+    getIOorNull()?.to(channelRoom(channelId)).emit("message:edit", updated);
+  } catch {
+    /* embeds are best-effort */
   }
 }
 

@@ -4,6 +4,8 @@ import { api, uploadFile, type UploadedFile } from "../api/client";
 import { getSocket } from "../lib/socket";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
+import { useUnread } from "../store/unread";
+import { getLastRead, setLastRead } from "../lib/lastRead";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera } from "../lib/voice";
 import type { Message as Msg } from "../types";
 import MessageItem from "./MessageItem";
@@ -28,6 +30,7 @@ export default function ChatArea() {
   const [replyingTo, setReplyingTo] = useState<Msg | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showPins, setShowPins] = useState(false);
+  const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
@@ -58,7 +61,17 @@ export default function ChatArea() {
   });
 
   useEffect(() => {
-    if (history) setMessages(history);
+    if (!history) return;
+    setMessages(history);
+    // "New messages" divider before the first message newer than last-read,
+    // then mark the channel read.
+    if (currentChannelId) {
+      const lastRead = getLastRead(currentChannelId);
+      const firstNew = history.find((m) => new Date(m.createdAt).getTime() > lastRead);
+      setFirstUnreadId(firstNew && history.length && lastRead ? firstNew.id : null);
+      setLastRead(currentChannelId);
+      useUnread.getState().clear(currentChannelId);
+    }
   }, [history, currentChannelId]);
 
   useEffect(() => {
@@ -73,6 +86,7 @@ export default function ChatArea() {
     const onNew = (m: Msg) => {
       if (m.channelId !== currentChannelId) return;
       setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      setLastRead(currentChannelId); // we're looking at it → stays read
     };
     const onEdit = (m: Msg) => setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
     const onDelete = (p: { id: string }) => setMessages((prev) => prev.filter((x) => x.id !== p.id));
@@ -221,7 +235,15 @@ export default function ChatArea() {
       <div className="flex-1 overflow-y-auto py-4">
         <Welcome name={channel.name} isDM={isDM} />
         {messages.map((m, i) => (
-          <MessageItem key={m.id} message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} />
+          <div key={m.id}>
+            {firstUnreadId === m.id && (
+              <div className="my-1 flex items-center gap-2 px-4">
+                <div className="h-px flex-1 bg-discord-danger/60" />
+                <span className="rounded bg-discord-danger px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">New</span>
+              </div>
+            )}
+            <MessageItem message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} />
+          </div>
         ))}
         <div ref={bottomRef} />
       </div>
