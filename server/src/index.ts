@@ -49,6 +49,31 @@ async function main() {
 
   app.get("/health", async () => ({ status: "ok", ts: Date.now() }));
 
+  // WebRTC ICE servers for the voice/screen-share clients (env-configurable).
+  app.get("/api/ice", async () => {
+    const stun = config.STUN_URLS.split(",").map((s) => s.trim()).filter(Boolean);
+    const iceServers: Array<{ urls: string | string[]; username?: string; credential?: string }> = [
+      { urls: stun },
+    ];
+    if (config.TURN_URLS) {
+      iceServers.push({
+        urls: config.TURN_URLS.split(",").map((s) => s.trim()).filter(Boolean),
+        username: config.TURN_USERNAME,
+        credential: config.TURN_PASSWORD,
+      });
+    } else {
+      // Free public TURN fallback so cross-NAT voice works without setup.
+      for (const u of [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+      ]) {
+        iceServers.push({ urls: u, username: "openrelayproject", credential: "openrelayproject" });
+      }
+    }
+    return { iceServers };
+  });
+
   // Friendly landing page so opening the server URL in a browser isn't a 404.
   app.get("/", async (_req, reply) => {
     reply.type("text/html").send(

@@ -33,6 +33,14 @@ const schema = z.object({
   // The "no limits" knobs. 0 = unlimited.
   MAX_MESSAGE_LENGTH: z.coerce.number().default(100_000),
   MAX_UPLOAD_BYTES: z.coerce.number().default(0),
+
+  // WebRTC ICE. STUN is comma-separated. For reliable cross-network voice,
+  // run coturn and set TURN_URLS/TURN_USERNAME/TURN_PASSWORD; otherwise a free
+  // public TURN fallback is served to clients.
+  STUN_URLS: z.string().default("stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"),
+  TURN_URLS: z.string().optional(),
+  TURN_USERNAME: z.string().optional(),
+  TURN_PASSWORD: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -3,8 +3,8 @@ import { create } from "zustand";
 export interface RemoteEntry {
   socketId: string;
   userId: string;
-  stream: MediaStream;
-  hasVideo: boolean;
+  audio?: MediaStream; // mic
+  video?: MediaStream; // screen share (present only while sharing)
 }
 
 interface VoiceStore {

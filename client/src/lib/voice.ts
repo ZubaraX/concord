@@ -7,12 +7,31 @@
 // This lets us adjust input volume live and supports push-to-talk + live
 // device switching without renegotiation.
 import { getSocket } from "./socket";
-import { useVoice } from "../store/voice";
+import { api } from "../api/client";
+import { useVoice, type RemoteEntry } from "../store/voice";
 import { useSettings, RES_MAP } from "../store/settings";
 
-const ICE: RTCConfiguration = {
-  iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }],
+// STUN for same/simple networks; free public TURN relays so the P2P
+// connection still establishes when both peers are behind different NATs.
+// The server's /api/ice can override this (e.g. with a self-hosted coturn).
+const DEFAULT_ICE: RTCConfiguration = {
+  iceServers: [
+    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+  ],
 };
+let iceConfig: RTCConfiguration = DEFAULT_ICE;
+
+async function loadIceConfig() {
+  try {
+    const r = await api<{ iceServers: RTCIceServer[] }>("/api/ice");
+    if (r?.iceServers?.length) iceConfig = { iceServers: r.iceServers };
+  } catch {
+    /* keep defaults */
+  }
+}
 
 interface Peer {
   pc: RTCPeerConnection;
@@ -91,11 +110,13 @@ export async function refreshMic() {
 }
 
 // ── Peer (perfect negotiation) ─────────────────────────────────────────────
-function upsertRemote(socketId: string, userId: string, stream: MediaStream) {
-  const hasVideo = stream.getVideoTracks().length > 0;
-  const remotes = st().remotes.filter((r) => r.socketId !== socketId);
-  remotes.push({ socketId, userId, stream, hasVideo });
-  st().set({ remotes });
+// Remote tracks are routed by kind: audio = mic (always), video = screen
+// share (only while the peer is sharing). Keeping them on separate entry
+// fields means a screen share never clobbers the mic audio and vice-versa.
+function patchRemote(socketId: string, userId: string, patch: Partial<RemoteEntry>) {
+  const prev = st().remotes.find((r) => r.socketId === socketId) ?? { socketId, userId };
+  const next = { ...prev, ...patch, socketId, userId };
+  st().set({ remotes: [...st().remotes.filter((r) => r.socketId !== socketId), next] });
 }
 function dropRemote(socketId: string) {
   st().set({ remotes: st().remotes.filter((r) => r.socketId !== socketId) });
@@ -109,14 +130,27 @@ function createPeer(socketId: string, userId: string): Peer {
   if (existing) return existing;
 
   const myId = getSocket()?.id ?? "";
-  const pc = new RTCPeerConnection(ICE);
+  const pc = new RTCPeerConnection(iceConfig);
   const peer: Peer = { pc, polite: myId < socketId, makingOffer: false, ignoreOffer: false, userId };
   peers.set(socketId, peer);
 
   sentStream?.getTracks().forEach((t) => pc.addTrack(t, sentStream!));
   screenStream?.getTracks().forEach((t) => pc.addTrack(t, screenStream!));
 
-  pc.ontrack = (e) => upsertRemote(socketId, userId, e.streams[0]);
+  pc.ontrack = (e) => {
+    const track = e.track;
+    const stream = e.streams[0];
+    if (track.kind === "video") {
+      // Screen share track — show it, and remove it when it ends/mutes (stop).
+      patchRemote(socketId, userId, { video: stream });
+      const clear = () => patchRemote(socketId, userId, { video: undefined });
+      track.addEventListener("ended", clear);
+      track.addEventListener("mute", clear);
+      track.addEventListener("unmute", () => patchRemote(socketId, userId, { video: stream }));
+    } else {
+      patchRemote(socketId, userId, { audio: stream });
+    }
+  };
   pc.onicecandidate = (e) => {
     if (e.candidate) signal(socketId, { candidate: e.candidate });
   };
@@ -175,6 +209,7 @@ export function initVoice() {
   const socket = getSocket();
   if (!socket) return;
   inited = true;
+  loadIceConfig(); // fetch TURN/STUN config from the server (non-blocking)
 
   socket.on("voice:peerJoined", ({ socketId, userId }: { socketId: string; userId: string }) => {
     if (st().channelId) createPeer(socketId, userId);

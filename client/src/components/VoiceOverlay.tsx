@@ -9,13 +9,14 @@ export default function VoiceOverlay() {
   const { remotes, localScreen, screenOn } = useVoice();
   const [expanded, setExpanded] = useState<{ stream: MediaStream; label: string } | null>(null);
 
-  const videoTiles = remotes.filter((r) => r.hasVideo);
+  const audioStreams = remotes.filter((r) => r.audio);
+  const videoTiles = remotes.filter((r) => r.video);
   const showGrid = screenOn || videoTiles.length > 0;
 
   return (
     <>
-      {remotes.map((r) => (
-        <AudioSink key={r.socketId} stream={r.stream} />
+      {audioStreams.map((r) => (
+        <AudioSink key={r.socketId} stream={r.audio!} />
       ))}
 
       {showGrid && (
@@ -24,7 +25,7 @@ export default function VoiceOverlay() {
             <VideoTile stream={localScreen} label="Your screen" muted onExpand={setExpanded} />
           )}
           {videoTiles.map((r) => (
-            <VideoTile key={r.socketId} stream={r.stream} label="Screen share" onExpand={setExpanded} />
+            <VideoTile key={r.socketId} stream={r.video!} label="Screen share" onExpand={setExpanded} />
           ))}
         </div>
       )}
