@@ -1,57 +1,239 @@
-// WebRTC P2P voice + screen-share manager (mesh topology with Socket.io
-// signaling, using the "perfect negotiation" pattern so simultaneous offers
-// don't deadlock). Good for small voice channels; an SFU (mediasoup) is the
-// path to large rooms — the signaling shape here maps cleanly onto that later.
+// Voice + screen-share via a SERVER RELAY over the existing Socket.io
+// connection (no WebRTC / no TURN). Each client captures media and streams
+// chunks to the server, which forwards them to everyone else in the voice
+// room. This works anywhere the server is reachable (including Codespaces),
+// because there is no peer-to-peer connection to negotiate.
 //
-// Audio pipeline: raw mic → WebAudio GainNode (input volume) → sent track.
-// This lets us adjust input volume live and supports push-to-talk + live
-// device switching without renegotiation.
+//   • Audio: Web Audio capture → Int16 PCM frames → scheduled playback
+//            (low latency, no codec/MSE fuss).
+//   • Screen: MediaRecorder (VP8) chunks → MediaSource playback → captureStream
+//            so the existing <video> tiles render it unchanged.
 import { getSocket } from "./socket";
-import { api } from "../api/client";
 import { useVoice, type RemoteEntry } from "../store/voice";
 import { useSettings, RES_MAP } from "../store/settings";
 
-// STUN for same/simple networks; free public TURN relays so the P2P
-// connection still establishes when both peers are behind different NATs.
-// The server's /api/ice can override this (e.g. with a self-hosted coturn).
-const DEFAULT_ICE: RTCConfiguration = {
-  iceServers: [
-    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
-  ],
-};
-let iceConfig: RTCConfiguration = DEFAULT_ICE;
+const st = () => useVoice.getState();
+const cfg = () => useSettings.getState();
 
-async function loadIceConfig() {
-  try {
-    const r = await api<{ iceServers: RTCIceServer[] }>("/api/ice");
-    if (r?.iceServers?.length) iceConfig = { iceServers: r.iceServers };
-  } catch {
-    /* keep defaults */
-  }
-}
-
-interface Peer {
-  pc: RTCPeerConnection;
-  polite: boolean;
-  makingOffer: boolean;
-  ignoreOffer: boolean;
-  userId: string;
-}
-
-const peers = new Map<string, Peer>(); // remoteSocketId -> Peer
-let audioCtx: AudioContext | null = null;
-let rawMic: MediaStream | null = null; // unprocessed mic
-let gainNode: GainNode | null = null;
-let sentStream: MediaStream | null = null; // processed audio we send
+// ── Local capture ──────────────────────────────────────────────────────────
+let micStream: MediaStream | null = null;
+let captureCtx: AudioContext | null = null;
+let captureGain: GainNode | null = null;
+let captureNode: ScriptProcessorNode | null = null;
+let silentSink: GainNode | null = null;
 let screenStream: MediaStream | null = null;
+let screenRecorder: MediaRecorder | null = null;
+let firstScreenChunk = true;
+
+let micEnabled = true; // gates sending (mute / push-to-talk)
 let pttDown = false;
 let inited = false;
 let aloneTimer: ReturnType<typeof setTimeout> | null = null;
+let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Leave the call automatically after 60s alone (nobody else connected).
+// ── Playback (per remote sender socketId) ───────────────────────────────────
+interface AudioPlayer {
+  ctx: AudioContext;
+  gain: GainNode;
+  nextTime: number;
+}
+interface VideoPlayer {
+  ms: MediaSource;
+  sb: SourceBuffer | null;
+  queue: ArrayBuffer[];
+  el: HTMLVideoElement;
+  url: string;
+  userId: string;
+}
+const audioPlayers = new Map<string, AudioPlayer>();
+const videoPlayers = new Map<string, VideoPlayer>();
+
+// ── Remote tiles (so VoiceOverlay renders screen video unchanged) ────────────
+function patchRemote(socketId: string, userId: string, patch: Partial<RemoteEntry>) {
+  const prev = st().remotes.find((r) => r.socketId === socketId) ?? { socketId, userId };
+  const next = { ...prev, ...patch, socketId, userId };
+  st().set({ remotes: [...st().remotes.filter((r) => r.socketId !== socketId), next] });
+}
+function dropRemote(socketId: string) {
+  st().set({ remotes: st().remotes.filter((r) => r.socketId !== socketId) });
+}
+
+function emitChunk(kind: "audio" | "screen", data: ArrayBuffer, extra: { sampleRate?: number; first?: boolean } = {}) {
+  const channelId = st().channelId;
+  if (channelId) getSocket()?.emit("media:chunk", { channelId, kind, data, ...extra });
+}
+
+// ── Mic capture (Int16 PCM frames) ───────────────────────────────────────────
+async function startMicCapture() {
+  const s = cfg();
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      deviceId: s.inputDeviceId ? { exact: s.inputDeviceId } : undefined,
+      echoCancellation: s.echoCancellation,
+      noiseSuppression: s.noiseSuppression,
+      autoGainControl: s.autoGainControl,
+    },
+  });
+  captureCtx = new AudioContext();
+  await captureCtx.resume();
+  const source = captureCtx.createMediaStreamSource(micStream);
+  captureGain = captureCtx.createGain();
+  captureGain.gain.value = s.inputVolume / 100;
+  captureNode = captureCtx.createScriptProcessor(2048, 1, 1);
+  silentSink = captureCtx.createGain();
+  silentSink.gain.value = 0; // run the processor without echoing locally
+
+  source.connect(captureGain);
+  captureGain.connect(captureNode);
+  captureNode.connect(silentSink);
+  silentSink.connect(captureCtx.destination);
+
+  captureNode.onaudioprocess = (e) => {
+    if (!micEnabled) return;
+    const f32 = e.inputBuffer.getChannelData(0);
+    const i16 = new Int16Array(f32.length);
+    for (let i = 0; i < f32.length; i++) {
+      const v = Math.max(-1, Math.min(1, f32[i]));
+      i16[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+    }
+    emitChunk("audio", i16.buffer, { sampleRate: captureCtx!.sampleRate });
+  };
+}
+
+function stopMicCapture() {
+  try {
+    captureNode?.disconnect();
+    captureGain?.disconnect();
+    silentSink?.disconnect();
+  } catch {
+    /* ignore */
+  }
+  micStream?.getTracks().forEach((t) => t.stop());
+  captureCtx?.close().catch(() => {});
+  captureNode = null;
+  captureGain = null;
+  silentSink = null;
+  captureCtx = null;
+  micStream = null;
+}
+
+function applyMicState() {
+  const ptt = cfg().voiceMode === "ptt";
+  micEnabled = !st().muted && (!ptt || pttDown);
+}
+
+export function setInputVolume(percent: number) {
+  cfg().set({ inputVolume: percent });
+  if (captureGain) captureGain.gain.value = percent / 100;
+}
+
+export async function refreshMic() {
+  if (!st().channelId) return;
+  stopMicCapture();
+  await startMicCapture();
+  applyMicState();
+}
+
+// ── Audio playback ───────────────────────────────────────────────────────────
+function playAudio(from: string, sampleRate: number, data: ArrayBuffer) {
+  let p = audioPlayers.get(from);
+  if (!p) {
+    const ctx = new AudioContext();
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    p = { ctx, gain, nextTime: 0 };
+    audioPlayers.set(from, p);
+  }
+  p.gain.gain.value = Math.min(cfg().outputVolume / 100, 2);
+
+  const i16 = new Int16Array(data);
+  const f32 = new Float32Array(i16.length);
+  for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 0x8000;
+
+  const buf = p.ctx.createBuffer(1, f32.length, sampleRate || 48000);
+  buf.copyToChannel(f32, 0);
+  const src = p.ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(p.gain);
+  const startAt = Math.max(p.ctx.currentTime + 0.06, p.nextTime); // ~60ms jitter buffer
+  src.start(startAt);
+  p.nextTime = startAt + buf.duration;
+}
+
+function stopAudioPlayer(from: string) {
+  const p = audioPlayers.get(from);
+  if (p) {
+    p.ctx.close().catch(() => {});
+    audioPlayers.delete(from);
+  }
+}
+
+// ── Screen playback (MediaSource) ────────────────────────────────────────────
+function appendVideo(vp: VideoPlayer) {
+  if (!vp.sb || vp.sb.updating || vp.queue.length === 0) return;
+  try {
+    vp.sb.appendBuffer(vp.queue.shift()!);
+  } catch {
+    /* sequence/quota hiccup — drop a chunk */
+    vp.queue.shift();
+  }
+}
+
+function playScreen(from: string, userId: string, first: boolean, data: ArrayBuffer) {
+  let vp = videoPlayers.get(from);
+  // A fresh "first" chunk means a new recorder session → rebuild the player.
+  if (first && vp) {
+    stopScreenPlayer(from);
+    vp = undefined;
+  }
+  if (!vp) {
+    if (!first) return; // wait for an init segment before starting
+    const ms = new MediaSource();
+    const el = document.createElement("video");
+    el.muted = true;
+    el.autoplay = true;
+    (el as HTMLVideoElement & { playsInline: boolean }).playsInline = true;
+    el.src = URL.createObjectURL(ms);
+    const player: VideoPlayer = { ms, sb: null, queue: [], el, url: el.src, userId };
+    videoPlayers.set(from, player);
+    ms.addEventListener("sourceopen", () => {
+      try {
+        player.sb = ms.addSourceBuffer('video/webm;codecs="vp8"');
+        player.sb.mode = "sequence";
+        player.sb.addEventListener("updateend", () => appendVideo(player));
+        appendVideo(player);
+      } catch {
+        /* unsupported */
+      }
+    });
+    el.play().catch(() => {});
+    // Expose the decoded frames as a MediaStream for the existing video tile.
+    try {
+      const stream = (el as HTMLVideoElement & { captureStream: () => MediaStream }).captureStream();
+      patchRemote(from, userId, { video: stream });
+    } catch {
+      /* captureStream unsupported */
+    }
+    vp = player;
+  }
+  vp.queue.push(data);
+  appendVideo(vp);
+}
+
+function stopScreenPlayer(from: string) {
+  const vp = videoPlayers.get(from);
+  if (!vp) return;
+  try {
+    vp.el.pause();
+    URL.revokeObjectURL(vp.url);
+  } catch {
+    /* ignore */
+  }
+  videoPlayers.delete(from);
+  patchRemote(from, vp.userId, { video: undefined });
+}
+
+// ── Auto-leave when alone ────────────────────────────────────────────────────
 function startAloneTimer() {
   if (aloneTimer) return;
   aloneTimer = setTimeout(() => {
@@ -65,249 +247,66 @@ function clearAloneTimer() {
   aloneTimer = null;
 }
 
-/** Send a floating emoji reaction to everyone in the current call. */
 export function sendVoiceEmoji(emoji: string) {
   const channelId = st().channelId;
   if (channelId) getSocket()?.emit("voice:emoji", { channelId, emoji });
 }
 
-const st = () => useVoice.getState();
-const cfg = () => useSettings.getState();
-
-// ── Mic pipeline ─────────────────────────────────────────────────────────
-async function buildMicStream(): Promise<MediaStream> {
-  const s = cfg();
-  rawMic = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: s.inputDeviceId ? { exact: s.inputDeviceId } : undefined,
-      echoCancellation: s.echoCancellation,
-      noiseSuppression: s.noiseSuppression,
-      autoGainControl: s.autoGainControl,
-    },
-  });
-  try {
-    audioCtx = new AudioContext();
-    await audioCtx.resume();
-    const src = audioCtx.createMediaStreamSource(rawMic);
-    gainNode = audioCtx.createGain();
-    gainNode.gain.value = s.inputVolume / 100;
-    const dest = audioCtx.createMediaStreamDestination();
-    src.connect(gainNode).connect(dest);
-    sentStream = dest.stream;
-  } catch {
-    // WebAudio unavailable → send raw mic (no input-volume control).
-    sentStream = rawMic;
-  }
-  return sentStream;
-}
-
-/** Mic track enabled = not muted, and (voice-activity OR push-to-talk held). */
-function applyMicState() {
-  if (!sentStream) return;
-  const ptt = cfg().voiceMode === "ptt";
-  const enabled = !st().muted && (!ptt || pttDown);
-  sentStream.getAudioTracks().forEach((t) => (t.enabled = enabled));
-}
-
-/** Live input volume (0–200%). */
-export function setInputVolume(percent: number) {
-  cfg().set({ inputVolume: percent });
-  if (gainNode) gainNode.gain.value = percent / 100;
-}
-
-/** Re-acquire the mic with current settings and swap it into every call. */
-export async function refreshMic() {
-  if (!st().channelId) return;
-  const old = { ctx: audioCtx, raw: rawMic };
-  await buildMicStream();
-  const track = sentStream!.getAudioTracks()[0];
-  peers.forEach((p) => {
-    const sender = p.pc.getSenders().find((s) => s.track?.kind === "audio");
-    if (sender && track) sender.replaceTrack(track);
-  });
-  applyMicState();
-  old.raw?.getTracks().forEach((t) => t.stop());
-  old.ctx?.close().catch(() => {});
-}
-
-// ── Peer (perfect negotiation) ─────────────────────────────────────────────
-// Remote tracks are routed by kind: audio = mic (always), video = screen
-// share (only while the peer is sharing). Keeping them on separate entry
-// fields means a screen share never clobbers the mic audio and vice-versa.
-function patchRemote(socketId: string, userId: string, patch: Partial<RemoteEntry>) {
-  const prev = st().remotes.find((r) => r.socketId === socketId) ?? { socketId, userId };
-  const next = { ...prev, ...patch, socketId, userId };
-  st().set({ remotes: [...st().remotes.filter((r) => r.socketId !== socketId), next] });
-}
-function dropRemote(socketId: string) {
-  st().set({ remotes: st().remotes.filter((r) => r.socketId !== socketId) });
-}
-
-// Aggregate every peer's connection state into one indicator for the UI.
-function updateConnState() {
-  if (!st().channelId) return;
-  const states = [...peers.values()].map((p) => p.pc.connectionState);
-  let next: "idle" | "connecting" | "connected" | "failed";
-  if (states.length === 0) next = "connected"; // in the call, just nobody else yet
-  else if (states.some((s) => s === "connected")) next = "connected";
-  else if (states.every((s) => s === "failed")) next = "failed";
-  else next = "connecting";
-  if (st().connState !== next) st().set({ connState: next });
-}
-function signal(to: string, data: Record<string, unknown>) {
-  getSocket()?.emit("voice:signal", { to, ...data });
-}
-
-// Max screen-share bitrate by chosen resolution (bits/sec). High values keep
-// fullscreen sharp — WebRTC otherwise defaults to a low bitrate that looks
-// blocky/artifacty when scaled up.
-function screenMaxBitrate(): number {
-  switch (cfg().screenResolution) {
-    case "720p": return 4_000_000;
-    case "1080p": return 8_000_000;
-    case "1440p": return 16_000_000;
-    case "4k": return 32_000_000;
-    default: return 25_000_000; // "source"
-  }
-}
-
-// Tune a peer's screen-share video sender: prefer detail + resolution over
-// frame rate, and lift the bitrate cap so fullscreen isn't full of artifacts.
-async function tuneScreenSender(pc: RTCPeerConnection) {
-  const sender = pc.getSenders().find((s) => s.track?.kind === "video");
-  if (!sender) return;
-  try {
-    const params = sender.getParameters();
-    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
-    params.encodings[0].maxBitrate = screenMaxBitrate();
-    params.encodings[0].maxFramerate = cfg().screenFps;
-    params.degradationPreference = "maintain-resolution";
-    await sender.setParameters(params);
-  } catch {
-    /* setParameters not supported on this track yet — best effort */
-  }
-}
-
-function createPeer(socketId: string, userId: string): Peer {
-  const existing = peers.get(socketId);
-  if (existing) return existing;
-
-  const myId = getSocket()?.id ?? "";
-  const pc = new RTCPeerConnection(iceConfig);
-  const peer: Peer = { pc, polite: myId < socketId, makingOffer: false, ignoreOffer: false, userId };
-  peers.set(socketId, peer);
-
-  sentStream?.getTracks().forEach((t) => pc.addTrack(t, sentStream!));
-  screenStream?.getTracks().forEach((t) => pc.addTrack(t, screenStream!));
-  if (screenStream) tuneScreenSender(pc);
-
-  pc.ontrack = (e) => {
-    const track = e.track;
-    const stream = e.streams[0];
-    if (track.kind === "video") {
-      // Screen share track — show it, and remove it when it ends/mutes (stop).
-      patchRemote(socketId, userId, { video: stream });
-      const clear = () => patchRemote(socketId, userId, { video: undefined });
-      track.addEventListener("ended", clear);
-      track.addEventListener("mute", clear);
-      track.addEventListener("unmute", () => patchRemote(socketId, userId, { video: stream }));
-    } else {
-      patchRemote(socketId, userId, { audio: stream });
-    }
-  };
-  pc.onicecandidate = (e) => {
-    if (e.candidate) signal(socketId, { candidate: e.candidate });
-  };
-  pc.onnegotiationneeded = async () => {
-    try {
-      peer.makingOffer = true;
-      await pc.setLocalDescription();
-      signal(socketId, { description: pc.localDescription });
-    } catch (err) {
-      console.error("[voice] negotiation error", err);
-    } finally {
-      peer.makingOffer = false;
-    }
-  };
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === "failed") pc.restartIce();
-    updateConnState();
-  };
-  pc.oniceconnectionstatechange = updateConnState;
-  return peer;
-}
-
-async function onSignal(payload: {
-  from: string;
-  fromUserId: string;
-  description?: RTCSessionDescriptionInit;
-  candidate?: RTCIceCandidateInit;
-}) {
-  const { from, fromUserId, description, candidate } = payload;
-  const peer = createPeer(from, fromUserId);
-  const pc = peer.pc;
-  try {
-    if (description) {
-      const collision =
-        description.type === "offer" && (peer.makingOffer || pc.signalingState !== "stable");
-      peer.ignoreOffer = !peer.polite && collision;
-      if (peer.ignoreOffer) return;
-      await pc.setRemoteDescription(description);
-      if (description.type === "offer") {
-        await pc.setLocalDescription();
-        signal(from, { description: pc.localDescription });
-      }
-    } else if (candidate) {
-      try {
-        await pc.addIceCandidate(candidate);
-      } catch (err) {
-        if (!peer.ignoreOffer) console.error("[voice] addIceCandidate", err);
-      }
-    }
-  } catch (err) {
-    console.error("[voice] signal handling error", err);
-  }
-}
-
-/** Attach voice signaling + push-to-talk listeners once. */
+// ── Socket wiring ────────────────────────────────────────────────────────────
 export function initVoice() {
   if (inited) return;
   const socket = getSocket();
   if (!socket) return;
   inited = true;
-  loadIceConfig(); // fetch TURN/STUN config from the server (non-blocking)
 
-  socket.on("voice:peerJoined", ({ socketId, userId }: { socketId: string; userId: string }) => {
-    if (st().channelId) createPeer(socketId, userId);
-  });
   socket.on("voice:peerLeft", ({ socketId }: { socketId: string }) => {
-    peers.get(socketId)?.pc.close();
-    peers.delete(socketId);
+    stopAudioPlayer(socketId);
+    stopScreenPlayer(socketId);
     dropRemote(socketId);
-    updateConnState();
   });
-  socket.on("voice:signal", onSignal);
+
+  // Someone joined while we're sharing → restart the recorder so they get a
+  // fresh init segment (PCM audio needs no init, so only screen matters).
+  socket.on("voice:peerJoined", () => {
+    if (st().screenOn) {
+      if (restartTimer) clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => restartScreenRecorder(), 400);
+    }
+  });
+
   socket.on("voice:state", ({ channelId, userIds }: { channelId: string; userIds: string[] }) => {
     st().set({ occupancy: { ...st().occupancy, [channelId]: userIds } });
-    // Auto-leave if we end up alone in our current call for a minute.
     if (channelId === st().channelId) {
       if (userIds.length <= 1) startAloneTimer();
       else clearAloneTimer();
     }
   });
 
-  // Floating emoji reactions during a call.
   socket.on("voice:emoji", ({ emoji }: { emoji: string }) => {
     const id = Date.now() + Math.random();
     st().set({ effects: [...st().effects, { id, emoji }] });
     setTimeout(() => st().set({ effects: st().effects.filter((e) => e.id !== id) }), 4500);
   });
 
-  // Push-to-talk key handling (only matters in PTT mode while connected).
+  // Incoming media from other participants.
+  socket.on(
+    "media:chunk",
+    (p: { from: string; userId: string; kind: "audio" | "screen"; sampleRate?: number; first?: boolean; data: ArrayBuffer }) => {
+      if (!st().channelId) return;
+      const data = p.data instanceof ArrayBuffer ? p.data : (p.data as { buffer?: ArrayBuffer })?.buffer;
+      if (!data) return;
+      if (p.kind === "audio") playAudio(p.from, p.sampleRate ?? 48000, data);
+      else playScreen(p.from, p.userId, !!p.first, data);
+    }
+  );
+  socket.on("media:stop", ({ from, kind }: { from: string; kind: "audio" | "screen" }) => {
+    if (kind === "screen") stopScreenPlayer(from);
+    else stopAudioPlayer(from);
+  });
+
   const onKey = (down: boolean) => (e: KeyboardEvent) => {
     if (cfg().voiceMode !== "ptt" || !st().channelId) return;
-    if (e.code !== cfg().pttKey) return;
-    if (e.repeat) return;
+    if (e.code !== cfg().pttKey || e.repeat) return;
     pttDown = down;
     applyMicState();
   };
@@ -315,44 +314,35 @@ export function initVoice() {
   window.addEventListener("keyup", onKey(false));
 }
 
+// ── Join / leave ─────────────────────────────────────────────────────────────
 export async function joinVoice(channelId: string) {
   if (st().channelId === channelId) return;
   await leaveVoice();
   st().set({ connecting: true });
-  await loadIceConfig(); // pick up latest TURN/STUN config each call
   try {
-    await buildMicStream();
+    await startMicCapture();
   } catch {
     st().set({ connecting: false });
     alert("Microphone access was denied.");
     return;
   }
-  st().set({ channelId, connecting: false, muted: false, connState: "connecting" });
+  st().set({ channelId, connecting: false, muted: false, connState: "connected" });
   applyMicState();
-
-  getSocket()?.emit(
-    "voice:join",
-    { channelId },
-    (res: { ok: boolean; peers?: { socketId: string; userId: string }[] }) => {
-      if (res?.ok) res.peers?.forEach((p) => createPeer(p.socketId, p.userId));
-    }
-  );
+  getSocket()?.emit("voice:join", { channelId }, () => {});
 }
 
 export async function leaveVoice() {
   clearAloneTimer();
   const channelId = st().channelId;
-  if (channelId) getSocket()?.emit("voice:leave", { channelId });
-  peers.forEach((p) => p.pc.close());
-  peers.clear();
-  rawMic?.getTracks().forEach((t) => t.stop());
-  screenStream?.getTracks().forEach((t) => t.stop());
-  audioCtx?.close().catch(() => {});
-  audioCtx = null;
-  rawMic = null;
-  sentStream = null;
-  gainNode = null;
-  screenStream = null;
+  if (channelId) {
+    getSocket()?.emit("media:stop", { channelId, kind: "audio" });
+    if (st().screenOn) getSocket()?.emit("media:stop", { channelId, kind: "screen" });
+    getSocket()?.emit("voice:leave", { channelId });
+  }
+  stopMicCapture();
+  stopScreen();
+  audioPlayers.forEach((_, k) => stopAudioPlayer(k));
+  videoPlayers.forEach((_, k) => stopScreenPlayer(k));
   st().set({ channelId: null, remotes: [], screenOn: false, muted: false, localScreen: null, effects: [], connState: "idle" });
 }
 
@@ -361,17 +351,66 @@ export function toggleMute() {
   applyMicState();
 }
 
-// Screen share using the user's chosen resolution/FPS (no hard cap).
+// ── Screen share ─────────────────────────────────────────────────────────────
+function screenBitrate(): number {
+  switch (cfg().screenResolution) {
+    case "720p": return 4_000_000;
+    case "1080p": return 8_000_000;
+    case "1440p": return 16_000_000;
+    case "4k": return 32_000_000;
+    default: return 20_000_000;
+  }
+}
+
+function startScreenRecorder() {
+  if (!screenStream) return;
+  const videoOnly = new MediaStream(screenStream.getVideoTracks());
+  let recorder: MediaRecorder;
+  try {
+    recorder = new MediaRecorder(videoOnly, {
+      mimeType: 'video/webm;codecs="vp8"',
+      videoBitsPerSecond: screenBitrate(),
+    });
+  } catch {
+    recorder = new MediaRecorder(videoOnly);
+  }
+  firstScreenChunk = true;
+  recorder.ondataavailable = async (e) => {
+    if (!e.data || e.data.size === 0) return;
+    const buf = await e.data.arrayBuffer();
+    emitChunk("screen", buf, { first: firstScreenChunk });
+    firstScreenChunk = false;
+  };
+  recorder.start(250); // 250ms segments
+  screenRecorder = recorder;
+}
+
+function restartScreenRecorder() {
+  if (!screenStream) return;
+  try {
+    screenRecorder?.stop();
+  } catch {
+    /* ignore */
+  }
+  startScreenRecorder();
+}
+
+function stopScreen() {
+  try {
+    screenRecorder?.stop();
+  } catch {
+    /* ignore */
+  }
+  screenRecorder = null;
+  screenStream?.getTracks().forEach((t) => t.stop());
+  screenStream = null;
+}
+
 export async function toggleScreen() {
   if (st().screenOn) {
-    screenStream?.getTracks().forEach((track) => {
-      track.stop();
-      peers.forEach((p) => {
-        const sender = p.pc.getSenders().find((s) => s.track === track);
-        if (sender) p.pc.removeTrack(sender);
-      });
-    });
-    screenStream = null;
+    const channelId = st().channelId;
+    stopScreen();
+    if (channelId) getSocket()?.emit("media:stop", { channelId, kind: "screen" });
     st().set({ screenOn: false, localScreen: null });
     return;
   }
@@ -381,28 +420,26 @@ export async function toggleScreen() {
       ? { frameRate: { ideal: s.screenFps } }
       : { ...RES_MAP[s.screenResolution], frameRate: { ideal: s.screenFps } };
   try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: s.screenAudio });
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: false });
   } catch {
     return;
   }
-  // Hint the encoder this is detailed screen content (sharper text/edges).
-  const videoTrack = screenStream.getVideoTracks()[0];
-  if (videoTrack) {
+  const vt = screenStream.getVideoTracks()[0];
+  if (vt) {
     try {
-      (videoTrack as MediaStreamTrack & { contentHint: string }).contentHint = "detail";
+      (vt as MediaStreamTrack & { contentHint: string }).contentHint = "detail";
     } catch {
-      /* not supported */
+      /* ignore */
     }
+    vt.addEventListener("ended", () => {
+      if (st().screenOn) toggleScreen();
+    });
   }
-  screenStream.getTracks().forEach((t) => peers.forEach((p) => p.pc.addTrack(t, screenStream!)));
-  peers.forEach((p) => tuneScreenSender(p.pc)); // lift bitrate / maintain resolution
-  videoTrack?.addEventListener("ended", () => {
-    if (st().screenOn) toggleScreen();
-  });
+  startScreenRecorder();
   st().set({ screenOn: true, localScreen: screenStream });
 }
 
-// ── Mic test (used in Settings): live input level 0–1 via callback. ─────────
+// ── Settings helpers (unchanged API) ─────────────────────────────────────────
 export async function startMicTest(onLevel: (level: number) => void): Promise<() => void> {
   const s = cfg();
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -415,11 +452,9 @@ export async function startMicTest(onLevel: (level: number) => void): Promise<()
   });
   const ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(stream);
-  const gain = ctx.createGain();
-  gain.gain.value = s.inputVolume / 100;
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 512;
-  src.connect(gain).connect(analyser);
+  src.connect(analyser);
   const data = new Uint8Array(analyser.frequencyBinCount);
   let raf = 0;
   const loop = () => {
@@ -437,7 +472,6 @@ export async function startMicTest(onLevel: (level: number) => void): Promise<()
   };
 }
 
-/** Enumerate audio input/output devices (labels need a prior permission grant). */
 export async function listDevices() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();

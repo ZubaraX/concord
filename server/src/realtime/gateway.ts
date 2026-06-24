@@ -162,6 +162,29 @@ export function attachGateway(app: FastifyInstance) {
       io.to(voiceRoom(channelId)).emit("voice:emoji", { emoji, userId, ts: Date.now() });
     });
 
+    // ── Media relay (no WebRTC/TURN): forward audio/screen chunks to the
+    //    rest of the voice room through this WebSocket. Works anywhere the
+    //    server is reachable (incl. Codespaces), since there's no P2P. ──
+    socket.on(
+      "media:chunk",
+      (p: { channelId: string; kind: "audio" | "screen"; sampleRate?: number; first?: boolean; data: ArrayBuffer }) => {
+        if (!p?.channelId || !p.data) return;
+        socket.to(voiceRoom(p.channelId)).emit("media:chunk", {
+          from: socket.id,
+          userId,
+          kind: p.kind,
+          sampleRate: p.sampleRate,
+          first: p.first,
+          data: p.data,
+        });
+      }
+    );
+
+    socket.on("media:stop", (p: { channelId: string; kind: "audio" | "screen" }) => {
+      if (!p?.channelId) return;
+      socket.to(voiceRoom(p.channelId)).emit("media:stop", { from: socket.id, kind: p.kind });
+    });
+
     // Relay an SDP description or ICE candidate to a specific peer socket.
     socket.on(
       "voice:signal",
