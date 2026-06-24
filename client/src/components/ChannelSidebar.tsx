@@ -5,12 +5,13 @@ import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen } from "../lib/voice";
-import type { Channel, Guild } from "../types";
+import type { Channel, DMSummary, Guild } from "../types";
 import UserPanel from "./UserPanel";
 import CreateChannelModal from "./CreateChannelModal";
+import Avatar from "./Avatar";
 
 export default function ChannelSidebar() {
-  const { currentGuildId, currentChannelId, setChannel, openModal } = useUI();
+  const { currentGuildId, currentChannelId, setChannel, openModal, openDM, openFriends } = useUI();
   const voice = useVoice();
   const [createCtx, setCreateCtx] = useState<{ type: "TEXT" | "VOICE"; parentId?: string } | null>(null);
 
@@ -42,15 +43,7 @@ export default function ChannelSidebar() {
   const openCreate = (type: "TEXT" | "VOICE", parentId?: string) => setCreateCtx({ type, parentId });
 
   if (!currentGuildId) {
-    return (
-      <aside className="flex w-60 flex-col bg-discord-sidebar">
-        <div className="flex h-12 items-center border-b border-black/20 px-4 font-semibold shadow-sm">
-          Direct Messages
-        </div>
-        <div className="flex-1 p-3 text-sm text-discord-muted">No DMs yet.</div>
-        <UserPanel />
-      </aside>
-    );
+    return <HomeSidebar activeChannelId={currentChannelId} onFriends={openFriends} onDM={openDM} />;
   }
 
   return (
@@ -214,6 +207,65 @@ function ChannelRow({
       <span className="w-4 text-center text-discord-faint">{icon}</span>
       <span className="truncate">{channel.name}</span>
     </button>
+  );
+}
+
+// Home view (no guild selected): Friends button + DM conversation list.
+function HomeSidebar({
+  activeChannelId,
+  onFriends,
+  onDM,
+}: {
+  activeChannelId: string | null;
+  onFriends: () => void;
+  onDM: (id: string) => void;
+}) {
+  const voice = useVoice();
+  const { data: dms = [] } = useQuery<DMSummary[]>({
+    queryKey: ["dms"],
+    queryFn: () => api<DMSummary[]>("/api/dms"),
+  });
+
+  return (
+    <aside className="flex w-60 flex-col bg-discord-sidebar">
+      <div className="flex h-12 items-center border-b border-black/20 px-4 font-semibold shadow-sm">
+        Home
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        <button
+          onClick={onFriends}
+          className={clsx(
+            "mb-2 flex w-full items-center gap-2 rounded px-2 py-2 text-sm font-medium",
+            !activeChannelId ? "bg-discord-active text-white" : "text-discord-muted hover:bg-discord-hover hover:text-white"
+          )}
+        >
+          👥 Friends
+        </button>
+
+        <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-discord-muted">
+          Direct Messages
+        </div>
+        {dms.length === 0 && <div className="px-2 py-1 text-sm text-discord-faint">No DMs yet.</div>}
+        {dms.map((dm) => {
+          const inCall = (voice.occupancy[dm.id] ?? []).length > 0;
+          return (
+            <button
+              key={dm.id}
+              onClick={() => onDM(dm.id)}
+              className={clsx(
+                "mt-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm",
+                activeChannelId === dm.id ? "bg-discord-active text-white" : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+              )}
+            >
+              <Avatar user={dm.otherUser} size={28} status={dm.otherUser?.status ?? "OFFLINE"} />
+              <span className="truncate">{dm.name}</span>
+              {inCall && <span className="ml-auto text-xs text-discord-green">📞</span>}
+            </button>
+          );
+        })}
+      </div>
+      <UserPanel />
+    </aside>
   );
 }
 

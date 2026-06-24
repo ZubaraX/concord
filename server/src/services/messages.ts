@@ -2,6 +2,7 @@
 // so a message created either way is identical and broadcast once.
 import { prisma } from "../lib/db.js";
 import { config } from "../config.js";
+import { getAccessibleChannel } from "./access.js";
 
 const authorSelect = {
   id: true,
@@ -47,13 +48,8 @@ export async function createMessage(opts: {
     throw new MessageError(413, `Message exceeds ${config.MAX_MESSAGE_LENGTH} chars`);
   }
 
-  const channel = await prisma.channel.findUnique({ where: { id: opts.channelId } });
-  if (!channel) throw new MessageError(404, "Channel not found");
-
-  const member = await prisma.guildMember.findUnique({
-    where: { guildId_userId: { guildId: channel.guildId, userId: opts.authorId } },
-  });
-  if (!member) throw new MessageError(403, "Not a member of this guild");
+  const channel = await getAccessibleChannel(opts.authorId, opts.channelId);
+  if (!channel) throw new MessageError(403, "No access to this channel");
 
   return prisma.message.create({
     data: {

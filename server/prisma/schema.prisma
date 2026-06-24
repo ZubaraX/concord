@@ -33,9 +33,25 @@ model User {
   memberships   GuildMember[]
   messages      Message[]
   refreshTokens RefreshToken[]
+  dmChannels    Channel[]       @relation("DMParticipants")
+  sentFriendRequests     Friendship[] @relation("FriendRequester")
+  receivedFriendRequests Friendship[] @relation("FriendAddressee")
 
   @@unique([username, discriminator])
   @@index([email])
+}
+
+model Friendship {
+  id          String   @id @default(cuid())
+  requesterId String
+  requester   User     @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String
+  addressee   User     @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      String   @default("PENDING") // PENDING | ACCEPTED
+  createdAt   DateTime @default(now())
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId])
 }
 
 model RefreshToken {
@@ -118,8 +134,9 @@ model GuildMember {
 
 model Channel {
   id        String   @id @default(cuid())
-  guildId   String
-  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  // Null guildId = a direct-message channel (type "DM") between dmParticipants.
+  guildId   String?
+  guild     Guild?   @relation(fields: [guildId], references: [id], onDelete: Cascade)
   name      String
   type      String   @default("TEXT")
   topic     String?
@@ -127,6 +144,7 @@ model Channel {
   parentId  String? // category
   parent    Channel? @relation("ChannelParent", fields: [parentId], references: [id], onDelete: SetNull)
   children  Channel[] @relation("ChannelParent")
+  dmParticipants User[] @relation("DMParticipants")
   // voice config (no caps): bitrate up to lossless, userLimit 0 = unlimited
   bitrate   Int      @default(64000)
   userLimit Int      @default(0)

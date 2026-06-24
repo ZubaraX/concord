@@ -76,6 +76,19 @@ export interface Message {
   attachments: Attachment[];
 }
 
+export interface Friend {
+  id: string; // friendship id
+  user: User;
+}
+
+export interface DMSummary {
+  id: string; // channel id
+  type: "DM";
+  guildId: null;
+  name: string;
+  otherUser: User;
+}
+
 export interface Attachment {
   id: string;
   url: string;

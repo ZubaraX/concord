@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/db.js";
 import { authenticate } from "../lib/auth.js";
 import { createMessage, listMessages, MessageError } from "../services/messages.js";
+import { getAccessibleChannel } from "../services/access.js";
 import { getIO, channelRoom } from "../realtime/io.js";
 
 export async function messageRoutes(app: FastifyInstance) {
@@ -13,12 +14,9 @@ export async function messageRoutes(app: FastifyInstance) {
     const { channelId } = req.params as { channelId: string };
     const { cursor, limit } = req.query as { cursor?: string; limit?: string };
 
-    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
-    if (!channel) return reply.code(404).send({ error: "Channel not found" });
-    const member = await prisma.guildMember.findUnique({
-      where: { guildId_userId: { guildId: channel.guildId, userId: req.userId } },
-    });
-    if (!member) return reply.code(403).send({ error: "Not a member" });
+    if (!(await getAccessibleChannel(req.userId, channelId))) {
+      return reply.code(403).send({ error: "No access to this channel" });
+    }
 
     const messages = await listMessages(channelId, cursor, limit ? Number(limit) : 50);
     return reply.send(messages.reverse()); // oldest → newest for rendering

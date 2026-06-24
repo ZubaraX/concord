@@ -3,6 +3,16 @@ import { z } from "zod";
 import { prisma } from "../lib/db.js";
 import { authenticate } from "../lib/auth.js";
 import { emitToGuild } from "../services/guilds.js";
+import { getAccessibleChannel } from "../services/access.js";
+
+const dmUserSelect = {
+  id: true,
+  username: true,
+  discriminator: true,
+  displayName: true,
+  avatarUrl: true,
+  status: true,
+} as const;
 
 const createBody = z.object({
   guildId: z.string(),
@@ -22,6 +32,30 @@ async function assertMember(userId: string, guildId: string) {
 
 export async function channelRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
+
+  // Channel info by id — works for guild channels and DM channels.
+  app.get("/:channelId", async (req, reply) => {
+    const { channelId } = req.params as { channelId: string };
+    const ch = await getAccessibleChannel(req.userId, channelId);
+    if (!ch) return reply.code(404).send({ error: "Not found" });
+
+    if (!ch.guildId) {
+      const full = await prisma.channel.findUnique({
+        where: { id: channelId },
+        include: { dmParticipants: { select: dmUserSelect } },
+      });
+      const other = full!.dmParticipants.find((p) => p.id !== req.userId) ?? full!.dmParticipants[0];
+      return reply.send({
+        id: ch.id,
+        type: "DM",
+        guildId: null,
+        name: other?.displayName ?? other?.username ?? "Direct Message",
+        otherUser: other,
+        participants: full!.dmParticipants,
+      });
+    }
+    return reply.send({ id: ch.id, name: ch.name, type: ch.type, topic: ch.topic, guildId: ch.guildId });
+  });
 
   app.post("/", async (req, reply) => {
     const parsed = createBody.safeParse(req.body);
@@ -43,7 +77,7 @@ export async function channelRoutes(app: FastifyInstance) {
   app.patch("/:channelId", async (req, reply) => {
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
-    if (!channel) return reply.code(404).send({ error: "Not found" });
+    if (!channel?.guildId) return reply.code(404).send({ error: "Not found" });
     if (!(await assertMember(req.userId, channel.guildId))) {
       return reply.code(403).send({ error: "Not a member" });
     }
@@ -65,7 +99,7 @@ export async function channelRoutes(app: FastifyInstance) {
   app.delete("/:channelId", async (req, reply) => {
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
-    if (!channel) return reply.code(404).send({ error: "Not found" });
+    if (!channel?.guildId) return reply.code(404).send({ error: "Not found" });
     if (!(await assertMember(req.userId, channel.guildId))) {
       return reply.code(403).send({ error: "Not a member" });
     }

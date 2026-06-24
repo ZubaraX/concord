@@ -51,13 +51,19 @@ export function attachGateway(app: FastifyInstance) {
     let currentVoice: string | null = null;
 
     const broadcastVoiceState = async (channelId: string) => {
-      const channel = await prisma.channel.findUnique({ where: { id: channelId }, select: { guildId: true } });
+      const channel = await prisma.channel.findUnique({
+        where: { id: channelId },
+        select: { guildId: true, dmParticipants: { select: { id: true } } },
+      });
       if (!channel) return;
       const map = voiceParticipants.get(channelId);
-      io.to(guildRoom(channel.guildId)).emit("voice:state", {
-        channelId,
-        userIds: map ? [...new Set(map.values())] : [],
-      });
+      const payload = { channelId, userIds: map ? [...new Set(map.values())] : [] };
+      if (channel.guildId) {
+        io.to(guildRoom(channel.guildId)).emit("voice:state", payload);
+      } else {
+        // DM call → notify both participants' personal rooms.
+        for (const p of channel.dmParticipants) io.to(userRoom(p.id)).emit("voice:state", payload);
+      }
     };
 
     const leaveVoiceChannel = (channelId: string) => {
