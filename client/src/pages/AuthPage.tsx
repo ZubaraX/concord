@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../store/auth";
-import { getServerUrl, setServerUrl, isDesktop } from "../lib/serverUrl";
+import { getServerUrl, setServerUrl, serverPinned } from "../lib/serverUrl";
 
 export default function AuthPage() {
   const { login, register } = useAuth();
@@ -12,8 +12,8 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Show the server field on desktop, or whenever no server is configured yet.
-  const showServerField = isDesktop || !getServerUrl();
+  // Only show the server field when the URL isn't baked into the build.
+  const showServerField = !serverPinned;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

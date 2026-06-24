@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../store/auth";
-import { getServerUrl, setServerUrl } from "../lib/serverUrl";
+import { getServerUrl, setServerUrl, serverPinned } from "../lib/serverUrl";
 import type { PresenceStatus } from "../types";
 import Modal from "./Modal";
 import Avatar from "./Avatar";
@@ -122,13 +122,23 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <div className="space-y-4">
-          <Field label="Server URL" value={server} onChange={setServer} placeholder="https://…app.github.dev or http://localhost:4000" />
-          <div className="flex items-center gap-3">
-            <button onClick={saveServer} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4]">
-              Save Server URL
-            </button>
-            {msg && <span className="text-sm text-discord-muted">{msg}</span>}
-          </div>
+          {serverPinned ? (
+            <div>
+              <span className="text-xs font-bold uppercase text-discord-muted">Server</span>
+              <div className="mt-1.5 rounded bg-[#1e1f22] px-3 py-2.5 text-sm text-discord-text">{getServerUrl()}</div>
+              <p className="mt-1 text-xs text-discord-faint">Connected to the official Concord server.</p>
+            </div>
+          ) : (
+            <>
+              <Field label="Server URL" value={server} onChange={setServer} placeholder="http://localhost:4000" />
+              <div className="flex items-center gap-3">
+                <button onClick={saveServer} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4]">
+                  Save Server URL
+                </button>
+                {msg && <span className="text-sm text-discord-muted">{msg}</span>}
+              </div>
+            </>
+          )}
 
           <hr className="border-black/20" />
           <button

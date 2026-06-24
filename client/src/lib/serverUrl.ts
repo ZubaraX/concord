@@ -1,15 +1,20 @@
-// The server may live anywhere (Codespaces forwarded URL, a LAN box, etc.),
-// so the desktop/web client lets the user configure it. Persisted in
-// localStorage; defaults to VITE_API_URL at build time, else same-origin
-// (which works in web dev thanks to the Vite proxy).
+// Server location. When a build-time server URL is baked in (VITE_API_URL),
+// it is authoritative and any saved override is ignored — so shipped builds
+// always talk to the real server. Without a baked URL (e.g. web dev), fall
+// back to a saved value or same-origin (Vite proxy).
 const KEY = "concord.serverUrl";
 const BUILD_DEFAULT = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
+/** True when the server URL is fixed at build time (no user override / field). */
+export const serverPinned = !!BUILD_DEFAULT;
+
 export function getServerUrl(): string {
-  return localStorage.getItem(KEY) ?? BUILD_DEFAULT;
+  if (serverPinned) return BUILD_DEFAULT; // baked URL wins, ignore stale localStorage
+  return localStorage.getItem(KEY) ?? "";
 }
 
 export function setServerUrl(url: string): void {
+  if (serverPinned) return; // no-op when the URL is baked in
   const clean = url.trim().replace(/\/$/, "");
   if (clean) localStorage.setItem(KEY, clean);
   else localStorage.removeItem(KEY);
