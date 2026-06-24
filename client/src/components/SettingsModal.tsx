@@ -4,12 +4,13 @@ import { getServerUrl, setServerUrl } from "../lib/serverUrl";
 import type { PresenceStatus } from "../types";
 import Modal from "./Modal";
 import Avatar from "./Avatar";
+import VoiceSettings from "./VoiceSettings";
 
 const STATUSES: PresenceStatus[] = ["ONLINE", "IDLE", "DND", "OFFLINE"];
 
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { user, updateProfile, logout } = useAuth();
-  const [tab, setTab] = useState<"profile" | "app">("profile");
+  const [tab, setTab] = useState<"profile" | "voice" | "app">("profile");
 
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
@@ -53,10 +54,13 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     <Modal title="Settings" onClose={onClose} wide>
       <div className="mb-5 flex gap-2 border-b border-black/20 pb-3">
         <Tab active={tab === "profile"} onClick={() => setTab("profile")}>My Profile</Tab>
+        <Tab active={tab === "voice"} onClick={() => setTab("voice")}>Voice &amp; Video</Tab>
         <Tab active={tab === "app"} onClick={() => setTab("app")}>App / Connection</Tab>
       </div>
 
-      {tab === "profile" ? (
+      {tab === "voice" ? (
+        <VoiceSettings />
+      ) : tab === "profile" ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4">
             <Avatar user={{ username: user.username, displayName, avatarUrl }} size={64} status={status} />

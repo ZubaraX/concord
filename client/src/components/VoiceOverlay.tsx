@@ -1,51 +1,123 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useVoice } from "../store/voice";
+import { useSettings } from "../store/settings";
 
-// Always-mounted: plays remote audio and shows a floating grid of any video
-// (screen-share) streams — local preview + remotes.
+// Always-mounted: plays remote audio (honoring output device + volume) and
+// shows a grid of any screen-share video. Click a tile to expand; expanded
+// view has a true-fullscreen button.
 export default function VoiceOverlay() {
   const { remotes, localScreen, screenOn } = useVoice();
+  const [expanded, setExpanded] = useState<{ stream: MediaStream; label: string } | null>(null);
+
   const videoTiles = remotes.filter((r) => r.hasVideo);
   const showGrid = screenOn || videoTiles.length > 0;
 
   return (
     <>
-      {/* Remote audio (hidden) */}
       {remotes.map((r) => (
         <AudioSink key={r.socketId} stream={r.stream} />
       ))}
 
       {showGrid && (
         <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex max-w-[60vw] flex-wrap justify-end gap-2">
-          {screenOn && localScreen && <VideoTile stream={localScreen} label="Your screen" muted />}
+          {screenOn && localScreen && (
+            <VideoTile stream={localScreen} label="Your screen" muted onExpand={setExpanded} />
+          )}
           {videoTiles.map((r) => (
-            <VideoTile key={r.socketId} stream={r.stream} label="Screen share" />
+            <VideoTile key={r.socketId} stream={r.stream} label="Screen share" onExpand={setExpanded} />
           ))}
         </div>
       )}
+
+      {expanded && <ExpandedView entry={expanded} onClose={() => setExpanded(null)} />}
     </>
   );
 }
 
 function AudioSink({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLAudioElement>(null);
+  const { outputVolume, outputDeviceId } = useSettings();
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream;
   }, [stream]);
+  useEffect(() => {
+    const el = ref.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
+    if (!el) return;
+    el.volume = Math.min(outputVolume / 100, 1);
+    if (outputDeviceId && el.setSinkId) el.setSinkId(outputDeviceId).catch(() => {});
+  }, [outputVolume, outputDeviceId]);
   return <audio ref={ref} autoPlay />;
 }
 
-function VideoTile({ stream, label, muted }: { stream: MediaStream; label: string; muted?: boolean }) {
+function VideoTile({
+  stream,
+  label,
+  muted,
+  onExpand,
+}: {
+  stream: MediaStream;
+  label: string;
+  muted?: boolean;
+  onExpand: (e: { stream: MediaStream; label: string }) => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream;
   }, [stream]);
   return (
-    <div className="pointer-events-auto relative overflow-hidden rounded-lg border border-black/40 bg-black shadow-xl">
+    <div className="pointer-events-auto group relative overflow-hidden rounded-lg border border-black/40 bg-black shadow-xl">
       <video ref={ref} autoPlay playsInline muted={muted} className="h-48 w-80 object-contain" />
+      <button
+        onClick={() => onExpand({ stream, label })}
+        className="absolute right-1 top-1 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
+        title="Expand"
+      >
+        ⛶ Expand
+      </button>
       <span className="absolute bottom-1 left-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
         {label}
       </span>
+    </div>
+  );
+}
+
+// Large centered viewer with a real fullscreen button.
+function ExpandedView({
+  entry,
+  onClose,
+}: {
+  entry: { stream: MediaStream; label: string };
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = entry.stream;
+  }, [entry.stream]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.fullscreenElement && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onMouseDown={onClose}>
+      <div className="flex items-center justify-between px-4 py-2 text-white" onMouseDown={(e) => e.stopPropagation()}>
+        <span className="font-medium">{entry.label}</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => ref.current?.requestFullscreen?.()}
+            className="rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
+          >
+            ⛶ Fullscreen
+          </button>
+          <button onClick={onClose} className="rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">
+            ✕ Close
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-1 items-center justify-center p-4" onMouseDown={(e) => e.stopPropagation()}>
+        <video ref={ref} autoPlay playsInline controls className="max-h-full max-w-full" />
+      </div>
     </div>
   );
 }
