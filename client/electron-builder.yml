@@ -31,5 +31,9 @@ linux:
     - AppImage
   category: Network
 nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
+  oneClick: true            # run → installs → launches, no prompts
+  perMachine: false         # per-user install, no admin needed
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  shortcutName: Concord
