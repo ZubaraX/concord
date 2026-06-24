@@ -41,7 +41,9 @@ export async function api<T = unknown>(
   retry = true
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
+  // Only declare JSON when we actually send a body — otherwise Fastify rejects
+  // an empty body with content-type application/json (400 Bad Request).
+  if (options.body) headers.set("Content-Type", "application/json");
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
 
   const rel = path.startsWith("/") ? path : `/api/${path}`;

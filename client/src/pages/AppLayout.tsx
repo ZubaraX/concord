@@ -11,6 +11,8 @@ import MemberList from "../components/MemberList";
 import AddServerModal from "../components/AddServerModal";
 import SettingsModal from "../components/SettingsModal";
 import InviteModal from "../components/InviteModal";
+import VoiceOverlay from "../components/VoiceOverlay";
+import { initVoice } from "../lib/voice";
 
 export default function AppLayout() {
   const { currentGuildId, setGuild, modal, closeModal } = useUI();
@@ -19,6 +21,7 @@ export default function AppLayout() {
   // Establish the real-time connection once for the session.
   useEffect(() => {
     connectSocket();
+    initVoice();
     return () => disconnectSocket();
   }, []);
 
@@ -66,6 +69,8 @@ export default function AppLayout() {
       <ChannelSidebar />
       <ChatArea />
       <MemberList />
+
+      <VoiceOverlay />
 
       {modal === "addServer" && <AddServerModal onClose={closeModal} />}
       {modal === "settings" && <SettingsModal onClose={closeModal} />}

@@ -49,6 +49,29 @@ async function main() {
 
   app.get("/health", async () => ({ status: "ok", ts: Date.now() }));
 
+  // Friendly landing page so opening the server URL in a browser isn't a 404.
+  app.get("/", async (_req, reply) => {
+    reply.type("text/html").send(
+      `<!doctype html><meta charset="utf-8"><title>Concord</title>
+       <body style="font-family:system-ui;background:#313338;color:#dbdee1;display:grid;place-items:center;height:100vh;margin:0;text-align:center">
+       <div><h1 style="color:#5865f2">Concord</h1>
+       <p>The API + gateway is running. ✅</p>
+       <p style="color:#949ba4">Open the <b>Concord desktop app</b> and set this URL as your <b>Server URL</b>.</p></div></body>`
+    );
+  });
+
+  // Invite links open here; the desktop app joins by the code.
+  app.get("/invite/:code", async (req, reply) => {
+    const { code } = req.params as { code: string };
+    reply.type("text/html").send(
+      `<!doctype html><meta charset="utf-8"><title>Concord invite</title>
+       <body style="font-family:system-ui;background:#313338;color:#dbdee1;display:grid;place-items:center;height:100vh;margin:0;text-align:center">
+       <div><h1 style="color:#5865f2">You've been invited to Concord</h1>
+       <p>Open the <b>Concord app</b>, click <b>+ → Join</b>, and paste this code:</p>
+       <p style="font-size:1.5rem;font-weight:700;letter-spacing:2px">${code.replace(/[^\w-]/g, "")}</p></div></body>`
+    );
+  });
+
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(guildRoutes, { prefix: "/api/guilds" });
   await app.register(channelRoutes, { prefix: "/api/channels" });
@@ -57,11 +80,12 @@ async function main() {
   await app.register(uploadRoutes, { prefix: "/api" });
 
   // SQLite tuning: WAL gives concurrent reads during writes; busy_timeout
-  // avoids transient "database is locked" under load.
+  // avoids transient "database is locked" under load. journal_mode returns a
+  // row, so it must use queryRaw (executeRaw forbids result rows on SQLite).
   try {
-    await prisma.$executeRawUnsafe("PRAGMA journal_mode=WAL;");
-    await prisma.$executeRawUnsafe("PRAGMA busy_timeout=5000;");
-    await prisma.$executeRawUnsafe("PRAGMA synchronous=NORMAL;");
+    await prisma.$queryRawUnsafe("PRAGMA journal_mode=WAL;");
+    await prisma.$queryRawUnsafe("PRAGMA busy_timeout=5000;");
+    await prisma.$queryRawUnsafe("PRAGMA synchronous=NORMAL;");
   } catch (err) {
     app.log.warn({ err }, "SQLite PRAGMA tuning skipped");
   }
