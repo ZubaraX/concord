@@ -199,6 +199,18 @@ export function attachGateway(app: FastifyInstance) {
       }
     );
 
+    // Map of which MediaStream id is which kind (audio/screen/camera), so the
+    // receiver can classify incoming WebRTC tracks. Broadcast to the room, or
+    // sent directly to one peer (`to`) right after they join.
+    socket.on(
+      "voice:streamkinds",
+      (payload: { channelId: string; to?: string; streams: Record<string, "audio" | "screen" | "camera"> }) => {
+        const msg = { from: socket.id, userId, streams: payload?.streams ?? {} };
+        if (payload?.to) io.to(payload.to).emit("voice:streamkinds", msg);
+        else if (payload?.channelId) socket.to(voiceRoom(payload.channelId)).emit("voice:streamkinds", msg);
+      }
+    );
+
     socket.on("disconnect", async () => {
       if (currentVoice) {
         const ch = currentVoice;
