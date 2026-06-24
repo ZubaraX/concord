@@ -134,7 +134,8 @@ function ExpandedView({
         </div>
       </div>
       <div className="flex flex-1 items-center justify-center p-4" onMouseDown={(e) => e.stopPropagation()}>
-        <video ref={ref} autoPlay playsInline controls className="max-h-full max-w-full" />
+        {/* No native controls — a screen share is a live stream, not a video file. */}
+        <video ref={ref} autoPlay playsInline className="max-h-full max-w-full" />
       </div>
     </div>
   );
