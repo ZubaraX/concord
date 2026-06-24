@@ -14,6 +14,7 @@
     "build": "npm run build --workspace server && npm run build --workspace client",
     "db:generate": "npm run db:generate --workspace server",
     "db:migrate": "npm run db:migrate --workspace server",
+    "db:deploy": "npm run db:deploy --workspace server",
     "db:seed": "npm run db:seed --workspace server"
   },
   "devDependencies": {
