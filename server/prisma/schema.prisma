@@ -172,9 +172,22 @@ model Message {
   createdAt DateTime  @default(now())
 
   attachments Attachment[]
+  reactions   Reaction[]
 
   @@index([channelId, createdAt])
   @@index([authorId])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 model Attachment {

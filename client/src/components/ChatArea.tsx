@@ -51,6 +51,15 @@ export default function ChatArea() {
     };
     const onEdit = (m: Msg) => setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
     const onDelete = (p: { id: string }) => setMessages((prev) => prev.filter((x) => x.id !== p.id));
+    const onReaction = (p: { messageId: string; emoji: string; userId: string; added: boolean }) =>
+      setMessages((prev) =>
+        prev.map((x) => {
+          if (x.id !== p.messageId) return x;
+          const reactions = (x.reactions ?? []).filter((r) => !(r.emoji === p.emoji && r.userId === p.userId));
+          if (p.added) reactions.push({ emoji: p.emoji, userId: p.userId });
+          return { ...x, reactions };
+        })
+      );
     const onTyping = (p: { channelId: string; userId: string; username: string }) => {
       if (p.channelId !== currentChannelId) return;
       setTypingUsers((prev) => ({ ...prev, [p.userId]: p.username }));
@@ -66,12 +75,14 @@ export default function ChatArea() {
     socket.on("message:new", onNew);
     socket.on("message:edit", onEdit);
     socket.on("message:delete", onDelete);
+    socket.on("message:reaction", onReaction);
     socket.on("typing:start", onTyping);
     return () => {
       socket.emit("channel:unsubscribe", currentChannelId);
       socket.off("message:new", onNew);
       socket.off("message:edit", onEdit);
       socket.off("message:delete", onDelete);
+      socket.off("message:reaction", onReaction);
       socket.off("typing:start", onTyping);
     };
   }, [currentChannelId]);

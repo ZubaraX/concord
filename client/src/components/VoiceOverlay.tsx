@@ -6,7 +6,7 @@ import { useSettings } from "../store/settings";
 // shows a grid of any screen-share video. Click a tile to expand; expanded
 // view has a true-fullscreen button.
 export default function VoiceOverlay() {
-  const { remotes, localScreen, screenOn } = useVoice();
+  const { remotes, localScreen, screenOn, effects, channelId } = useVoice();
   const [expanded, setExpanded] = useState<{ stream: MediaStream; label: string } | null>(null);
 
   const audioStreams = remotes.filter((r) => r.audio);
@@ -18,6 +18,23 @@ export default function VoiceOverlay() {
       {audioStreams.map((r) => (
         <AudioSink key={r.socketId} stream={r.audio!} />
       ))}
+
+      {/* Floating emoji reactions during a call */}
+      {channelId && effects.length > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center">
+          <div className="relative h-40 w-40">
+            {effects.map((e) => (
+              <span
+                key={e.id}
+                className="absolute bottom-0 text-4xl"
+                style={{ left: `${20 + ((e.id * 37) % 60)}%`, animation: "float-up 4.4s ease-out forwards" }}
+              >
+                {e.emoji}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showGrid && (
         <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex max-w-[60vw] flex-wrap justify-end gap-2">

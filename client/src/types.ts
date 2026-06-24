@@ -74,6 +74,7 @@ export interface Message {
   editedAt: string | null;
   createdAt: string;
   attachments: Attachment[];
+  reactions?: { emoji: string; userId: string }[];
 }
 
 export interface Friend {

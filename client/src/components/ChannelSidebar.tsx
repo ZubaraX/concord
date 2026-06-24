@@ -4,7 +4,9 @@ import clsx from "clsx";
 import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
-import { joinVoice, leaveVoice, toggleMute, toggleScreen } from "../lib/voice";
+import { joinVoice, leaveVoice, toggleMute, toggleScreen, sendVoiceEmoji } from "../lib/voice";
+
+export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
 import UserPanel from "./UserPanel";
 import CreateChannelModal from "./CreateChannelModal";
@@ -147,31 +149,78 @@ function VoiceControlBar({
   onScreen: () => void;
   onLeave: () => void;
 }) {
+  const [emojiOpen, setEmojiOpen] = useState(false);
   return (
-    <div className="border-t border-black/30 bg-[#232428] px-2 py-2">
-      <div className="flex items-center justify-between px-1">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-discord-green">🔊 Voice Connected</div>
-          <div className="truncate text-xs text-discord-muted">{channelName}</div>
+    <div className="relative border-t border-black/30 bg-[#232428] px-2 py-2">
+      <div className="flex items-center gap-2 px-1">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-discord-green opacity-60" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-discord-green" />
+        </span>
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="truncate text-sm font-semibold text-white">Voice Connected</div>
+          <div className="truncate text-xs text-discord-muted">🔊 {channelName}</div>
         </div>
-        <button onClick={onLeave} title="Disconnect" className="rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-discord-danger">
-          ⛔
+        <button
+          onClick={onLeave}
+          title="Disconnect"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-discord-danger/90 text-white transition hover:bg-discord-danger"
+        >
+          ✕
         </button>
       </div>
-      <div className="mt-1.5 flex gap-1.5">
-        <Ctl active={muted} onClick={onMute} danger>{muted ? "Unmute" : "Mute"}</Ctl>
-        <Ctl active={screenOn} onClick={onScreen}>{screenOn ? "Stop Share" : "Share Screen"}</Ctl>
+
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        <CallBtn active={muted} danger={muted} onClick={onMute} label={muted ? "Unmute" : "Mute"}>
+          {muted ? "🔇" : "🎙"}
+        </CallBtn>
+        <CallBtn active={screenOn} onClick={onScreen} label={screenOn ? "Stop" : "Share"}>
+          🖥
+        </CallBtn>
+        <CallBtn active={emojiOpen} onClick={() => setEmojiOpen((v) => !v)} label="React">
+          😀
+        </CallBtn>
       </div>
+
+      {emojiOpen && (
+        <div className="absolute -top-12 left-2 right-2 flex justify-around rounded-lg bg-discord-rail p-1.5 shadow-xl">
+          {CALL_EMOJIS.map((e) => (
+            <button
+              key={e}
+              onClick={() => {
+                sendVoiceEmoji(e);
+                setEmojiOpen(false);
+              }}
+              className="rounded p-1 text-xl hover:bg-discord-hover"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function Ctl({ children, onClick, active, danger }: { children: React.ReactNode; onClick: () => void; active?: boolean; danger?: boolean }) {
+function CallBtn({
+  children,
+  label,
+  onClick,
+  active,
+  danger,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  danger?: boolean;
+}) {
   return (
     <button
       onClick={onClick}
+      title={label}
       className={clsx(
-        "flex-1 rounded px-2 py-1.5 text-xs font-medium transition",
+        "flex flex-col items-center gap-0.5 rounded-md py-1.5 text-base transition",
         active
           ? danger
             ? "bg-discord-danger text-white"
@@ -179,7 +228,8 @@ function Ctl({ children, onClick, active, danger }: { children: React.ReactNode;
           : "bg-discord-card text-discord-text hover:bg-discord-hover"
       )}
     >
-      {children}
+      <span>{children}</span>
+      <span className="text-[10px] font-medium">{label}</span>
     </button>
   );
 }
@@ -264,6 +314,16 @@ function HomeSidebar({
           );
         })}
       </div>
+      {voice.channelId && (
+        <VoiceControlBar
+          channelName={dms.find((d) => d.id === voice.channelId)?.name ?? "Call"}
+          muted={voice.muted}
+          screenOn={voice.screenOn}
+          onMute={toggleMute}
+          onScreen={toggleScreen}
+          onLeave={leaveVoice}
+        />
+      )}
       <UserPanel />
     </aside>
   );

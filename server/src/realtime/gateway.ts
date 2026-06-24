@@ -6,7 +6,7 @@ import { Server } from "socket.io";
 import { config } from "../config.js";
 import { prisma } from "../lib/db.js";
 import { addPresence, removePresence } from "../lib/presence.js";
-import { createMessage, MessageError } from "../services/messages.js";
+import { createMessage, broadcastNewMessage, MessageError } from "../services/messages.js";
 import { setIO, channelRoom, guildRoom, userRoom } from "./io.js";
 
 interface SocketData {
@@ -107,7 +107,7 @@ export function attachGateway(app: FastifyInstance) {
           replyToId: payload?.replyToId,
           attachments: payload?.attachments,
         });
-        io.to(channelRoom(message.channelId)).emit("message:new", message);
+        await broadcastNewMessage(message);
         ack?.({ ok: true, message });
       } catch (err) {
         const msg = err instanceof MessageError ? err.message : "Failed to send";
@@ -154,6 +154,12 @@ export function attachGateway(app: FastifyInstance) {
       leaveVoiceChannel(channelId);
       if (currentVoice === channelId) currentVoice = null;
       broadcastVoiceState(channelId);
+    });
+
+    // Floating emoji reaction inside a call → everyone in the voice room.
+    socket.on("voice:emoji", ({ channelId, emoji }: { channelId: string; emoji: string }) => {
+      if (typeof channelId !== "string" || typeof emoji !== "string") return;
+      io.to(voiceRoom(channelId)).emit("voice:emoji", { emoji, userId, ts: Date.now() });
     });
 
     // Relay an SDP description or ICE candidate to a specific peer socket.

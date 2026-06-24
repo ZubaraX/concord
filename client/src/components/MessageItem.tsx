@@ -15,11 +15,31 @@ function MessageItem({
 }) {
   const { user } = useAuth();
   const [hover, setHover] = useState(false);
+  const [picker, setPicker] = useState(false);
   const mine = user?.id === message.author.id;
   const time = new Date(message.createdAt);
 
   // Parse markdown once per content change, not on every parent re-render.
   const body = useMemo(() => renderMarkdown(message.content), [message.content]);
+
+  // Group reactions by emoji → count + whether I reacted.
+  const reactionGroups = useMemo(() => {
+    const map = new Map<string, { count: number; mine: boolean }>();
+    for (const r of message.reactions ?? []) {
+      const g = map.get(r.emoji) ?? { count: 0, mine: false };
+      g.count++;
+      if (r.userId === user?.id) g.mine = true;
+      map.set(r.emoji, g);
+    }
+    return [...map.entries()];
+  }, [message.reactions, user?.id]);
+
+  function toggleReaction(emoji: string) {
+    setPicker(false);
+    const mineReacted = (message.reactions ?? []).some((r) => r.emoji === emoji && r.userId === user?.id);
+    const enc = encodeURIComponent(emoji);
+    api(`/api/messages/${message.id}/reactions/${enc}`, { method: mineReacted ? "DELETE" : "PUT" }).catch(() => {});
+  }
 
   return (
     <div
@@ -75,20 +95,66 @@ function MessageItem({
             ))}
           </div>
         )}
+
+        {reactionGroups.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {reactionGroups.map(([emoji, g]) => (
+              <button
+                key={emoji}
+                onClick={() => toggleReaction(emoji)}
+                className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm transition ${
+                  g.mine
+                    ? "border-discord-accent bg-discord-accent/20 text-white"
+                    : "border-transparent bg-discord-card text-discord-text hover:border-discord-hover"
+                }`}
+              >
+                <span>{emoji}</span>
+                <span className="text-xs text-discord-muted">{g.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {hover && mine && (
-        <button
-          onClick={() => api(`/api/messages/${message.id}`, { method: "DELETE" }).catch(() => {})}
-          className="absolute right-3 top-0 rounded bg-discord-rail px-2 py-1 text-xs text-discord-muted hover:text-discord-danger"
-          title="Delete"
-        >
-          🗑
-        </button>
+      {hover && (
+        <div className="absolute right-3 top-0 flex items-center gap-1 rounded bg-discord-rail shadow">
+          <button
+            onClick={() => setPicker((p) => !p)}
+            className="px-2 py-1 text-sm text-discord-muted hover:text-white"
+            title="Add reaction"
+          >
+            😀
+          </button>
+          {mine && (
+            <button
+              onClick={() => api(`/api/messages/${message.id}`, { method: "DELETE" }).catch(() => {})}
+              className="px-2 py-1 text-sm text-discord-muted hover:text-discord-danger"
+              title="Delete"
+            >
+              🗑
+            </button>
+          )}
+        </div>
+      )}
+
+      {picker && (
+        <div className="absolute right-3 top-7 z-10 flex gap-1 rounded-lg bg-discord-rail p-1.5 shadow-xl">
+          {QUICK_EMOJIS.map((e) => (
+            <button
+              key={e}
+              onClick={() => toggleReaction(e)}
+              className="rounded p-1 text-lg hover:bg-discord-hover"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
 }
+
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "😢", "🔥", "👀"];
 
 function AttachmentView({ attachment }: { attachment: Attachment }) {
   const src = serverPath(attachment.url);
@@ -133,13 +199,17 @@ function prettySize(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-// Re-render a message only when its identity, content, edit state, or grouping
-// changes — not when sibling messages arrive.
+const reactionSig = (m: Message) =>
+  (m.reactions ?? []).map((r) => r.emoji + r.userId).sort().join(",");
+
+// Re-render a message only when its identity, content, edit state, reactions,
+// or grouping changes — not when sibling messages arrive.
 export default memo(MessageItem, (a, b) => {
   return (
     a.message.id === b.message.id &&
     a.message.content === b.message.content &&
     a.message.editedAt === b.message.editedAt &&
-    a.grouped === b.grouped
+    a.grouped === b.grouped &&
+    reactionSig(a.message) === reactionSig(b.message)
   );
 });

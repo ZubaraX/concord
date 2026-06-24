@@ -49,6 +49,27 @@ let sentStream: MediaStream | null = null; // processed audio we send
 let screenStream: MediaStream | null = null;
 let pttDown = false;
 let inited = false;
+let aloneTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Leave the call automatically after 60s alone (nobody else connected).
+function startAloneTimer() {
+  if (aloneTimer) return;
+  aloneTimer = setTimeout(() => {
+    aloneTimer = null;
+    const ch = st().channelId;
+    if (ch && (st().occupancy[ch] ?? []).length <= 1) leaveVoice();
+  }, 60_000);
+}
+function clearAloneTimer() {
+  if (aloneTimer) clearTimeout(aloneTimer);
+  aloneTimer = null;
+}
+
+/** Send a floating emoji reaction to everyone in the current call. */
+export function sendVoiceEmoji(emoji: string) {
+  const channelId = st().channelId;
+  if (channelId) getSocket()?.emit("voice:emoji", { channelId, emoji });
+}
 
 const st = () => useVoice.getState();
 const cfg = () => useSettings.getState();
@@ -125,6 +146,36 @@ function signal(to: string, data: Record<string, unknown>) {
   getSocket()?.emit("voice:signal", { to, ...data });
 }
 
+// Max screen-share bitrate by chosen resolution (bits/sec). High values keep
+// fullscreen sharp — WebRTC otherwise defaults to a low bitrate that looks
+// blocky/artifacty when scaled up.
+function screenMaxBitrate(): number {
+  switch (cfg().screenResolution) {
+    case "720p": return 4_000_000;
+    case "1080p": return 8_000_000;
+    case "1440p": return 16_000_000;
+    case "4k": return 32_000_000;
+    default: return 25_000_000; // "source"
+  }
+}
+
+// Tune a peer's screen-share video sender: prefer detail + resolution over
+// frame rate, and lift the bitrate cap so fullscreen isn't full of artifacts.
+async function tuneScreenSender(pc: RTCPeerConnection) {
+  const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+  if (!sender) return;
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+    params.encodings[0].maxBitrate = screenMaxBitrate();
+    params.encodings[0].maxFramerate = cfg().screenFps;
+    params.degradationPreference = "maintain-resolution";
+    await sender.setParameters(params);
+  } catch {
+    /* setParameters not supported on this track yet — best effort */
+  }
+}
+
 function createPeer(socketId: string, userId: string): Peer {
   const existing = peers.get(socketId);
   if (existing) return existing;
@@ -136,6 +187,7 @@ function createPeer(socketId: string, userId: string): Peer {
 
   sentStream?.getTracks().forEach((t) => pc.addTrack(t, sentStream!));
   screenStream?.getTracks().forEach((t) => pc.addTrack(t, screenStream!));
+  if (screenStream) tuneScreenSender(pc);
 
   pc.ontrack = (e) => {
     const track = e.track;
@@ -222,6 +274,18 @@ export function initVoice() {
   socket.on("voice:signal", onSignal);
   socket.on("voice:state", ({ channelId, userIds }: { channelId: string; userIds: string[] }) => {
     st().set({ occupancy: { ...st().occupancy, [channelId]: userIds } });
+    // Auto-leave if we end up alone in our current call for a minute.
+    if (channelId === st().channelId) {
+      if (userIds.length <= 1) startAloneTimer();
+      else clearAloneTimer();
+    }
+  });
+
+  // Floating emoji reactions during a call.
+  socket.on("voice:emoji", ({ emoji }: { emoji: string }) => {
+    const id = Date.now() + Math.random();
+    st().set({ effects: [...st().effects, { id, emoji }] });
+    setTimeout(() => st().set({ effects: st().effects.filter((e) => e.id !== id) }), 4500);
   });
 
   // Push-to-talk key handling (only matters in PTT mode while connected).
@@ -260,6 +324,7 @@ export async function joinVoice(channelId: string) {
 }
 
 export async function leaveVoice() {
+  clearAloneTimer();
   const channelId = st().channelId;
   if (channelId) getSocket()?.emit("voice:leave", { channelId });
   peers.forEach((p) => p.pc.close());
@@ -272,7 +337,7 @@ export async function leaveVoice() {
   sentStream = null;
   gainNode = null;
   screenStream = null;
-  st().set({ channelId: null, remotes: [], screenOn: false, muted: false, localScreen: null });
+  st().set({ channelId: null, remotes: [], screenOn: false, muted: false, localScreen: null, effects: [] });
 }
 
 export function toggleMute() {
@@ -304,8 +369,18 @@ export async function toggleScreen() {
   } catch {
     return;
   }
+  // Hint the encoder this is detailed screen content (sharper text/edges).
+  const videoTrack = screenStream.getVideoTracks()[0];
+  if (videoTrack) {
+    try {
+      (videoTrack as MediaStreamTrack & { contentHint: string }).contentHint = "detail";
+    } catch {
+      /* not supported */
+    }
+  }
   screenStream.getTracks().forEach((t) => peers.forEach((p) => p.pc.addTrack(t, screenStream!)));
-  screenStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+  peers.forEach((p) => tuneScreenSender(p.pc)); // lift bitrate / maintain resolution
+  videoTrack?.addEventListener("ended", () => {
     if (st().screenOn) toggleScreen();
   });
   st().set({ screenOn: true, localScreen: screenStream });

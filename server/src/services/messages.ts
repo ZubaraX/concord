@@ -3,6 +3,7 @@
 import { prisma } from "../lib/db.js";
 import { config } from "../config.js";
 import { getAccessibleChannel } from "./access.js";
+import { getIOorNull, channelRoom, userRoom } from "../realtime/io.js";
 
 const authorSelect = {
   id: true,
@@ -15,6 +16,7 @@ const authorSelect = {
 export const messageInclude = {
   author: { select: authorSelect },
   attachments: true,
+  reactions: { select: { emoji: true, userId: true } },
   replyTo: { include: { author: { select: authorSelect } } },
 } as const;
 
@@ -72,6 +74,28 @@ export async function createMessage(opts: {
     },
     include: messageInclude,
   });
+}
+
+type CreatedMessage = Awaited<ReturnType<typeof createMessage>>;
+
+/**
+ * Broadcast a freshly-created message to the channel, and for DMs also ping the
+ * other participant's personal room so they get a notification when not viewing.
+ */
+export async function broadcastNewMessage(message: CreatedMessage) {
+  const io = getIOorNull();
+  if (!io) return;
+  io.to(channelRoom(message.channelId)).emit("message:new", message);
+
+  const channel = await prisma.channel.findUnique({
+    where: { id: message.channelId },
+    select: { guildId: true, dmParticipants: { select: { id: true } } },
+  });
+  if (channel && !channel.guildId) {
+    for (const p of channel.dmParticipants) {
+      if (p.id !== message.authorId) io.to(userRoom(p.id)).emit("notify:dm", { channelId: message.channelId, message });
+    }
+  }
 }
 
 // Cursor-paginated history (newest first). Full, unlimited history.

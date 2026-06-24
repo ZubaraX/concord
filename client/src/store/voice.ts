@@ -15,6 +15,7 @@ interface VoiceStore {
   localScreen: MediaStream | null; // preview of our own shared screen
   occupancy: Record<string, string[]>; // channelId -> userIds (for the sidebar)
   remotes: RemoteEntry[]; // active call peers' streams
+  effects: { id: number; emoji: string }[]; // floating emoji reactions in-call
   set: (p: Partial<VoiceStore>) => void;
 }
 
@@ -26,5 +27,6 @@ export const useVoice = create<VoiceStore>((set) => ({
   localScreen: null,
   occupancy: {},
   remotes: [],
+  effects: [],
   set: (p) => set(p),
 }));
