@@ -27,6 +27,14 @@ let firstScreenChunk = true;
 
 let micEnabled = true; // gates sending (mute / push-to-talk)
 let pttDown = false;
+
+// Noise gate (extra suppression on top of the browser's noiseSuppression):
+// while the input is below the threshold we stop transmitting, so steady
+// background noise / silence isn't sent. Hangover keeps it open briefly after
+// speech so word endings aren't clipped.
+let gateHangover = 0;
+const GATE_THRESHOLD = 0.012; // RMS on a -1..1 scale
+const GATE_HANGOVER_FRAMES = 10; // ~0.4s at 2048-sample frames
 let inited = false;
 let aloneTimer: ReturnType<typeof setTimeout> | null = null;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -91,6 +99,17 @@ async function startMicCapture() {
   captureNode.onaudioprocess = (e) => {
     if (!micEnabled) return;
     const f32 = e.inputBuffer.getChannelData(0);
+
+    // Noise gate: don't transmit while it's just background noise.
+    if (cfg().noiseSuppression) {
+      let sum = 0;
+      for (let i = 0; i < f32.length; i++) sum += f32[i] * f32[i];
+      const rms = Math.sqrt(sum / f32.length);
+      if (rms >= GATE_THRESHOLD) gateHangover = GATE_HANGOVER_FRAMES;
+      else if (gateHangover > 0) gateHangover--;
+      if (gateHangover === 0) return; // gated → silence
+    }
+
     const i16 = new Int16Array(f32.length);
     for (let i = 0; i < f32.length; i++) {
       const v = Math.max(-1, Math.min(1, f32[i]));
@@ -452,9 +471,13 @@ export async function startMicTest(onLevel: (level: number) => void): Promise<()
   });
   const ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(stream);
+  const gain = ctx.createGain();
+  gain.gain.value = s.inputVolume / 100;
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 512;
-  src.connect(analyser);
+  src.connect(gain);
+  gain.connect(analyser);
+  gain.connect(ctx.destination); // monitor: hear yourself during the test
   const data = new Uint8Array(analyser.frequencyBinCount);
   let raf = 0;
   const loop = () => {
