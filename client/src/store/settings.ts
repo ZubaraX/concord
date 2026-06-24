@@ -12,6 +12,7 @@ export interface SettingsState {
   echoCancellation: boolean;
   noiseSuppression: boolean;
   autoGainControl: boolean;
+  micSensitivity: number; // 0–100; higher = picks up quieter sounds (less gating)
   voiceMode: VoiceMode;
   pttKey: string; // KeyboardEvent.code, e.g. "Space"
 
@@ -42,6 +43,7 @@ export const useSettings = create<SettingsState>()(
       echoCancellation: true,
       noiseSuppression: true,
       autoGainControl: true,
+      micSensitivity: 75,
       voiceMode: "vad",
       pttKey: "Space",
 

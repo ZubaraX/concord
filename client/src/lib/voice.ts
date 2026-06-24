@@ -33,8 +33,10 @@ let pttDown = false;
 // background noise / silence isn't sent. Hangover keeps it open briefly after
 // speech so word endings aren't clipped.
 let gateHangover = 0;
-const GATE_THRESHOLD = 0.012; // RMS on a -1..1 scale
 const GATE_HANGOVER_FRAMES = 10; // ~0.4s at 2048-sample frames
+// Sensitivity (0–100) → RMS threshold. Higher sensitivity = lower threshold
+// (transmits quieter sounds); 100 = gate effectively off.
+const gateThreshold = () => (1 - cfg().micSensitivity / 100) * 0.05;
 let inited = false;
 let aloneTimer: ReturnType<typeof setTimeout> | null = null;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -105,7 +107,7 @@ async function startMicCapture() {
       let sum = 0;
       for (let i = 0; i < f32.length; i++) sum += f32[i] * f32[i];
       const rms = Math.sqrt(sum / f32.length);
-      if (rms >= GATE_THRESHOLD) gateHangover = GATE_HANGOVER_FRAMES;
+      if (rms >= gateThreshold()) gateHangover = GATE_HANGOVER_FRAMES;
       else if (gateHangover > 0) gateHangover--;
       if (gateHangover === 0) return; // gated → silence
     }

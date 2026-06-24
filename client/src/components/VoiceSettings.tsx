@@ -109,6 +109,21 @@ export default function VoiceSettings() {
         <Toggle label="Echo cancellation" checked={s.echoCancellation} onChange={(v) => onProcessingChange({ echoCancellation: v })} />
         <Toggle label="Noise suppression" checked={s.noiseSuppression} onChange={(v) => onProcessingChange({ noiseSuppression: v })} />
         <Toggle label="Automatic gain control" checked={s.autoGainControl} onChange={(v) => onProcessingChange({ autoGainControl: v })} />
+        {s.noiseSuppression && (
+          <>
+            <Slider
+              label={`Mic sensitivity — ${s.micSensitivity}%`}
+              min={0}
+              max={100}
+              value={s.micSensitivity}
+              onChange={(v) => s.set({ micSensitivity: v })}
+            />
+            <p className="text-xs text-discord-faint">
+              Lower = stronger noise gate (only louder speech is sent); higher = picks up quieter
+              sounds. Use the mic test above and find where background noise stops transmitting.
+            </p>
+          </>
+        )}
       </section>
 
       {/* INPUT MODE */}
