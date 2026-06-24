@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { getSocket } from "../lib/socket";
 import { useUI } from "../store/ui";
-import type { Guild, GuildMember, PresenceStatus } from "../types";
+import { useAuth } from "../store/auth";
+import { joinVoice } from "../lib/voice";
+import { useNotify } from "../store/notify";
+import type { Guild, GuildMember, PresenceStatus, User } from "../types";
 import Avatar from "./Avatar";
+import ContextMenu, { type MenuItem } from "./ContextMenu";
 
 export default function MemberList() {
-  const { currentGuildId } = useUI();
+  const { currentGuildId, openDM } = useUI();
+  const { user: me } = useAuth();
+  const qc = useQueryClient();
   const [presence, setPresence] = useState<Record<string, PresenceStatus>>({});
+  const [menu, setMenu] = useState<{ x: number; y: number; user: User } | null>(null);
 
   const { data: guild } = useQuery<Guild>({
     queryKey: ["guild", currentGuildId],
@@ -16,7 +23,6 @@ export default function MemberList() {
     enabled: !!currentGuildId,
   });
 
-  // Live presence updates from the gateway.
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -28,18 +34,50 @@ export default function MemberList() {
 
   if (!currentGuildId || !guild?.members) return null;
 
-  const withStatus = (m: GuildMember): PresenceStatus =>
-    presence[m.user.id] ?? m.user.status ?? "OFFLINE";
-
+  const withStatus = (m: GuildMember): PresenceStatus => presence[m.user.id] ?? m.user.status ?? "OFFLINE";
   const online = guild.members.filter((m) => withStatus(m) !== "OFFLINE");
   const offline = guild.members.filter((m) => withStatus(m) === "OFFLINE");
+
+  async function openDMWith(u: User, call = false) {
+    try {
+      const dm = await api<{ id: string }>("/api/dms", { method: "POST", body: JSON.stringify({ userId: u.id }) });
+      qc.invalidateQueries({ queryKey: ["dms"] });
+      openDM(dm.id);
+      if (call) joinVoice(dm.id);
+    } catch (e) {
+      useNotify.getState().push({ title: "Can't open DM", body: (e as Error).message });
+    }
+  }
+
+  function menuItems(u: User): MenuItem[] {
+    return [
+      { label: "Message", icon: "💬", onClick: () => openDMWith(u) },
+      { label: "Call", icon: "📞", onClick: () => openDMWith(u, true) },
+      {
+        label: "Add Friend",
+        icon: "➕",
+        onClick: () =>
+          api("/api/friends/request", { method: "POST", body: JSON.stringify({ username: u.username, discriminator: u.discriminator }) })
+            .then(() => useNotify.getState().push({ title: "Friend request sent", body: `${u.username}#${u.discriminator}` }))
+            .catch((e) => useNotify.getState().push({ title: "Couldn't add friend", body: (e as Error).message })),
+      },
+      { label: "Copy User ID", icon: "🆔", onClick: () => navigator.clipboard?.writeText(u.id) },
+    ];
+  }
+
+  const rowMenu = (e: React.MouseEvent, u: User) => {
+    if (u.id === me?.id) return;
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, user: u });
+  };
 
   return (
     <aside className="hidden w-60 flex-col bg-discord-sidebar lg:flex">
       <div className="flex-1 overflow-y-auto px-2 py-4">
-        <Section title={`Online — ${online.length}`} members={online} status={withStatus} />
-        <Section title={`Offline — ${offline.length}`} members={offline} status={withStatus} dim />
+        <Section title={`Online — ${online.length}`} members={online} status={withStatus} onMenu={rowMenu} />
+        <Section title={`Offline — ${offline.length}`} members={offline} status={withStatus} onMenu={rowMenu} dim />
       </div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.user)} onClose={() => setMenu(null)} />}
     </aside>
   );
 }
@@ -48,25 +86,26 @@ function Section({
   title,
   members,
   status,
+  onMenu,
   dim,
 }: {
   title: string;
   members: GuildMember[];
   status: (m: GuildMember) => PresenceStatus;
+  onMenu: (e: React.MouseEvent, u: User) => void;
   dim?: boolean;
 }) {
   if (members.length === 0) return null;
   return (
     <div className="mb-4">
-      <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-discord-muted">
-        {title}
-      </div>
+      <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-discord-muted">{title}</div>
       {members.map((m) => {
         const top = m.roles?.find((r) => !r.isDefault && r.color);
         return (
           <div
             key={m.id}
-            className={`flex items-center gap-2 rounded px-2 py-1.5 hover:bg-discord-hover ${dim ? "opacity-50" : ""}`}
+            onContextMenu={(e) => onMenu(e, m.user)}
+            className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-discord-hover ${dim ? "opacity-50" : ""}`}
           >
             <Avatar user={m.user} size={32} status={status(m)} />
             <span className="truncate text-sm font-medium" style={{ color: top?.color }}>

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../lib/db.js";
 import { authenticate } from "../lib/auth.js";
-import { createMessage, listMessages, broadcastNewMessage, MessageError } from "../services/messages.js";
+import { createMessage, listMessages, broadcastNewMessage, messageInclude, MessageError } from "../services/messages.js";
 import { getAccessibleChannel } from "../services/access.js";
 import { getIO, channelRoom } from "../realtime/io.js";
 
@@ -135,5 +135,39 @@ export async function messageRoutes(app: FastifyInstance) {
       added: false,
     });
     return reply.code(200).send({ ok: true });
+  });
+
+  // ── Pins ──────────────────────────────────────────────────────────────
+  async function setPinned(userId: string, messageId: string, pinned: boolean, reply: import("fastify").FastifyReply) {
+    const channelId = await reactableChannel(userId, messageId);
+    if (!channelId) return reply.code(403).send({ error: "No access" });
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { pinned },
+      include: messageInclude,
+    });
+    getIO().to(channelRoom(channelId)).emit("message:edit", updated);
+    return reply.send({ ok: true });
+  }
+
+  app.put("/messages/:messageId/pin", (req, reply) =>
+    setPinned(req.userId, (req.params as { messageId: string }).messageId, true, reply)
+  );
+  app.delete("/messages/:messageId/pin", (req, reply) =>
+    setPinned(req.userId, (req.params as { messageId: string }).messageId, false, reply)
+  );
+
+  // List pinned messages of a channel.
+  app.get("/channels/:channelId/pins", async (req, reply) => {
+    const { channelId } = req.params as { channelId: string };
+    if (!(await getAccessibleChannel(req.userId, channelId))) {
+      return reply.code(403).send({ error: "No access" });
+    }
+    const pins = await prisma.message.findMany({
+      where: { channelId, pinned: true },
+      include: messageInclude,
+      orderBy: { createdAt: "desc" },
+    });
+    return reply.send(pins);
   });
 }

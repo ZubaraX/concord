@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { api, uploadFile, type UploadedFile } from "../api/client";
 import { getSocket } from "../lib/socket";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
@@ -8,6 +8,7 @@ import { joinVoice, leaveVoice, toggleMute, toggleScreen } from "../lib/voice";
 import type { Message as Msg } from "../types";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
+import PinsModal from "./PinsModal";
 
 interface ChannelInfo {
   id: string;
@@ -22,7 +23,26 @@ export default function ChatArea() {
   const voice = useVoice();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [attachments, setAttachments] = useState<UploadedFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Msg | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [showPins, setShowPins] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const addFiles = useCallback(async (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    if (!arr.length) return;
+    setUploading(true);
+    try {
+      const up = await Promise.all(arr.map((f) => uploadFile(f)));
+      setAttachments((prev) => [...prev, ...up]);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }, []);
 
   // Channel info by id — works for both guild channels and DMs.
   const { data: channel } = useQuery<ChannelInfo>({
@@ -91,6 +111,13 @@ export default function ChatArea() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  // Reset composer state when switching channels.
+  useEffect(() => {
+    setAttachments([]);
+    setReplyingTo(null);
+    setShowPins(false);
+  }, [currentChannelId]);
+
   if (!currentChannelId || !channel) {
     return (
       <main className="flex flex-1 flex-col items-center justify-center bg-discord-bg text-discord-muted">
@@ -105,7 +132,17 @@ export default function ChatArea() {
   const typing = Object.values(typingUsers);
 
   return (
-    <main className="flex flex-1 flex-col bg-discord-bg">
+    <main
+      className="relative flex flex-1 flex-col bg-discord-bg"
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
+    >
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-xl border-4 border-dashed border-discord-accent bg-discord-accent/10 text-lg font-semibold text-white">
+          Drop files to upload (no size limit)
+        </div>
+      )}
       <header className="flex h-12 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         <span className="text-xl text-discord-faint">{isDM ? "@" : "#"}</span>
         <span className="font-semibold text-white">{channel.name}</span>
@@ -116,8 +153,16 @@ export default function ChatArea() {
           </>
         )}
 
+        <button
+          onClick={() => setShowPins(true)}
+          className="ml-auto rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white"
+          title="Pinned messages"
+        >
+          📌
+        </button>
+
         {isDM && (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-2">
             {callMembers.length > 0 && !inThisCall && (
               <span className="text-xs text-discord-green">● In call</span>
             )}
@@ -145,17 +190,28 @@ export default function ChatArea() {
       <div className="flex-1 overflow-y-auto py-4">
         <Welcome name={channel.name} isDM={isDM} />
         {messages.map((m, i) => (
-          <MessageItem key={m.id} message={m} grouped={isGrouped(messages[i - 1], m)} />
+          <MessageItem key={m.id} message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} />
         ))}
         <div ref={bottomRef} />
       </div>
 
       <div className="px-4 pb-6">
-        <Composer channelId={currentChannelId} channelName={channel.name} />
+        <Composer
+          channelId={currentChannelId}
+          channelName={channel.name}
+          attachments={attachments}
+          setAttachments={setAttachments}
+          uploading={uploading}
+          addFiles={addFiles}
+          replyingTo={replyingTo}
+          onClearReply={() => setReplyingTo(null)}
+        />
         <div className="h-5 px-1 pt-1 text-xs text-discord-muted">
           {typing.length > 0 && `${typing.join(", ")} ${typing.length === 1 ? "is" : "are"} typing…`}
         </div>
       </div>
+
+      {showPins && <PinsModal channelId={channel.id} onClose={() => setShowPins(false)} />}
     </main>
   );
 }

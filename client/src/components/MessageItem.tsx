@@ -5,22 +5,53 @@ import { serverPath } from "../lib/serverUrl";
 import type { Attachment, Message } from "../types";
 import Avatar from "./Avatar";
 import { renderMarkdown } from "../lib/markdown";
+import ContextMenu, { type MenuItem } from "./ContextMenu";
 
 function MessageItem({
   message,
   grouped,
+  onReply,
 }: {
   message: Message;
   grouped: boolean;
+  onReply: (m: Message) => void;
 }) {
   const { user } = useAuth();
   const [hover, setHover] = useState(false);
   const [picker, setPicker] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.content);
   const mine = user?.id === message.author.id;
   const time = new Date(message.createdAt);
 
   // Parse markdown once per content change, not on every parent re-render.
   const body = useMemo(() => renderMarkdown(message.content), [message.content]);
+
+  function saveEdit() {
+    const content = draft.trim();
+    setEditing(false);
+    if (content && content !== message.content) {
+      api(`/api/messages/${message.id}`, { method: "PATCH", body: JSON.stringify({ content }) }).catch(() => {});
+    }
+  }
+
+  function setPin(pinned: boolean) {
+    api(`/api/messages/${message.id}/pin`, { method: pinned ? "PUT" : "DELETE" }).catch(() => {});
+  }
+
+  const menuItems: MenuItem[] = [
+    { label: "Add Reaction", icon: "😀", onClick: () => setPicker(true) },
+    { label: "Reply", icon: "↩️", onClick: () => onReply(message) },
+    { label: "Copy Text", icon: "📋", onClick: () => navigator.clipboard?.writeText(message.content) },
+    { label: message.pinned ? "Unpin" : "Pin", icon: "📌", onClick: () => setPin(!message.pinned) },
+    ...(mine
+      ? [
+          { label: "Edit", icon: "✏️", onClick: () => { setDraft(message.content); setEditing(true); } },
+          { label: "Delete", icon: "🗑", danger: true, onClick: () => api(`/api/messages/${message.id}`, { method: "DELETE" }).catch(() => {}) },
+        ]
+      : []),
+  ];
 
   // Group reactions by emoji → count + whether I reacted.
   const reactionGroups = useMemo(() => {
@@ -45,7 +76,8 @@ function MessageItem({
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className={`group relative flex gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"}`}
+      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
+      className={`group relative flex gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
     >
       <div className="w-10 shrink-0">
         {!grouped ? (
@@ -81,11 +113,26 @@ function MessageItem({
           </div>
         )}
 
-        {message.content && (
-          <div className="whitespace-pre-wrap break-words text-discord-text">
-            {body}
-            {message.editedAt && <span className="ml-1 text-[10px] text-discord-faint">(edited)</span>}
-          </div>
+        {message.pinned && <div className="mb-0.5 text-[10px] font-semibold text-yellow-500">📌 Pinned</div>}
+
+        {editing ? (
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+              if (e.key === "Escape") setEditing(false);
+            }}
+            className="w-full resize-none rounded bg-[#1e1f22] px-3 py-2 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+          />
+        ) : (
+          message.content && (
+            <div className="whitespace-pre-wrap break-words text-discord-text">
+              {body}
+              {message.editedAt && <span className="ml-1 text-[10px] text-discord-faint">(edited)</span>}
+            </div>
+          )
         )}
 
         {message.attachments?.length > 0 && (
@@ -116,40 +163,26 @@ function MessageItem({
         )}
       </div>
 
-      {hover && (
-        <div className="absolute right-3 top-0 flex items-center gap-1 rounded bg-discord-rail shadow">
-          <button
-            onClick={() => setPicker((p) => !p)}
-            className="px-2 py-1 text-sm text-discord-muted hover:text-white"
-            title="Add reaction"
-          >
-            😀
-          </button>
+      {hover && !editing && (
+        <div className="absolute right-3 top-0 flex items-center gap-1 rounded bg-discord-rail shadow ring-1 ring-black/30">
+          <button onClick={() => setPicker((p) => !p)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Add reaction">😀</button>
+          <button onClick={() => onReply(message)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Reply">↩️</button>
           {mine && (
-            <button
-              onClick={() => api(`/api/messages/${message.id}`, { method: "DELETE" }).catch(() => {})}
-              className="px-2 py-1 text-sm text-discord-muted hover:text-discord-danger"
-              title="Delete"
-            >
-              🗑
-            </button>
+            <button onClick={() => { setDraft(message.content); setEditing(true); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Edit">✏️</button>
           )}
+          <button onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="More">⋯</button>
         </div>
       )}
 
       {picker && (
         <div className="absolute right-3 top-7 z-10 flex gap-1 rounded-lg bg-discord-rail p-1.5 shadow-xl">
           {QUICK_EMOJIS.map((e) => (
-            <button
-              key={e}
-              onClick={() => toggleReaction(e)}
-              className="rounded p-1 text-lg hover:bg-discord-hover"
-            >
-              {e}
-            </button>
+            <button key={e} onClick={() => toggleReaction(e)} className="rounded p-1 text-lg hover:bg-discord-hover">{e}</button>
           ))}
         </div>
       )}
+
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
     </div>
   );
 }
@@ -209,6 +242,7 @@ export default memo(MessageItem, (a, b) => {
     a.message.id === b.message.id &&
     a.message.content === b.message.content &&
     a.message.editedAt === b.message.editedAt &&
+    a.message.pinned === b.message.pinned &&
     a.grouped === b.grouped &&
     reactionSig(a.message) === reactionSig(b.message)
   );
