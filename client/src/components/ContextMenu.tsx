@@ -24,10 +24,15 @@ export default function ContextMenu({
   useEffect(() => {
     const close = () => onClose();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("click", close);
-    window.addEventListener("contextmenu", close);
+    // Defer attaching outside-click listeners by a tick so the very click that
+    // opened the menu doesn't immediately close it.
+    const id = setTimeout(() => {
+      window.addEventListener("click", close);
+      window.addEventListener("contextmenu", close);
+    }, 0);
     window.addEventListener("keydown", onKey);
     return () => {
+      clearTimeout(id);
       window.removeEventListener("click", close);
       window.removeEventListener("contextmenu", close);
       window.removeEventListener("keydown", onKey);

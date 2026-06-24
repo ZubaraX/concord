@@ -64,10 +64,15 @@ export default function ChatArea() {
   useEffect(() => {
     const socket = getSocket();
     if (!socket || !currentChannelId) return;
-    socket.emit("channel:subscribe", currentChannelId);
+    const subscribe = () => socket.emit("channel:subscribe", currentChannelId);
+    subscribe();
+    // Re-subscribe after a reconnect, otherwise we silently stop receiving
+    // this channel's live messages/reactions.
+    socket.on("connect", subscribe);
 
     const onNew = (m: Msg) => {
-      if (m.channelId === currentChannelId) setMessages((prev) => [...prev, m]);
+      if (m.channelId !== currentChannelId) return;
+      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
     };
     const onEdit = (m: Msg) => setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
     const onDelete = (p: { id: string }) => setMessages((prev) => prev.filter((x) => x.id !== p.id));
@@ -99,6 +104,7 @@ export default function ChatArea() {
     socket.on("typing:start", onTyping);
     return () => {
       socket.emit("channel:unsubscribe", currentChannelId);
+      socket.off("connect", subscribe);
       socket.off("message:new", onNew);
       socket.off("message:edit", onEdit);
       socket.off("message:delete", onDelete);
@@ -106,6 +112,30 @@ export default function ChatArea() {
       socket.off("typing:start", onTyping);
     };
   }, [currentChannelId]);
+
+  // Reliable send: socket (fast) with ack, falling back to REST if the socket
+  // is down or doesn't confirm — so messages never silently vanish.
+  const sendMessage = useCallback(
+    (payload: { channelId: string; content: string; attachments: UploadedFile[]; replyToId?: string }) => {
+      const socket = getSocket();
+      const addLocal = (m: Msg) => setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      const viaRest = () =>
+        api<Msg>(`/api/channels/${payload.channelId}/messages`, { method: "POST", body: JSON.stringify(payload) })
+          .then(addLocal)
+          .catch(() => alert("Не удалось отправить сообщение. Проверьте соединение."));
+      if (socket && socket.connected) {
+        let acked = false;
+        socket.emit("message:send", payload, (res: { ok?: boolean }) => {
+          acked = true;
+          if (!res?.ok) viaRest();
+        });
+        setTimeout(() => { if (!acked) viaRest(); }, 4000);
+      } else {
+        viaRest();
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -206,6 +236,7 @@ export default function ChatArea() {
           addFiles={addFiles}
           replyingTo={replyingTo}
           onClearReply={() => setReplyingTo(null)}
+          onSend={sendMessage}
         />
         <div className="h-5 px-1 pt-1 text-xs text-discord-muted">
           {typing.length > 0 && `${typing.join(", ")} ${typing.length === 1 ? "is" : "are"} typing…`}

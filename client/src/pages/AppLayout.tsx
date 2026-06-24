@@ -19,10 +19,11 @@ import InviteModal from "../components/InviteModal";
 import VoiceOverlay from "../components/VoiceOverlay";
 import Toasts from "../components/Toasts";
 import IncomingCallModal from "../components/IncomingCallModal";
+import UserProfileModal from "../components/UserProfileModal";
 import { initVoice } from "../lib/voice";
 
 export default function AppLayout() {
-  const { currentGuildId, currentChannelId, setGuild, openDM, modal, closeModal } = useUI();
+  const { currentGuildId, currentChannelId, setGuild, openDM, modal, closeModal, profileUserId, closeProfile } = useUI();
   const qc = useQueryClient();
   const initialized = useRef(false);
   const ringingChannels = useRef<Set<string>>(new Set());
@@ -146,6 +147,7 @@ export default function AppLayout() {
       {modal === "addServer" && <AddServerModal onClose={closeModal} />}
       {modal === "settings" && <SettingsModal onClose={closeModal} />}
       {modal === "invite" && <InviteModal onClose={closeModal} />}
+      {profileUserId && <UserProfileModal userId={profileUserId} onClose={closeProfile} />}
     </div>
   );
 }

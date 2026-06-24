@@ -11,7 +11,7 @@ import Avatar from "./Avatar";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 
 export default function MemberList() {
-  const { currentGuildId, openDM } = useUI();
+  const { currentGuildId, openDM, openProfile } = useUI();
   const { user: me } = useAuth();
   const qc = useQueryClient();
   const [presence, setPresence] = useState<Record<string, PresenceStatus>>({});
@@ -51,6 +51,7 @@ export default function MemberList() {
 
   function menuItems(u: User): MenuItem[] {
     return [
+      { label: "View Profile", icon: "👤", onClick: () => openProfile(u.id) },
       { label: "Message", icon: "💬", onClick: () => openDMWith(u) },
       { label: "Call", icon: "📞", onClick: () => openDMWith(u, true) },
       {

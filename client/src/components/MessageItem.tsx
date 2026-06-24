@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../store/auth";
+import { useUI } from "../store/ui";
 import { serverPath } from "../lib/serverUrl";
 import type { Attachment, Message } from "../types";
 import Avatar from "./Avatar";
@@ -17,6 +18,7 @@ function MessageItem({
   onReply: (m: Message) => void;
 }) {
   const { user } = useAuth();
+  const { openProfile } = useUI();
   const [hover, setHover] = useState(false);
   const [picker, setPicker] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -41,6 +43,7 @@ function MessageItem({
   }
 
   const menuItems: MenuItem[] = [
+    { label: "View Profile", icon: "👤", onClick: () => openProfile(message.author.id) },
     { label: "Add Reaction", icon: "😀", onClick: () => setPicker(true) },
     { label: "Reply", icon: "↩️", onClick: () => onReply(message) },
     { label: "Copy Text", icon: "📋", onClick: () => navigator.clipboard?.writeText(message.content) },
@@ -81,7 +84,9 @@ function MessageItem({
     >
       <div className="w-10 shrink-0">
         {!grouped ? (
-          <Avatar user={message.author} size={40} />
+          <button onClick={() => openProfile(message.author.id)} title="View profile" className="rounded-full">
+            <Avatar user={message.author} size={40} />
+          </button>
         ) : (
           <span className="hidden w-10 text-right text-[10px] leading-6 text-discord-faint group-hover:inline-block">
             {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -92,9 +97,9 @@ function MessageItem({
       <div className="min-w-0 flex-1">
         {!grouped && (
           <div className="flex items-baseline gap-2">
-            <span className="font-medium text-white">
+            <button onClick={() => openProfile(message.author.id)} className="font-medium text-white hover:underline">
               {message.author.displayName ?? message.author.username}
-            </span>
+            </button>
             <span className="text-xs text-discord-faint">
               {time.toLocaleString([], {
                 month: "short",

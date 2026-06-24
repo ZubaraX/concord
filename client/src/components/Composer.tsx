@@ -4,6 +4,13 @@ import type { UploadedFile } from "../api/client";
 import type { Message } from "../types";
 import EmojiPicker from "./EmojiPicker";
 
+interface SendPayload {
+  channelId: string;
+  content: string;
+  attachments: UploadedFile[];
+  replyToId?: string;
+}
+
 // Message composer: text, reply, attachments (upload/paste/drag-drop), emoji.
 // Attachments are owned by ChatArea so drag-drop onto the whole area works.
 export default function Composer({
@@ -15,6 +22,7 @@ export default function Composer({
   addFiles,
   replyingTo,
   onClearReply,
+  onSend,
 }: {
   channelId: string;
   channelName: string;
@@ -24,6 +32,7 @@ export default function Composer({
   addFiles: (files: FileList | File[]) => void;
   replyingTo: Message | null;
   onClearReply: () => void;
+  onSend: (payload: SendPayload) => void;
 }) {
   const [value, setValue] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
@@ -34,12 +43,7 @@ export default function Composer({
   function send() {
     const content = value.trim();
     if (!content && attachments.length === 0) return;
-    getSocket()?.emit("message:send", {
-      channelId,
-      content,
-      attachments,
-      replyToId: replyingTo?.id,
-    });
+    onSend({ channelId, content, attachments, replyToId: replyingTo?.id });
     setValue("");
     setAttachments(() => []);
     onClearReply();

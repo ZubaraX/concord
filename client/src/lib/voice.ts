@@ -187,7 +187,11 @@ function playAudio(from: string, sampleRate: number, data: ArrayBuffer) {
   const src = p.ctx.createBufferSource();
   src.buffer = buf;
   src.connect(p.gain);
-  const startAt = Math.max(p.ctx.currentTime + 0.06, p.nextTime); // ~60ms jitter buffer
+  // ~150ms jitter buffer to absorb network variance (less choppy). If we've
+  // fallen behind (stall), resync to a fresh buffer instead of playing late.
+  const JITTER = 0.15;
+  if (p.nextTime < p.ctx.currentTime) p.nextTime = p.ctx.currentTime + JITTER;
+  const startAt = Math.max(p.ctx.currentTime + JITTER, p.nextTime);
   src.start(startAt);
   p.nextTime = startAt + buf.duration;
 }

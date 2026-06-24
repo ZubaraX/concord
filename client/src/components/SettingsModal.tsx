@@ -122,13 +122,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {serverPinned ? (
-            <div>
-              <span className="text-xs font-bold uppercase text-discord-muted">Server</span>
-              <div className="mt-1.5 rounded bg-[#1e1f22] px-3 py-2.5 text-sm text-discord-text">{getServerUrl()}</div>
-              <p className="mt-1 text-xs text-discord-faint">Connected to the official Concord server.</p>
-            </div>
-          ) : (
+          {!serverPinned && (
             <>
               <Field label="Server URL" value={server} onChange={setServer} placeholder="http://localhost:4000" />
               <div className="flex items-center gap-3">
@@ -137,10 +131,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 </button>
                 {msg && <span className="text-sm text-discord-muted">{msg}</span>}
               </div>
+              <hr className="border-black/20" />
             </>
           )}
 
-          <hr className="border-black/20" />
           <button
             onClick={() => logout()}
             className="rounded bg-discord-danger px-5 py-2 font-medium text-white hover:bg-[#a12828]"
