@@ -42,9 +42,11 @@ const schema = z.object({
   TURN_USERNAME: z.string().optional(),
   TURN_PASSWORD: z.string().optional(),
 
-  // GIF search proxy (Tenor v2 — tenor.googleapis.com). Requires a free Google
-  // API key with the "Tenor API" enabled. Empty by default: the GIF picker
-  // simply returns no results until TENOR_KEY is set in the server .env.
+  // GIF search proxy. KLIPY (api.klipy.com) is the default provider — a drop-in
+  // Tenor replacement with a free lifetime key from partner.klipy.com. TENOR_KEY
+  // is an optional fallback (Tenor v2, needs a Google Cloud key). With neither
+  // set the GIF picker simply returns no results. See routes/gifs.ts.
+  KLIPY_KEY: z.string().default(""),
   TENOR_KEY: z.string().default(""),
 });
 
