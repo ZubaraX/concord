@@ -8,9 +8,11 @@ npm-debug.log*
 coverage/
 .vite/
 
-# Local SQLite database + migrations data
+# Local SQLite database + its WAL/SHM/journal sidecar files (runtime only)
 server/prisma/*.db
 server/prisma/*.db-journal
+server/prisma/*.db-shm
+server/prisma/*.db-wal
 data/
 uploads/
 
