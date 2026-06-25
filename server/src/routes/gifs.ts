@@ -1,24 +1,37 @@
+import { Agent, request } from "undici";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../lib/auth.js";
 import { config } from "../config.js";
 
-// Node's global fetch (undici) pools keep-alive connections, and KLIPY half-
-// closes idle ones — so a *reused* socket hangs on the next request. A reused
-// dead socket fails fast on a short timeout; the retry then opens a fresh
-// connection and succeeds. Normal KLIPY latency is well under a second, so a 4s
-// per-attempt timeout is a comfortable margin.
-async function getJson(url: string, timeoutMs = 4000, attempts = 3): Promise<any> {
+// KLIPY half-closes idle keep-alive sockets, so reusing one hangs the next
+// request (~70s). We use undici's `request` directly (Node's global fetch uses a
+// separate bundled undici we can't reconfigure) with a dispatcher that drops
+// connections almost immediately (keepAliveTimeout ~1ms) and forces IPv4 — so
+// every call gets a fresh, working socket. headers/body timeouts bound it.
+const klipyDispatcher = new Agent({
+  connect: { family: 4 },
+  keepAliveTimeout: 1,
+  keepAliveMaxTimeout: 1,
+  pipelining: 0,
+});
+
+async function getJson(url: string, timeoutMs = 8000, attempts = 2): Promise<any> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      const r = await fetch(url, {
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: { "User-Agent": "Concord/1.0", Accept: "application/json" },
+      const res = await request(url, {
+        dispatcher: klipyDispatcher,
+        headersTimeout: timeoutMs,
+        bodyTimeout: timeoutMs,
+        headers: { "user-agent": "Concord/1.0", accept: "application/json" },
       });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return await r.json();
+      if (res.statusCode >= 400) {
+        res.body.dump();
+        throw new Error(`HTTP ${res.statusCode}`);
+      }
+      return await res.body.json();
     } catch (e) {
-      lastErr = e; // most likely a reused dead keep-alive socket — retry gets a fresh one
+      lastErr = e;
     }
   }
   throw lastErr;
