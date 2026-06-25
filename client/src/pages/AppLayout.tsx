@@ -23,6 +23,7 @@ import Toasts from "../components/Toasts";
 import IncomingCallModal from "../components/IncomingCallModal";
 import UserProfileModal from "../components/UserProfileModal";
 import WhatsNewModal from "../components/WhatsNewModal";
+import Lightbox from "../components/Lightbox";
 import { appVersion, changesSince, type ChangelogEntry } from "../lib/changelog";
 import { initVoice } from "../lib/voice";
 
@@ -196,6 +197,7 @@ export default function AppLayout() {
       {modal === "invite" && <InviteModal onClose={closeModal} />}
       {profileUserId && <UserProfileModal userId={profileUserId} onClose={closeProfile} />}
       {whatsNew.length > 0 && <WhatsNewModal entries={whatsNew} onClose={() => setWhatsNew([])} />}
+      <Lightbox />
     </div>
   );
 }

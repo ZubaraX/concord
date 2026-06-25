@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../store/auth";
 import { useUI } from "../store/ui";
+import { useLightbox } from "../store/lightbox";
 import { serverPath } from "../lib/serverUrl";
 import type { Attachment, LinkEmbed, Message } from "../types";
 import Avatar from "./Avatar";
@@ -228,9 +229,13 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
 
   if (isImage) {
     return (
-      <a href={src} target="_blank" rel="noreferrer">
+      <button
+        type="button"
+        onClick={() => useLightbox.getState().open(src, attachment.filename)}
+        className="block cursor-zoom-in"
+      >
         <img src={src} alt={attachment.filename} className="max-h-96 max-w-full rounded-lg object-contain" loading="lazy" />
-      </a>
+      </button>
     );
   }
   if (isVideo) {
