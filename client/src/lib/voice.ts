@@ -12,6 +12,7 @@ import { api } from "../api/client";
 import { useVoice, type RemoteEntry } from "../store/voice";
 import { useSettings } from "../store/settings";
 import { RES_MAP } from "../store/settings";
+import { playSound } from "./sound";
 
 type Kind = "audio" | "screen" | "camera";
 
@@ -273,13 +274,18 @@ export function initVoice() {
   loadIceConfig();
 
   socket.on("voice:peerJoined", ({ socketId, userId }: { socketId: string; userId: string }) => {
-    if (st().channelId) createPeer(socketId, userId);
+    if (st().channelId) {
+      createPeer(socketId, userId);
+      playSound("peerJoin");
+    }
   });
   socket.on("voice:peerLeft", ({ socketId }: { socketId: string }) => {
+    const had = peers.has(socketId);
     peers.get(socketId)?.pc.close();
     peers.delete(socketId);
     dropRemote(socketId);
     updateConnState();
+    if (had && st().channelId) playSound("peerLeave");
   });
   socket.on("voice:signal", onSignal);
   socket.on("voice:streamkinds", onStreamKinds);
@@ -325,6 +331,12 @@ export async function joinVoice(channelId: string) {
     { channelId },
     (res: { ok: boolean; peers?: { socketId: string; userId: string }[] }) => {
       if (res?.ok) res.peers?.forEach((p) => createPeer(p.socketId, p.userId));
+      // Once we're in the room, settle the connection state. With no peers
+      // (alone in the channel) this flips us straight to "connected" instead of
+      // hanging on the orange "Connecting…" — updateConnState is otherwise only
+      // driven by peer connection-state changes, which never fire when alone.
+      updateConnState();
+      playSound("voiceJoin");
     }
   );
 }
@@ -332,7 +344,10 @@ export async function joinVoice(channelId: string) {
 export async function leaveVoice() {
   clearAloneTimer();
   const channelId = st().channelId;
-  if (channelId) getSocket()?.emit("voice:leave", { channelId });
+  if (channelId) {
+    getSocket()?.emit("voice:leave", { channelId });
+    playSound("voiceLeave");
+  }
   peers.forEach((p) => p.pc.close());
   peers.clear();
   pendingTracks.length = 0;
@@ -346,8 +361,10 @@ export async function leaveVoice() {
 }
 
 export function toggleMute() {
-  st().set({ muted: !st().muted });
+  const muted = !st().muted;
+  st().set({ muted });
   applyMicState();
+  playSound(muted ? "mute" : "unmute");
 }
 
 // ── screen / camera ──────────────────────────────────────────────────────────────

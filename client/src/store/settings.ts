@@ -25,6 +25,10 @@ export interface SettingsState {
   screenFps: ScreenFps;
   screenAudio: boolean;
 
+  // UI / notification sounds (join/leave/mute/message). Synthesized in-app.
+  soundsEnabled: boolean;
+  soundVolume: number; // 0–100 (%)
+
   set: (p: Partial<SettingsState>) => void;
 }
 
@@ -53,6 +57,9 @@ export const useSettings = create<SettingsState>()(
       screenResolution: "1080p",
       screenFps: 60,
       screenAudio: true,
+
+      soundsEnabled: true,
+      soundVolume: 60,
 
       set: (p) => set(p),
     }),

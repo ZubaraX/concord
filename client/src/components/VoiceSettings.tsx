@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSettings, type ScreenFps, type ScreenResolution } from "../store/settings";
 import { listDevices, refreshMic, setInputVolume, startMicTest } from "../lib/voice";
+import { previewSound } from "../lib/sound";
 
 const FPS_OPTIONS: ScreenFps[] = [15, 30, 60, 120, 144];
 const RES_OPTIONS: { value: ScreenResolution; label: string }[] = [
@@ -163,7 +164,48 @@ export default function VoiceSettings() {
           Applies to your next screen share. High resolutions/FPS need more upload bandwidth and CPU/GPU.
         </p>
       </section>
+
+      {/* SOUNDS */}
+      <section className="space-y-3">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">Sounds</h3>
+        <Toggle
+          label="Play app sounds (join / leave / mute / message)"
+          checked={s.soundsEnabled}
+          onChange={(v) => s.set({ soundsEnabled: v })}
+        />
+        {s.soundsEnabled && (
+          <>
+            <Slider
+              label={`Sound volume — ${s.soundVolume}%`}
+              min={0}
+              max={100}
+              value={s.soundVolume}
+              onChange={(v) => {
+                s.set({ soundVolume: v });
+                previewSound("peerJoin", v);
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
+              <SoundPreview label="Join" onClick={() => previewSound("voiceJoin", s.soundVolume)} />
+              <SoundPreview label="Leave" onClick={() => previewSound("voiceLeave", s.soundVolume)} />
+              <SoundPreview label="Mute" onClick={() => previewSound("mute", s.soundVolume)} />
+              <SoundPreview label="Message" onClick={() => previewSound("message", s.soundVolume)} />
+            </div>
+          </>
+        )}
+      </section>
     </div>
+  );
+}
+
+function SoundPreview({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded bg-discord-card px-3 py-1.5 text-xs text-discord-text hover:bg-discord-hover"
+    >
+      ▶ {label}
+    </button>
   );
 }
 
