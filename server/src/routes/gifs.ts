@@ -50,7 +50,7 @@ async function searchKlipy(
   const url = q
     ? `${base}/search?${params}&q=${encodeURIComponent(q)}`
     : `${base}/trending?${params}`;
-  const r = await fetch(url);
+  const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
   if (!r.ok) return { results: [], hasNext: false };
   const j: any = await r.json();
   const items: any[] = j?.data?.data ?? [];

@@ -1,3 +1,9 @@
+import dns from "node:dns";
+// Prefer IPv4 for all outbound connections. This box has flaky IPv6 routing to
+// some hosts (KLIPY/Tenor), where Node's fetch would otherwise stall ~70s on an
+// IPv6 attempt while curl's Happy-Eyeballs picks IPv4 immediately.
+dns.setDefaultResultOrder("ipv4first");
+
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
