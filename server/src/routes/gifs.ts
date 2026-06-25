@@ -1,29 +1,26 @@
-import { execFile } from "node:child_process";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../lib/auth.js";
 import { config } from "../config.js";
 
-// KLIPY half-closes idle keep-alive sockets, and Node's HTTP client (undici)
-// reuses them — which hangs the next request (~70s) inside this app. After a
-// long fight with dispatchers we just shell out to `curl` (forced IPv4, fresh
-// connection, no pooling), which is rock-solid here. Falls back gracefully via
-// the caller's try/catch if curl is unavailable.
-function getJson(url: string, timeoutMs = 10000): Promise<any> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      "curl",
-      ["-s", "-4", "--max-time", String(Math.ceil(timeoutMs / 1000)), "-A", "Concord/1.0", "-H", "Accept: application/json", url],
-      { maxBuffer: 16 * 1024 * 1024, timeout: timeoutMs + 2000 },
-      (err, stdout) => {
-        if (err) return reject(err);
-        try {
-          resolve(JSON.parse(stdout));
-        } catch (e) {
-          reject(e);
-        }
-      }
-    );
-  });
+// api.klipy.com is anycast with multiple edges; from some hosts one IP path is
+// slow. A short per-attempt timeout plus a couple retries (each may land on a
+// different/fresh connection) keeps GIF search responsive — and the route's
+// try/catch degrades to an empty result set if it still can't get through.
+async function getJson(url: string, timeoutMs = 6000, attempts = 3): Promise<any> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { "user-agent": "Concord/1.0", accept: "application/json" },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
 }
 
 // Server-side GIF search proxy, so the API key stays off the client.
