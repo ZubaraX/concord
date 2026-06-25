@@ -7,7 +7,7 @@ interface Gif {
   preview: string;
 }
 
-// GIF search popover (Giphy via the server proxy). Picking one sends it.
+// GIF search popover (KLIPY via the server proxy). Picking one sends it.
 export default function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [gifs, setGifs] = useState<Gif[]>([]);
@@ -35,22 +35,26 @@ export default function GifPicker({ onPick, onClose }: { onPick: (url: string) =
   }, [q]);
 
   return (
-    <div ref={ref} className="absolute bottom-12 right-0 z-50 flex h-96 w-80 flex-col rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40">
+    <div ref={ref} className="absolute bottom-12 right-0 z-50 flex h-[30rem] w-[26rem] flex-col rounded-lg bg-discord-rail p-3 shadow-xl ring-1 ring-black/40">
       <input
         autoFocus
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search GIPHY…"
-        className="mb-2 w-full rounded bg-[#1e1f22] px-3 py-2 text-sm text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+        placeholder="Search GIFs…"
+        className="mb-3 w-full rounded bg-[#1e1f22] px-3 py-2 text-sm text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
       />
-      <div className="grid flex-1 grid-cols-2 gap-1 overflow-y-auto">
+      <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto pr-1">
         {loading && <div className="col-span-2 p-4 text-center text-sm text-discord-muted">Loading…</div>}
         {!loading && gifs.length === 0 && (
           <div className="col-span-2 p-4 text-center text-sm text-discord-muted">No GIFs found.</div>
         )}
         {gifs.map((g) => (
-          <button key={g.id} onClick={() => onPick(g.url)} className="overflow-hidden rounded hover:opacity-80">
-            <img src={g.preview} alt="" className="h-28 w-full object-cover" loading="lazy" />
+          <button
+            key={g.id}
+            onClick={() => onPick(g.url)}
+            className="overflow-hidden rounded-md bg-black/20 ring-1 ring-transparent transition hover:ring-2 hover:ring-discord-accent"
+          >
+            <img src={g.preview} alt="" className="h-32 w-full object-cover" loading="lazy" />
           </button>
         ))}
       </div>
