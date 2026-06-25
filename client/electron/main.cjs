@@ -1,9 +1,15 @@
 // Concord desktop shell (Electron). Loads the built React app and connects to
 // whatever server URL the user configures in-app (e.g. a Codespaces URL).
-const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session } = require("electron");
+const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { autoUpdater } = require("electron-updater");
+
+// Expose the real installed version to the renderer (so the "What's New" screen
+// matches the actual running build). Registered before any window loads.
+ipcMain.on("app:getVersion", (e) => {
+  e.returnValue = app.getVersion();
+});
 
 // App/window icon (embedded into the .exe by electron-builder; also used for
 // the dev taskbar icon when the source file is present).
@@ -70,11 +76,26 @@ app.whenReady().then(() => {
   wireScreenShare();
   createWindow();
 
-  // Auto-update from GitHub Releases: download in the background, install on
-  // quit. Only meaningful in a packaged build.
+  // Auto-update from GitHub Releases. We want each launch to run the latest
+  // build, so on startup we check, download, and — once downloaded — install
+  // immediately and relaunch into the new version. The new build then shows its
+  // own changelog ("What's New") on start. Only meaningful when packaged.
   if (app.isPackaged) {
     autoUpdater.autoDownload = true;
-    autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+    autoUpdater.autoInstallOnAppQuit = true;
+    let installing = false;
+    autoUpdater.on("update-downloaded", () => {
+      if (installing) return;
+      installing = true;
+      // isSilent = true (no extra installer UI), isForceRunAfter = true (relaunch).
+      try {
+        autoUpdater.quitAndInstall(true, true);
+      } catch {
+        installing = false;
+      }
+    });
+    autoUpdater.checkForUpdates().catch(() => {});
+    // Keep checking hourly for long-running sessions.
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 60 * 60 * 1000);
   }
 

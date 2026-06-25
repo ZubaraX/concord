@@ -7,7 +7,7 @@ import { useAuth } from "../store/auth";
 import { useVoice } from "../store/voice";
 import { useNotify } from "../store/notify";
 import { useUnread } from "../store/unread";
-import { playPing, desktopNotify, requestNotifyPermission } from "../lib/sound";
+import { playPing, playSound, desktopNotify, requestNotifyPermission } from "../lib/sound";
 import { joinVoice } from "../lib/voice";
 import type { DMSummary, Guild, Message } from "../types";
 import ServerRail from "../components/ServerRail";
@@ -22,6 +22,8 @@ import VoiceOverlay from "../components/VoiceOverlay";
 import Toasts from "../components/Toasts";
 import IncomingCallModal from "../components/IncomingCallModal";
 import UserProfileModal from "../components/UserProfileModal";
+import WhatsNewModal from "../components/WhatsNewModal";
+import { appVersion, changesSince, type ChangelogEntry } from "../lib/changelog";
 import { initVoice } from "../lib/voice";
 
 export default function AppLayout() {
@@ -30,12 +32,25 @@ export default function AppLayout() {
   const initialized = useRef(false);
   const ringingChannels = useRef<Set<string>>(new Set());
   const [incoming, setIncoming] = useState<{ channelId: string; name: string } | null>(null);
+  const [whatsNew, setWhatsNew] = useState<ChangelogEntry[]>([]);
 
   useEffect(() => {
     connectSocket();
     initVoice();
     requestNotifyPermission();
     return () => disconnectSocket();
+  }, []);
+
+  // After an auto-update, the new build starts with a higher version than what
+  // we last recorded → show "What's New" once, then remember this version.
+  useEffect(() => {
+    const cur = appVersion();
+    const last = localStorage.getItem("concord.lastVersion");
+    if (last && last !== cur) {
+      const entries = changesSince(last);
+      if (entries.length) setWhatsNew(entries);
+    }
+    localStorage.setItem("concord.lastVersion", cur);
   }, []);
 
   // Live sync for guilds, friends, and DMs.
@@ -69,10 +84,31 @@ export default function AppLayout() {
     const dmName = (channelId: string) =>
       (qc.getQueryData<DMSummary[]>(["dms"]) ?? []).find((d) => d.id === channelId);
 
-    // Guild channel activity → unread indicator (unless viewing it).
-    const onActivity = (p: { channelId: string; authorId: string }) => {
-      if (p.authorId === useAuth.getState().user?.id) return;
-      if (useUI.getState().currentChannelId !== p.channelId) useUnread.getState().bump(p.channelId);
+    // Guild channel activity → unread indicator (unless viewing it). If the
+    // message @-mentions me, also ping + desktop-notify even in a guild channel.
+    const onActivity = (p: {
+      channelId: string;
+      guildId?: string;
+      authorId: string;
+      authorName?: string;
+      content?: string;
+      mentions?: string[];
+    }) => {
+      const myId = useAuth.getState().user?.id;
+      if (p.authorId === myId) return;
+      if (useUI.getState().currentChannelId === p.channelId) return; // already reading it
+      useUnread.getState().bump(p.channelId);
+      if (myId && p.mentions?.includes(myId)) {
+        const who = p.authorName ?? "New mention";
+        const body = p.content || "mentioned you";
+        const open = () => {
+          if (p.guildId) useUI.getState().setGuild(p.guildId);
+          useUI.getState().setChannel(p.channelId);
+        };
+        push({ title: `${who} mentioned you`, body, actionLabel: "Open", onAction: open });
+        playSound("message");
+        desktopNotify(`${who} mentioned you`, body);
+      }
     };
 
     // New DM message while not viewing that conversation → toast + ping + unread.
@@ -159,6 +195,7 @@ export default function AppLayout() {
       {modal === "settings" && <SettingsModal onClose={closeModal} />}
       {modal === "invite" && <InviteModal onClose={closeModal} />}
       {profileUserId && <UserProfileModal userId={profileUserId} onClose={closeProfile} />}
+      {whatsNew.length > 0 && <WhatsNewModal entries={whatsNew} onClose={() => setWhatsNew([])} />}
     </div>
   );
 }

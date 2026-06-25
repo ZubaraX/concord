@@ -4,6 +4,9 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("concord", {
   isDesktop: true,
   platform: process.platform,
+  // The actual installed app version (matches the auto-updater), used by the
+  // "What's New" screen to detect upgrades.
+  version: ipcRenderer.sendSync("app:getVersion"),
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,

@@ -79,6 +79,32 @@ export async function createMessage(opts: {
 type CreatedMessage = Awaited<ReturnType<typeof createMessage>>;
 
 /**
+ * Resolve mention tokens in a message to guild-member user IDs. Supports
+ * `@everyone`/`@here` (all members) and `@username` (case-insensitive). The
+ * author is never returned (you don't get pinged by your own message).
+ */
+async function resolveMentions(content: string, guildId: string, authorId: string): Promise<string[]> {
+  if (!content || !content.includes("@")) return [];
+  const members = await prisma.guildMember.findMany({
+    where: { guildId },
+    select: { userId: true, user: { select: { username: true } } },
+  });
+  const out = new Set<string>();
+  if (/@(everyone|here)\b/i.test(content)) {
+    for (const m of members) out.add(m.userId);
+  } else {
+    const tokens = new Set(
+      (content.match(/@([\p{L}\p{N}_.]+)/gu) ?? []).map((t) => t.slice(1).toLowerCase())
+    );
+    if (tokens.size) {
+      for (const m of members) if (tokens.has(m.user.username.toLowerCase())) out.add(m.userId);
+    }
+  }
+  out.delete(authorId);
+  return [...out];
+}
+
+/**
  * Broadcast a freshly-created message to the channel, and for DMs also ping the
  * other participant's personal room so they get a notification when not viewing.
  */
@@ -92,11 +118,17 @@ export async function broadcastNewMessage(message: CreatedMessage) {
     select: { guildId: true, dmParticipants: { select: { id: true } } },
   });
   if (channel?.guildId) {
+    // Resolve @mentions (and @everyone/@here) against this guild's members so
+    // mentioned users get a ping even when they're not viewing the channel.
+    const mentions = await resolveMentions(message.content, channel.guildId, message.authorId);
     // Unread: let every guild member know this channel had activity.
     io.to(guildRoom(channel.guildId)).emit("channel:activity", {
       channelId: message.channelId,
       guildId: channel.guildId,
       authorId: message.authorId,
+      authorName: message.author.displayName ?? message.author.username,
+      content: (message.content ?? "").slice(0, 160),
+      mentions,
     });
   } else if (channel) {
     for (const p of channel.dmParticipants) {

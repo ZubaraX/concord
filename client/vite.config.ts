@@ -4,6 +4,11 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react()],
+  // Build-time app version (fallback for the web build; desktop reads the real
+  // installed version from the Electron main process via preload).
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? "0.0.0"),
+  },
   // Relative base so the built app also loads correctly from file:// in Electron.
   base: "./",
   resolve: {
