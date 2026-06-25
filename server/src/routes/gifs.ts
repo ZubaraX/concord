@@ -39,22 +39,29 @@ function pickKlipyUrls(file: any): { url?: string; preview?: string } {
   return { url, preview: preview || url };
 }
 
-async function searchKlipy(key: string, q: string, customerId: string): Promise<GifResult[]> {
+async function searchKlipy(
+  key: string,
+  q: string,
+  customerId: string,
+  page: number
+): Promise<{ results: GifResult[]; hasNext: boolean }> {
   const base = `https://api.klipy.com/api/v1/${encodeURIComponent(key)}/gifs`;
-  const params = `per_page=24&customer_id=${encodeURIComponent(customerId)}&rating=pg-13`;
+  const params = `per_page=24&page=${page}&customer_id=${encodeURIComponent(customerId)}&rating=pg-13`;
   const url = q
     ? `${base}/search?${params}&q=${encodeURIComponent(q)}`
     : `${base}/trending?${params}`;
   const r = await fetch(url);
-  if (!r.ok) return [];
+  if (!r.ok) return { results: [], hasNext: false };
   const j: any = await r.json();
   const items: any[] = j?.data?.data ?? [];
-  return items
+  const hasNext = !!j?.data?.has_next;
+  const results = items
     .map((it) => {
       const { url, preview } = pickKlipyUrls(it?.file);
       return { id: String(it?.id ?? it?.slug ?? ""), url: url ?? "", preview: preview ?? "" };
     })
     .filter((x) => x.url);
+  return { results, hasNext };
 }
 
 async function searchTenor(key: string, q: string): Promise<GifResult[]> {
@@ -81,19 +88,22 @@ export async function gifRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
   app.get("/search", async (req, reply) => {
-    const { q } = req.query as { q?: string };
+    const { q, page } = req.query as { q?: string; page?: string };
     const query = (q ?? "").trim();
+    const pg = Math.max(1, parseInt(page ?? "1", 10) || 1);
     const customerId = req.userId || "concord";
     try {
       if (config.KLIPY_KEY) {
-        return reply.send({ results: await searchKlipy(config.KLIPY_KEY, query, customerId) });
+        const r = await searchKlipy(config.KLIPY_KEY, query, customerId, pg);
+        return reply.send({ results: r.results, hasNext: r.hasNext, page: pg });
       }
       if (config.TENOR_KEY) {
-        return reply.send({ results: await searchTenor(config.TENOR_KEY, query) });
+        // (Tenor pagination uses an opaque cursor; one page is enough as fallback.)
+        return reply.send({ results: await searchTenor(config.TENOR_KEY, query), hasNext: false, page: pg });
       }
-      return reply.send({ results: [] });
+      return reply.send({ results: [], hasNext: false, page: pg });
     } catch {
-      return reply.send({ results: [] });
+      return reply.send({ results: [], hasNext: false, page: pg });
     }
   });
 }

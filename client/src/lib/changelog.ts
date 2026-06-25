@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.9",
+    date: "2026-06-25",
+    items: [
+      "GIF-пикер: бесконечная прокрутка — новые гифки подгружаются по мере прокрутки",
+      "Категории GIF (смех, грусть, любовь, танцы и др.) при пустом поиске",
+    ],
+  },
+  {
     version: "0.2.8",
     date: "2026-06-25",
     items: [
