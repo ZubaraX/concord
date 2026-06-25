@@ -1,6 +1,35 @@
+import https from "node:https";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../lib/auth.js";
 import { config } from "../config.js";
+
+// Node's global fetch (undici) pools keep-alive connections, and KLIPY half-
+// closes idle ones — so a reused socket hangs ~70s on the *next* request. We
+// fetch via node:https with keepAlive:false (a fresh connection each time) to
+// sidestep that entirely.
+const noKeepAlive = new https.Agent({ keepAlive: false });
+function getJson(url: string, timeoutMs = 15000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { agent: noKeepAlive, timeout: timeoutMs }, (res) => {
+      if (res.statusCode && res.statusCode >= 400) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+  });
+}
 
 // Server-side GIF search proxy, so the API key stays off the client.
 //
@@ -50,9 +79,7 @@ async function searchKlipy(
   const url = q
     ? `${base}/search?${params}&q=${encodeURIComponent(q)}`
     : `${base}/trending?${params}`;
-  const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
-  if (!r.ok) return { results: [], hasNext: false };
-  const j: any = await r.json();
+  const j: any = await getJson(url);
   const items: any[] = j?.data?.data ?? [];
   const hasNext = !!j?.data?.has_next;
   const results = items
@@ -72,9 +99,7 @@ async function searchTenor(key: string, q: string): Promise<GifResult[]> {
   const url = q
     ? `${base}/search?${common}&q=${encodeURIComponent(q)}`
     : `${base}/featured?${common}`;
-  const r = await fetch(url);
-  if (!r.ok) return [];
-  const j: any = await r.json();
+  const j: any = await getJson(url);
   return (j?.results ?? [])
     .map((g: any) => ({
       id: String(g.id),
