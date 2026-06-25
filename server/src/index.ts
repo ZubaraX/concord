@@ -1,8 +1,14 @@
 import dns from "node:dns";
+import { Agent, setGlobalDispatcher } from "undici";
 // Prefer IPv4 for all outbound connections. This box has flaky IPv6 routing to
 // some hosts (KLIPY/Tenor), where Node's fetch would otherwise stall ~70s on an
 // IPv6 attempt while curl's Happy-Eyeballs picks IPv4 immediately.
 dns.setDefaultResultOrder("ipv4first");
+// Disable HTTP keep-alive reuse on the global fetch dispatcher: KLIPY half-
+// closes idle connections, so a reused socket hangs the next request. Closing
+// connections quickly (and forcing IPv4) makes every outbound request use a
+// fresh, working socket.
+setGlobalDispatcher(new Agent({ connect: { family: 4 }, keepAliveTimeout: 10, keepAliveMaxTimeout: 10 }));
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
