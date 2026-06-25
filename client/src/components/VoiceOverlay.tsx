@@ -10,7 +10,7 @@ export default function VoiceOverlay() {
   const [expanded, setExpanded] = useState<{ stream: MediaStream; label: string } | null>(null);
 
   const audioStreams = remotes.filter((r) => r.audio);
-  const screenTiles = remotes.filter((r) => r.video);
+  const screenTiles = remotes.filter((r) => r.screen);
   const cameraTiles = remotes.filter((r) => r.camera);
   const showGrid = screenOn || cameraOn || screenTiles.length > 0 || cameraTiles.length > 0;
 
@@ -46,7 +46,7 @@ export default function VoiceOverlay() {
             <VideoTile stream={localCamera} label="You" muted onExpand={setExpanded} />
           )}
           {screenTiles.map((r) => (
-            <VideoTile key={`s-${r.socketId}`} stream={r.video!} label="Screen share" onExpand={setExpanded} />
+            <VideoTile key={`s-${r.socketId}`} stream={r.screen!} label="Screen share" onExpand={setExpanded} />
           ))}
           {cameraTiles.map((r) => (
             <VideoTile key={`c-${r.socketId}`} stream={r.camera!} label="Camera" onExpand={setExpanded} />

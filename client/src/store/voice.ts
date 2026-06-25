@@ -4,7 +4,7 @@ export interface RemoteEntry {
   socketId: string;
   userId: string;
   audio?: MediaStream; // mic
-  video?: MediaStream; // screen share (present only while sharing)
+  screen?: MediaStream; // screen share (present only while sharing)
   camera?: MediaStream; // webcam (present only while camera on)
 }
 
