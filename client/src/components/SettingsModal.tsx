@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../store/auth";
+import { useSettings } from "../store/settings";
+import { useI18n, LANGUAGES, type Lang } from "../lib/i18n";
 import { getServerUrl, setServerUrl, serverPinned } from "../lib/serverUrl";
 import type { PresenceStatus } from "../types";
 import Modal from "./Modal";
@@ -10,12 +12,17 @@ const STATUSES: PresenceStatus[] = ["ONLINE", "IDLE", "DND", "OFFLINE"];
 
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { user, updateProfile, logout } = useAuth();
+  const { t } = useI18n();
+  const lang = useSettings((s) => s.lang);
+  const setSettings = useSettings((s) => s.set);
   const [tab, setTab] = useState<"profile" | "voice" | "app">("profile");
 
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
+  const [bannerUrl, setBannerUrl] = useState(user?.bannerUrl ?? "");
   const [accentColor, setAccentColor] = useState(user?.accentColor ?? "#5865f2");
   const [customStatus, setCustomStatus] = useState(user?.customStatus ?? "");
+  const [pronouns, setPronouns] = useState(user?.pronouns ?? "");
   const [bio, setBio] = useState(user?.bio ?? "");
   const [status, setStatus] = useState<PresenceStatus>(user?.status ?? "ONLINE");
 
@@ -32,12 +39,14 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       await updateProfile({
         displayName: displayName.trim() || user!.username,
         avatarUrl: avatarUrl.trim() || null,
+        bannerUrl: bannerUrl.trim() || null,
         accentColor: accentColor || null,
         customStatus: customStatus.trim() || null,
+        pronouns: pronouns.trim() || null,
         bio: bio.trim() || null,
         status,
       });
-      setMsg("Saved ✓");
+      setMsg(t("settings.saved"));
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
@@ -51,45 +60,62 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Settings" onClose={onClose} wide>
+    <Modal title={t("settings.title")} onClose={onClose} wide>
       <div className="mb-5 flex gap-2 border-b border-black/20 pb-3">
-        <Tab active={tab === "profile"} onClick={() => setTab("profile")}>My Profile</Tab>
-        <Tab active={tab === "voice"} onClick={() => setTab("voice")}>Voice &amp; Video</Tab>
-        <Tab active={tab === "app"} onClick={() => setTab("app")}>App / Connection</Tab>
+        <Tab active={tab === "profile"} onClick={() => setTab("profile")}>{t("settings.tab.profile")}</Tab>
+        <Tab active={tab === "voice"} onClick={() => setTab("voice")}>{t("settings.tab.voice")}</Tab>
+        <Tab active={tab === "app"} onClick={() => setTab("app")}>{t("settings.tab.app")}</Tab>
       </div>
 
       {tab === "voice" ? (
         <VoiceSettings />
       ) : tab === "profile" ? (
         <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Avatar user={{ username: user.username, displayName, avatarUrl }} size={64} status={status} />
-            <div className="text-sm text-discord-muted">
-              {user.username}#{user.discriminator}
+          {/* Live banner + avatar preview */}
+          <div
+            className="relative mb-8 h-24 rounded-lg"
+            style={{
+              background: bannerUrl
+                ? `center/cover no-repeat url(${bannerUrl})`
+                : accentColor,
+            }}
+          >
+            <div className="absolute -bottom-6 left-4">
+              <Avatar
+                user={{ username: user.username, displayName, avatarUrl }}
+                size={64}
+                status={status}
+              />
             </div>
           </div>
+          <div className="text-sm text-discord-muted">
+            {user.username}#{user.discriminator}
+            {pronouns.trim() && <span className="ml-2 text-discord-faint">· {pronouns}</span>}
+          </div>
 
-          <Field label="Display name" value={displayName} onChange={setDisplayName} />
-          <Field label="Avatar URL" value={avatarUrl} onChange={setAvatarUrl} placeholder="https://…/avatar.png" />
-          <Field label="Custom status" value={customStatus} onChange={setCustomStatus} placeholder="Playing something" />
+          <Field label={t("settings.displayName")} value={displayName} onChange={setDisplayName} />
+          <Field label={t("settings.pronouns")} value={pronouns} onChange={setPronouns} placeholder={t("settings.pronounsPlaceholder")} />
+          <Field label={t("settings.avatarUrl")} value={avatarUrl} onChange={setAvatarUrl} placeholder="https://…/avatar.png" />
+          <Field label={t("settings.bannerUrl")} value={bannerUrl} onChange={setBannerUrl} placeholder="https://…/banner.png" />
+          <Field label={t("settings.customStatus")} value={customStatus} onChange={setCustomStatus} placeholder={t("settings.customStatusPlaceholder")} />
 
           <div>
-            <label className="text-xs font-bold uppercase text-discord-muted">Status</label>
-            <div className="mt-1.5 flex gap-2">
+            <label className="text-xs font-bold uppercase text-discord-muted">{t("settings.status")}</label>
+            <div className="mt-1.5 flex flex-wrap gap-2">
               {STATUSES.map((s) => (
                 <button
                   key={s}
                   onClick={() => setStatus(s)}
                   className={`rounded px-3 py-1.5 text-sm ${status === s ? "bg-discord-accent text-white" : "bg-discord-card text-discord-muted hover:text-white"}`}
                 >
-                  {s}
+                  {t(`status.${s}` as never)}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase text-discord-muted">Accent color</label>
+            <label className="text-xs font-bold uppercase text-discord-muted">{t("settings.bannerColor")}</label>
             <input
               type="color"
               value={accentColor}
@@ -99,7 +125,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="text-xs font-bold uppercase text-discord-muted">About me</label>
+            <label className="text-xs font-bold uppercase text-discord-muted">{t("settings.aboutMe")}</label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
@@ -115,19 +141,38 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               disabled={busy}
               className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4] disabled:opacity-60"
             >
-              {busy ? "Saving…" : "Save Profile"}
+              {busy ? t("settings.saving") : t("settings.saveProfile")}
             </button>
             {msg && <span className="text-sm text-discord-muted">{msg}</span>}
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* Language */}
+          <div>
+            <label className="text-xs font-bold uppercase text-discord-muted">{t("settings.language")}</label>
+            <p className="mb-2 mt-0.5 text-xs text-discord-faint">{t("settings.languageDesc")}</p>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(LANGUAGES) as Lang[]).map((code) => (
+                <button
+                  key={code}
+                  onClick={() => setSettings({ lang: code })}
+                  className={`rounded px-4 py-2 text-sm font-medium ${lang === code ? "bg-discord-accent text-white" : "bg-discord-card text-discord-muted hover:text-white"}`}
+                >
+                  {LANGUAGES[code]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <hr className="border-black/20" />
+
           {!serverPinned && (
             <>
-              <Field label="Server URL" value={server} onChange={setServer} placeholder="http://localhost:4000" />
+              <Field label={t("settings.serverUrl")} value={server} onChange={setServer} placeholder="http://localhost:4000" />
               <div className="flex items-center gap-3">
                 <button onClick={saveServer} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4]">
-                  Save Server URL
+                  {t("settings.saveServerUrl")}
                 </button>
                 {msg && <span className="text-sm text-discord-muted">{msg}</span>}
               </div>
@@ -139,7 +184,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             onClick={() => logout()}
             className="rounded bg-discord-danger px-5 py-2 font-medium text-white hover:bg-[#a12828]"
           >
-            Log Out
+            {t("settings.logout")}
           </button>
         </div>
       )}

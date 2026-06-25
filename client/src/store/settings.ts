@@ -29,6 +29,9 @@ export interface SettingsState {
   soundsEnabled: boolean;
   soundVolume: number; // 0–100 (%)
 
+  // Interface language.
+  lang: "en" | "ru";
+
   set: (p: Partial<SettingsState>) => void;
 }
 
@@ -60,6 +63,8 @@ export const useSettings = create<SettingsState>()(
 
       soundsEnabled: true,
       soundVolume: 60,
+
+      lang: (typeof navigator !== "undefined" && navigator.language?.startsWith("ru") ? "ru" : "en"),
 
       set: (p) => set(p),
     }),

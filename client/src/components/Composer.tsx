@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { getSocket } from "../lib/socket";
+import { useI18n } from "../lib/i18n";
 import type { UploadedFile } from "../api/client";
 import type { Message } from "../types";
 import EmojiPicker from "./EmojiPicker";
@@ -35,6 +36,7 @@ export default function Composer({
   onClearReply: () => void;
   onSend: (payload: SendPayload) => void;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
@@ -102,7 +104,8 @@ export default function Composer({
       {replyingTo && (
         <div className="flex items-center justify-between border-b border-black/20 px-4 py-1.5 text-xs text-discord-muted">
           <span className="truncate">
-            Replying to <strong className="text-discord-text">{replyingTo.author.displayName ?? replyingTo.author.username}</strong>
+            {t("composer.replyingTo", { name: "" })}{" "}
+            <strong className="text-discord-text">{replyingTo.author.displayName ?? replyingTo.author.username}</strong>
           </span>
           <button onClick={onClearReply} className="hover:text-white">✕</button>
         </div>
@@ -125,7 +128,7 @@ export default function Composer({
           onClick={() => fileInput.current?.click()}
           disabled={uploading}
           className="pb-1 text-2xl leading-none text-discord-muted hover:text-discord-text disabled:opacity-50"
-          title="Attach a file (no size limit)"
+          title={t("composer.uploadFile")}
         >
           {uploading ? "…" : "＋"}
         </button>
@@ -136,20 +139,20 @@ export default function Composer({
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          placeholder={`Message #${channelName}`}
+          placeholder={t("composer.message", { name: channelName })}
           className="max-h-48 flex-1 resize-none bg-transparent py-1 text-discord-text outline-none placeholder:text-discord-faint"
         />
         <button
           onClick={() => setShowGif((v) => !v)}
           className="pb-1 text-sm font-bold leading-none text-discord-muted hover:text-discord-text"
-          title="GIF"
+          title={t("composer.gif")}
         >
           GIF
         </button>
         <button
           onClick={() => setShowEmoji((v) => !v)}
           className="pb-1 text-xl leading-none text-discord-muted hover:text-discord-text"
-          title="Emoji"
+          title={t("composer.emoji")}
         >
           😀
         </button>

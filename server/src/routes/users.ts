@@ -20,6 +20,7 @@ export async function userRoutes(app: FastifyInstance) {
         accentColor: true,
         bio: true,
         customStatus: true,
+        pronouns: true,
         status: true,
         createdAt: true,
       },

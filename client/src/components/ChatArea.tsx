@@ -8,6 +8,8 @@ import { useUnread } from "../store/unread";
 import { getLastRead, setLastRead } from "../lib/lastRead";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera } from "../lib/voice";
 import type { Message as Msg } from "../types";
+import { useI18n } from "../lib/i18n";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, ScreenIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
@@ -22,6 +24,7 @@ interface ChannelInfo {
 
 export default function ChatArea() {
   const { currentChannelId } = useUI();
+  const { t } = useI18n();
   const voice = useVoice();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
@@ -200,7 +203,7 @@ export default function ChatArea() {
         <button
           onClick={() => setShowPins(true)}
           className="ml-auto rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white"
-          title="Pinned messages"
+          title={t("channel.pinnedMessages")}
         >
           📌
         </button>
@@ -208,23 +211,35 @@ export default function ChatArea() {
         {isDM && (
           <div className="flex items-center gap-2">
             {callMembers.length > 0 && !inThisCall && (
-              <span className="text-xs text-discord-green">● In call</span>
+              <span className="text-xs text-discord-green">● {t("voice.inCall")}</span>
             )}
             {!inThisCall ? (
               <button
                 onClick={() => joinVoice(channel.id)}
-                className="rounded bg-discord-green px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
-                title="Start / join voice call"
+                className="flex items-center gap-2 rounded-full bg-discord-green px-4 py-1.5 text-sm font-medium text-white hover:brightness-110"
+                title={t("voice.startCall")}
               >
-                📞 Call
+                <PhoneIcon size={16} />
+                {t("voice.call")}
               </button>
             ) : (
               <>
-                <HeaderBtn active={voice.muted} onClick={toggleMute}>{voice.muted ? "Unmute" : "Mute"}</HeaderBtn>
-                <HeaderBtn active={voice.cameraOn} onClick={toggleCamera}>{voice.cameraOn ? "Cam Off" : "Camera"}</HeaderBtn>
-                <HeaderBtn active={voice.screenOn} onClick={toggleScreen}>{voice.screenOn ? "Stop Share" : "Share"}</HeaderBtn>
-                <button onClick={leaveVoice} className="rounded bg-discord-danger px-3 py-1.5 text-sm font-medium text-white hover:brightness-110">
-                  Leave
+                <HeaderBtn active={voice.muted} onClick={toggleMute} title={voice.muted ? t("voice.unmute") : t("voice.mute")}>
+                  {voice.muted ? <MicOffIcon size={16} /> : <MicIcon size={16} />}
+                </HeaderBtn>
+                <HeaderBtn active={voice.cameraOn} onClick={toggleCamera} title={voice.cameraOn ? t("voice.cameraOff") : t("voice.camera")}>
+                  <CameraIcon size={16} />
+                </HeaderBtn>
+                <HeaderBtn active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
+                  <ScreenIcon size={16} />
+                </HeaderBtn>
+                <button
+                  onClick={leaveVoice}
+                  title={t("voice.leave")}
+                  className="flex items-center gap-2 rounded-full bg-discord-danger px-4 py-1.5 text-sm font-medium text-white hover:brightness-110"
+                >
+                  <PhoneOffIcon size={16} />
+                  {t("voice.leave")}
                 </button>
               </>
             )}
@@ -261,7 +276,7 @@ export default function ChatArea() {
           onSend={sendMessage}
         />
         <div className="h-5 px-1 pt-1 text-xs text-discord-muted">
-          {typing.length > 0 && `${typing.join(", ")} ${typing.length === 1 ? "is" : "are"} typing…`}
+          {typing.length > 0 && `${typing.join(", ")} ${typing.length === 1 ? t("chat.typingOne") : t("chat.typingMany")}`}
         </div>
       </div>
 
@@ -270,11 +285,12 @@ export default function ChatArea() {
   );
 }
 
-function HeaderBtn({ active, onClick, children }: { active?: boolean; onClick: () => void; children: React.ReactNode }) {
+function HeaderBtn({ active, onClick, title, children }: { active?: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded px-3 py-1.5 text-sm font-medium ${active ? "bg-discord-accent text-white" : "bg-discord-card text-discord-text hover:bg-discord-hover"}`}
+      title={title}
+      className={`flex items-center justify-center rounded-full p-2 ${active ? "bg-discord-accent text-white" : "bg-discord-card text-discord-text hover:bg-discord-hover"}`}
     >
       {children}
     </button>
@@ -282,16 +298,17 @@ function HeaderBtn({ active, onClick, children }: { active?: boolean; onClick: (
 }
 
 function Welcome({ name, isDM }: { name: string; isDM: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="px-4 pb-4">
       <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-discord-card text-3xl">
         {isDM ? "@" : "#"}
       </div>
       <h2 className="text-2xl font-bold text-white">
-        {isDM ? name : `Welcome to #${name}!`}
+        {isDM ? name : t("channel.welcomeTitle", { name })}
       </h2>
       <p className="text-discord-muted">
-        {isDM ? `This is the beginning of your direct message history with ${name}.` : `This is the start of the #${name} channel.`}
+        {isDM ? t("channel.welcomeDm", { name }) : t("channel.welcomeChannel", { name })}
       </p>
     </div>
   );

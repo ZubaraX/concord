@@ -6,6 +6,8 @@ import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
 import { useUnread } from "../store/unread";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, sendVoiceEmoji } from "../lib/voice";
+import { useI18n } from "../lib/i18n";
+import { MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PhoneOffIcon } from "./Icons";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
@@ -132,13 +134,14 @@ export default function ChannelSidebar() {
 
 function VoiceControlBar({ channelName }: { channelName: string }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const { t } = useI18n();
   const { connState: conn, muted, screenOn, cameraOn } = useVoice();
   const status =
     conn === "failed"
       ? { color: "bg-discord-danger", text: "No media — needs TURN", textColor: "text-discord-danger" }
       : conn === "connecting"
-      ? { color: "bg-yellow-500", text: "Connecting…", textColor: "text-white" }
-      : { color: "bg-discord-green", text: "Voice Connected", textColor: "text-white" };
+      ? { color: "bg-yellow-500", text: t("voice.connecting"), textColor: "text-white" }
+      : { color: "bg-discord-green", text: t("voice.connected"), textColor: "text-white" };
   return (
     <div className="relative border-t border-black/30 bg-[#232428] px-2 py-2">
       <div className="flex items-center gap-2 px-1">
@@ -154,24 +157,24 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
         </div>
         <button
           onClick={leaveVoice}
-          title="Disconnect"
+          title={t("voice.disconnect")}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-discord-danger/90 text-white transition hover:bg-discord-danger"
         >
-          ✕
+          <PhoneOffIcon size={16} />
         </button>
       </div>
 
       <div className="mt-2 grid grid-cols-4 gap-1.5">
-        <CallBtn active={muted} danger={muted} onClick={toggleMute} label={muted ? "Unmute" : "Mute"}>
-          {muted ? "🔇" : "🎙"}
+        <CallBtn active={muted} danger={muted} onClick={toggleMute} label={muted ? t("voice.unmute") : t("voice.mute")}>
+          {muted ? <MicOffIcon size={18} /> : <MicIcon size={18} />}
         </CallBtn>
-        <CallBtn active={cameraOn} onClick={toggleCamera} label="Cam">
-          📷
+        <CallBtn active={cameraOn} onClick={toggleCamera} label={t("voice.camera")}>
+          <CameraIcon size={18} />
         </CallBtn>
-        <CallBtn active={screenOn} onClick={toggleScreen} label={screenOn ? "Stop" : "Share"}>
-          🖥
+        <CallBtn active={screenOn} onClick={toggleScreen} label={screenOn ? t("voice.stopShare") : t("voice.share")}>
+          <ScreenIcon size={18} />
         </CallBtn>
-        <CallBtn active={emojiOpen} onClick={() => setEmojiOpen((v) => !v)} label="React">
+        <CallBtn active={emojiOpen} onClick={() => setEmojiOpen((v) => !v)} label={t("voice.react")}>
           😀
         </CallBtn>
       </div>

@@ -19,6 +19,7 @@ export interface User {
   accentColor?: string | null;
   bio?: string | null;
   customStatus?: string | null;
+  pronouns?: string | null;
   status?: PresenceStatus;
 }
 

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { joinVoice } from "../lib/voice";
+import { useI18n } from "../lib/i18n";
 import type { Friend, User } from "../types";
 import Avatar from "./Avatar";
 
@@ -16,6 +17,7 @@ export default function FriendsPage() {
   const [tab, setTab] = useState<Tab>("online");
   const qc = useQueryClient();
   const { openDM } = useUI();
+  const { t } = useI18n();
 
   const { data: friends = [] } = useQuery<Friend[]>({ queryKey: ["friends"], queryFn: () => api("/api/friends") });
   const { data: pending } = useQuery<Pending>({ queryKey: ["friends", "pending"], queryFn: () => api("/api/friends/pending") });
@@ -39,18 +41,18 @@ export default function FriendsPage() {
   return (
     <main className="flex flex-1 flex-col bg-discord-bg">
       <header className="flex h-12 items-center gap-4 border-b border-black/20 px-4 shadow-sm">
-        <span className="font-semibold text-white">👥 Friends</span>
+        <span className="font-semibold text-white">👥 {t("friends.title")}</span>
         <div className="flex gap-1">
-          <TabBtn active={tab === "online"} onClick={() => setTab("online")}>Online</TabBtn>
-          <TabBtn active={tab === "all"} onClick={() => setTab("all")}>All</TabBtn>
+          <TabBtn active={tab === "online"} onClick={() => setTab("online")}>{t("friends.online")}</TabBtn>
+          <TabBtn active={tab === "all"} onClick={() => setTab("all")}>{t("friends.all")}</TabBtn>
           <TabBtn active={tab === "pending"} onClick={() => setTab("pending")}>
-            Pending{pendingCount > 0 ? ` (${pendingCount})` : ""}
+            {t("friends.pending")}{pendingCount > 0 ? ` (${pendingCount})` : ""}
           </TabBtn>
           <button
             onClick={() => setTab("add")}
             className={`rounded px-3 py-1 text-sm font-medium ${tab === "add" ? "bg-discord-green text-white" : "bg-discord-green/80 text-white hover:bg-discord-green"}`}
           >
-            Add Friend
+            {t("friends.addFriend")}
           </button>
         </div>
       </header>
@@ -61,11 +63,11 @@ export default function FriendsPage() {
         ) : tab === "pending" ? (
           <PendingList pending={pending} onChange={refresh} />
         ) : list.length === 0 ? (
-          <p className="text-discord-muted">No friends {tab === "online" ? "online" : "yet"}. Add some!</p>
+          <p className="text-discord-muted">{t("friends.empty")}</p>
         ) : (
           <div className="space-y-1">
             <h3 className="mb-2 text-xs font-bold uppercase text-discord-muted">
-              {tab === "online" ? "Online" : "All Friends"} — {list.length}
+              {tab === "online" ? t("friends.online") : t("friends.all")} — {list.length}
             </h3>
             {list.map((f) => (
               <div key={f.id} className="flex items-center gap-3 rounded px-2 py-2 hover:bg-discord-hover">
@@ -76,8 +78,8 @@ export default function FriendsPage() {
                     {f.user.username}#{f.user.discriminator}
                   </div>
                 </div>
-                <IconBtn title="Message" onClick={() => openOrCreateDM(f.user.id)}>💬</IconBtn>
-                <IconBtn title="Call" onClick={() => openOrCreateDM(f.user.id, true)}>📞</IconBtn>
+                <IconBtn title={t("profile.message")} onClick={() => openOrCreateDM(f.user.id)}>💬</IconBtn>
+                <IconBtn title={t("voice.call")} onClick={() => openOrCreateDM(f.user.id, true)}>📞</IconBtn>
               </div>
             ))}
           </div>
@@ -88,6 +90,7 @@ export default function FriendsPage() {
 }
 
 function AddFriend({ onDone }: { onDone: () => void }) {
+  const { t } = useI18n();
   const [tag, setTag] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -114,8 +117,8 @@ function AddFriend({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="max-w-lg">
-      <h3 className="text-base font-semibold text-white">Add Friend</h3>
-      <p className="mt-1 text-sm text-discord-muted">Enter their tag, e.g. <code>demo#0001</code>.</p>
+      <h3 className="text-base font-semibold text-white">{t("friends.addFriend")}</h3>
+      <p className="mt-1 text-sm text-discord-muted">{t("friends.addPlaceholder")} — <code>demo#0001</code></p>
       <div className="mt-3 flex gap-2">
         <input
           autoFocus
@@ -126,7 +129,7 @@ function AddFriend({ onDone }: { onDone: () => void }) {
           className="flex-1 rounded bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
         />
         <button onClick={submit} disabled={busy} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4] disabled:opacity-60">
-          Send
+          {t("friends.send")}
         </button>
       </div>
       {msg && <div className={`mt-2 text-sm ${msg.ok ? "text-discord-green" : "text-discord-danger"}`}>{msg.text}</div>}

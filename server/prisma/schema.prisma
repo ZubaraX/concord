@@ -26,6 +26,7 @@ model User {
   bio           String?
   status        String   @default("OFFLINE")
   customStatus  String?
+  pronouns      String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

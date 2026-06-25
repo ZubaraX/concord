@@ -34,6 +34,7 @@ type AnyUser = {
   accentColor?: string | null;
   bio?: string | null;
   customStatus?: string | null;
+  pronouns?: string | null;
   status?: string;
 };
 
@@ -49,6 +50,7 @@ function publicUser(u: AnyUser) {
     accentColor: u.accentColor ?? null,
     bio: u.bio ?? null,
     customStatus: u.customStatus ?? null,
+    pronouns: u.pronouns ?? null,
     status: u.status ?? "OFFLINE",
   };
 }
@@ -153,6 +155,7 @@ export async function authRoutes(app: FastifyInstance) {
         accentColor: z.string().max(16).nullable().optional(),
         bio: z.string().max(4000).nullable().optional(),
         customStatus: z.string().max(128).nullable().optional(),
+        pronouns: z.string().max(40).nullable().optional(),
         status: z.enum(["ONLINE", "IDLE", "DND", "OFFLINE"]).optional(),
       })
       .safeParse(req.body);

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useAuth } from "../store/auth";
+import { useI18n } from "../lib/i18n";
 import { getServerUrl, setServerUrl, serverPinned } from "../lib/serverUrl";
 
 export default function AuthPage() {
   const { login, register } = useAuth();
+  const { t } = useI18n();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("demo@concord.dev");
@@ -34,26 +36,24 @@ export default function AuthPage() {
     <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#5865f2] to-[#404eed] p-4">
       <div className="w-full max-w-md rounded-md bg-discord-bg p-8 shadow-2xl">
         <h1 className="text-center text-2xl font-bold text-white">
-          {mode === "login" ? "Welcome back!" : "Create an account"}
+          {mode === "login" ? t("auth.welcome") : t("auth.createAccount")}
         </h1>
-        <p className="mt-1 text-center text-sm text-discord-muted">
-          {mode === "login" ? "We're so excited to see you again." : "Join your self-hosted Concord."}
-        </p>
+        <p className="mt-1 text-center text-sm text-discord-muted">{t("auth.subtitle")}</p>
 
         <form onSubmit={submit} className="mt-6 space-y-4">
           {showServerField && (
             <Field
-              label="Server URL"
+              label={t("settings.serverUrl")}
               value={server}
               onChange={setServer}
               placeholder="https://your-codespace-4000.app.github.dev"
             />
           )}
           {mode === "register" && (
-            <Field label="Username" value={username} onChange={setUsername} placeholder="cooluser" />
+            <Field label={t("auth.username")} value={username} onChange={setUsername} placeholder="cooluser" />
           )}
-          <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="you@example.com" />
-          <Field label="Password" value={password} onChange={setPassword} type="password" placeholder="••••••••" />
+          <Field label={t("auth.email")} value={email} onChange={setEmail} type="email" placeholder="you@example.com" />
+          <Field label={t("auth.password")} value={password} onChange={setPassword} type="password" placeholder="••••••••" />
 
           {error && <div className="text-sm text-discord-danger">{error}</div>}
 
@@ -62,12 +62,11 @@ export default function AuthPage() {
             disabled={busy}
             className="w-full rounded-sm bg-discord-accent py-2.5 font-medium text-white transition hover:bg-[#4752c4] disabled:opacity-60"
           >
-            {busy ? "Please wait…" : mode === "login" ? "Log In" : "Continue"}
+            {busy ? t("auth.loading") : mode === "login" ? t("auth.login") : t("auth.register")}
           </button>
         </form>
 
         <p className="mt-4 text-sm text-discord-muted">
-          {mode === "login" ? "Need an account? " : "Already have one? "}
           <button
             onClick={() => {
               setMode(mode === "login" ? "register" : "login");
@@ -75,7 +74,7 @@ export default function AuthPage() {
             }}
             className="text-[#00a8fc] hover:underline"
           >
-            {mode === "login" ? "Register" : "Log In"}
+            {mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}
           </button>
         </p>
 

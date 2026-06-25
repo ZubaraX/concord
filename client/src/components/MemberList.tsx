@@ -6,6 +6,7 @@ import { useUI } from "../store/ui";
 import { useAuth } from "../store/auth";
 import { joinVoice } from "../lib/voice";
 import { useNotify } from "../store/notify";
+import { useI18n } from "../lib/i18n";
 import type { Guild, GuildMember, PresenceStatus, User } from "../types";
 import Avatar from "./Avatar";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
@@ -13,6 +14,7 @@ import ContextMenu, { type MenuItem } from "./ContextMenu";
 export default function MemberList() {
   const { currentGuildId, openDM, openProfile } = useUI();
   const { user: me } = useAuth();
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [presence, setPresence] = useState<Record<string, PresenceStatus>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; user: User } | null>(null);
@@ -51,18 +53,18 @@ export default function MemberList() {
 
   function menuItems(u: User): MenuItem[] {
     return [
-      { label: "View Profile", icon: "👤", onClick: () => openProfile(u.id) },
-      { label: "Message", icon: "💬", onClick: () => openDMWith(u) },
-      { label: "Call", icon: "📞", onClick: () => openDMWith(u, true) },
+      { label: t("profile.viewProfile"), icon: "👤", onClick: () => openProfile(u.id) },
+      { label: t("profile.message"), icon: "💬", onClick: () => openDMWith(u) },
+      { label: t("voice.call"), icon: "📞", onClick: () => openDMWith(u, true) },
       {
-        label: "Add Friend",
+        label: t("friends.addFriend"),
         icon: "➕",
         onClick: () =>
           api("/api/friends/request", { method: "POST", body: JSON.stringify({ username: u.username, discriminator: u.discriminator }) })
             .then(() => useNotify.getState().push({ title: "Friend request sent", body: `${u.username}#${u.discriminator}` }))
             .catch((e) => useNotify.getState().push({ title: "Couldn't add friend", body: (e as Error).message })),
       },
-      { label: "Copy User ID", icon: "🆔", onClick: () => navigator.clipboard?.writeText(u.id) },
+      { label: t("common.copy") + " ID", icon: "🆔", onClick: () => navigator.clipboard?.writeText(u.id) },
     ];
   }
 
@@ -75,8 +77,8 @@ export default function MemberList() {
   return (
     <aside className="hidden w-60 flex-col bg-discord-sidebar lg:flex">
       <div className="flex-1 overflow-y-auto px-2 py-4">
-        <Section title={`Online — ${online.length}`} members={online} status={withStatus} onMenu={rowMenu} />
-        <Section title={`Offline — ${offline.length}`} members={offline} status={withStatus} onMenu={rowMenu} dim />
+        <Section title={`${t("members.online")} — ${online.length}`} members={online} status={withStatus} onMenu={rowMenu} />
+        <Section title={`${t("members.offline")} — ${offline.length}`} members={offline} status={withStatus} onMenu={rowMenu} dim />
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.user)} onClose={() => setMenu(null)} />}
     </aside>
