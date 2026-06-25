@@ -14,12 +14,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "0.2.3",
+    version: "0.2.4",
     date: "2026-06-25",
     items: [
       "Авто-обновление при запуске: приложение само ставит новую версию и показывает, что изменилось",
       "Звонок (рингтон) на входящие звонки в личных сообщениях",
       "Пинг и уведомление, когда вас @упоминают (включая @everyone / @here)",
+      "Обновление в фоне больше не прерывает активную сессию (ставится при выходе)",
     ],
   },
   {

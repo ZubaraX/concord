@@ -83,9 +83,15 @@ app.whenReady().then(() => {
   if (app.isPackaged) {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
+    const startedAt = Date.now();
     let installing = false;
     autoUpdater.on("update-downloaded", () => {
       if (installing) return;
+      // Only relaunch immediately for an update found right after launch (so the
+      // app starts on the latest build, as intended). If an update arrives later
+      // in the session, don't yank the user out of it (e.g. mid-call) — it'll be
+      // applied automatically on the next quit (autoInstallOnAppQuit).
+      if (Date.now() - startedAt > 90 * 1000) return;
       installing = true;
       // isSilent = true (no extra installer UI), isForceRunAfter = true (relaunch).
       try {
