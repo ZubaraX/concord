@@ -22,6 +22,7 @@ async function getJson(url: string, timeoutMs = 8000, attempts = 2): Promise<any
       return await r.json();
     } catch (e) {
       lastErr = e;
+      console.error(`[gif] attempt ${i + 1} failed:`, (e as Error)?.name, (e as Error)?.message);
     } finally {
       dispatcher.close().catch(() => {});
     }
