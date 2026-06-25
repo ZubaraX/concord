@@ -70,3 +70,11 @@ export const ScreenIcon = ({ className, size }: P) =>
       <line x1="12" y1="17" x2="12" y2="21" />
     </>
   ));
+
+export const PinIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <line x1="12" y1="17" x2="12" y2="22" />
+      <path d="M9 2h6l-1 7 3 3v2H7v-2l3-3-1-7z" />
+    </>
+  ));

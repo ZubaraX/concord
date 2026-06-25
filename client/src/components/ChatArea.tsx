@@ -9,7 +9,7 @@ import { getLastRead, setLastRead } from "../lib/lastRead";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera } from "../lib/voice";
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
-import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, ScreenIcon } from "./Icons";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PinIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
@@ -205,7 +205,7 @@ export default function ChatArea() {
           className="ml-auto rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white"
           title={t("channel.pinnedMessages")}
         >
-          📌
+          <PinIcon size={18} />
         </button>
 
         {isDM && (

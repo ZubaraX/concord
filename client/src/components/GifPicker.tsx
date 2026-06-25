@@ -43,7 +43,7 @@ export default function GifPicker({ onPick, onClose }: { onPick: (url: string) =
         placeholder="Search GIFs…"
         className="mb-3 w-full rounded bg-[#1e1f22] px-3 py-2 text-sm text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
       />
-      <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto pr-1">
+      <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 content-start gap-3 overflow-y-auto pr-1">
         {loading && <div className="col-span-2 p-4 text-center text-sm text-discord-muted">Loading…</div>}
         {!loading && gifs.length === 0 && (
           <div className="col-span-2 p-4 text-center text-sm text-discord-muted">No GIFs found.</div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../store/auth";
 import { useSettings } from "../store/settings";
 import { useI18n, LANGUAGES, type Lang } from "../lib/i18n";
+import { appVersion } from "../lib/changelog";
 import { getServerUrl, setServerUrl, serverPinned } from "../lib/serverUrl";
 import type { PresenceStatus } from "../types";
 import Modal from "./Modal";
@@ -186,6 +187,11 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           >
             {t("settings.logout")}
           </button>
+
+          <div className="flex items-center gap-2 pt-2 text-xs text-discord-faint">
+            <span className="rounded bg-discord-card px-2 py-1 font-mono">Concord</span>
+            <span>{t("settings.version")} {appVersion()}</span>
+          </div>
         </div>
       )}
     </Modal>

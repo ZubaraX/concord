@@ -17,6 +17,7 @@ import Avatar from "./Avatar";
 
 export default function ChannelSidebar() {
   const { currentGuildId, currentChannelId, setChannel, openModal, openDM, openFriends } = useUI();
+  const { t } = useI18n();
   const voice = useVoice();
   const unread = useUnread((s) => s.counts);
   const [createCtx, setCreateCtx] = useState<{ type: "TEXT" | "VOICE"; parentId?: string } | null>(null);
@@ -58,10 +59,10 @@ export default function ChannelSidebar() {
         <span className="truncate">{guild?.name ?? "…"}</span>
         <button
           onClick={() => openModal("invite")}
-          title="Invite People"
+          title={t("nav.invitePeople")}
           className="rounded px-1.5 py-1 text-sm text-discord-muted transition hover:bg-discord-hover hover:text-white"
         >
-          Invite
+          {t("nav.invite")}
         </button>
       </div>
 
@@ -81,7 +82,7 @@ export default function ChannelSidebar() {
                     )
                   }
                   className="text-discord-muted opacity-0 transition group-hover:opacity-100 hover:text-white"
-                  title="Create channel"
+                  title={t("channel.createChannel")}
                 >
                   +
                 </button>
@@ -99,7 +100,7 @@ export default function ChannelSidebar() {
                   (voice.occupancy[c.id] ?? []).map((uid) => (
                     <div key={uid} className="ml-9 flex items-center gap-1.5 py-0.5 text-sm text-discord-muted">
                       <span className="h-2 w-2 rounded-full bg-discord-green" />
-                      <span className="truncate">{nameOf[uid] ?? "Someone"}</span>
+                      <span className="truncate">{nameOf[uid] ?? t("common.someone")}</span>
                     </div>
                   ))}
               </div>
@@ -111,7 +112,7 @@ export default function ChannelSidebar() {
           onClick={() => openCreate("TEXT")}
           className="mt-2 w-full rounded px-2 py-1 text-left text-sm text-discord-muted hover:bg-discord-hover hover:text-white"
         >
-          + Create channel
+          + {t("channel.createChannel")}
         </button>
       </div>
 
@@ -217,7 +218,7 @@ function CallBtn({
       onClick={onClick}
       title={label}
       className={clsx(
-        "flex flex-col items-center gap-0.5 rounded-md py-1.5 text-base transition",
+        "flex h-10 items-center justify-center rounded-md transition",
         active
           ? danger
             ? "bg-discord-danger text-white"
@@ -225,8 +226,7 @@ function CallBtn({
           : "bg-discord-card text-discord-text hover:bg-discord-hover"
       )}
     >
-      <span>{children}</span>
-      <span className="text-[10px] font-medium">{label}</span>
+      {children}
     </button>
   );
 }
@@ -276,6 +276,7 @@ function HomeSidebar({
   onFriends: () => void;
   onDM: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const voice = useVoice();
   const unread = useUnread((s) => s.counts);
   const { data: dms = [] } = useQuery<DMSummary[]>({
@@ -286,7 +287,7 @@ function HomeSidebar({
   return (
     <aside className="flex w-60 flex-col bg-discord-sidebar">
       <div className="flex h-12 items-center border-b border-black/20 px-4 font-semibold shadow-sm">
-        Home
+        {t("nav.home")}
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-3">
         <button
@@ -296,13 +297,13 @@ function HomeSidebar({
             !activeChannelId ? "bg-discord-active text-white" : "text-discord-muted hover:bg-discord-hover hover:text-white"
           )}
         >
-          👥 Friends
+          👥 {t("nav.friends")}
         </button>
 
         <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-discord-muted">
-          Direct Messages
+          {t("nav.directMessages")}
         </div>
-        {dms.length === 0 && <div className="px-2 py-1 text-sm text-discord-faint">No DMs yet.</div>}
+        {dms.length === 0 && <div className="px-2 py-1 text-sm text-discord-faint">{t("nav.noDms")}</div>}
         {dms.map((dm) => {
           const inCall = (voice.occupancy[dm.id] ?? []).length > 0;
           const n = activeChannelId === dm.id ? 0 : unread[dm.id] || 0;

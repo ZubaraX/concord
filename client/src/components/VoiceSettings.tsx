@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSettings, type ScreenFps, type ScreenResolution } from "../store/settings";
 import { listDevices, refreshMic, setInputVolume, startMicTest } from "../lib/voice";
 import { previewSound } from "../lib/sound";
+import { useI18n } from "../lib/i18n";
 
 const FPS_OPTIONS: ScreenFps[] = [15, 30, 60, 120, 144];
 const RES_OPTIONS: { value: ScreenResolution; label: string }[] = [
@@ -14,6 +15,7 @@ const RES_OPTIONS: { value: ScreenResolution; label: string }[] = [
 
 export default function VoiceSettings() {
   const s = useSettings();
+  const { t } = useI18n();
   const [inputs, setInputs] = useState<MediaDeviceInfo[]>([]);
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
   const [level, setLevel] = useState(0);
@@ -70,21 +72,21 @@ export default function VoiceSettings() {
     <div className="space-y-6">
       {/* INPUT */}
       <section className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">Input</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.input")}</h3>
         <Select
-          label="Microphone"
+          label={t("vset.microphone")}
           value={s.inputDeviceId}
           onChange={(v) => onProcessingChange({ inputDeviceId: v })}
-          options={[{ value: "", label: "Default" }, ...inputs.map((d, i) => ({ value: d.deviceId, label: d.label || `Microphone ${i + 1}` }))]}
+          options={[{ value: "", label: t("vset.default") }, ...inputs.map((d, i) => ({ value: d.deviceId, label: d.label || `${t("vset.microphone")} ${i + 1}` }))]}
         />
-        <Slider label={`Input volume — ${s.inputVolume}%`} min={0} max={200} value={s.inputVolume} onChange={(v) => setInputVolume(v)} />
+        <Slider label={`${t("vset.inputVolume")} — ${s.inputVolume}%`} min={0} max={200} value={s.inputVolume} onChange={(v) => setInputVolume(v)} />
 
         <div className="flex items-center gap-3">
           <button
             onClick={toggleTest}
             className={`rounded px-4 py-2 text-sm font-medium ${testing ? "bg-discord-danger text-white" : "bg-discord-accent text-white hover:bg-[#4752c4]"}`}
           >
-            {testing ? "Stop Test" : "Test Microphone"}
+            {testing ? t("vset.stopTest") : t("vset.testMic")}
           </button>
           <div className="h-3 flex-1 overflow-hidden rounded bg-[#1e1f22]">
             <div className="h-full bg-discord-green transition-[width] duration-75" style={{ width: `${Math.min(level * 140, 100)}%` }} />
@@ -94,89 +96,84 @@ export default function VoiceSettings() {
 
       {/* OUTPUT */}
       <section className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">Output</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.output")}</h3>
         <Select
-          label="Speaker / headset"
+          label={t("vset.speaker")}
           value={s.outputDeviceId}
           onChange={(v) => s.set({ outputDeviceId: v })}
-          options={[{ value: "", label: "Default" }, ...outputs.map((d, i) => ({ value: d.deviceId, label: d.label || `Output ${i + 1}` }))]}
+          options={[{ value: "", label: t("vset.default") }, ...outputs.map((d, i) => ({ value: d.deviceId, label: d.label || `${t("vset.output")} ${i + 1}` }))]}
         />
-        <Slider label={`Output volume — ${s.outputVolume}%`} min={0} max={100} value={s.outputVolume} onChange={(v) => s.set({ outputVolume: v })} />
+        <Slider label={`${t("vset.outputVolume")} — ${s.outputVolume}%`} min={0} max={100} value={s.outputVolume} onChange={(v) => s.set({ outputVolume: v })} />
       </section>
 
       {/* PROCESSING */}
       <section className="space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">Processing</h3>
-        <Toggle label="Echo cancellation" checked={s.echoCancellation} onChange={(v) => onProcessingChange({ echoCancellation: v })} />
-        <Toggle label="Noise suppression" checked={s.noiseSuppression} onChange={(v) => onProcessingChange({ noiseSuppression: v })} />
-        <Toggle label="Automatic gain control" checked={s.autoGainControl} onChange={(v) => onProcessingChange({ autoGainControl: v })} />
+        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.processing")}</h3>
+        <Toggle label={t("vset.echo")} checked={s.echoCancellation} onChange={(v) => onProcessingChange({ echoCancellation: v })} />
+        <Toggle label={t("vset.noise")} checked={s.noiseSuppression} onChange={(v) => onProcessingChange({ noiseSuppression: v })} />
+        <Toggle label={t("vset.agc")} checked={s.autoGainControl} onChange={(v) => onProcessingChange({ autoGainControl: v })} />
         {s.noiseSuppression && (
           <>
             <Slider
-              label={`Mic sensitivity — ${s.micSensitivity}%`}
+              label={`${t("vset.micSensitivity")} — ${s.micSensitivity}%`}
               min={0}
               max={100}
               value={s.micSensitivity}
               onChange={(v) => s.set({ micSensitivity: v })}
             />
-            <p className="text-xs text-discord-faint">
-              Lower = stronger noise gate (only louder speech is sent); higher = picks up quieter
-              sounds. Use the mic test above and find where background noise stops transmitting.
-            </p>
+            <p className="text-xs text-discord-faint">{t("vset.micSensitivityHelp")}</p>
           </>
         )}
       </section>
 
       {/* INPUT MODE */}
       <section className="space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">Input mode</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.inputMode")}</h3>
         <div className="flex gap-2">
-          <Pill active={s.voiceMode === "vad"} onClick={() => s.set({ voiceMode: "vad" })}>Voice Activity</Pill>
-          <Pill active={s.voiceMode === "ptt"} onClick={() => s.set({ voiceMode: "ptt" })}>Push to Talk</Pill>
+          <Pill active={s.voiceMode === "vad"} onClick={() => s.set({ voiceMode: "vad" })}>{t("vset.voiceActivity")}</Pill>
+          <Pill active={s.voiceMode === "ptt"} onClick={() => s.set({ voiceMode: "ptt" })}>{t("vset.pushToTalk")}</Pill>
         </div>
         {s.voiceMode === "ptt" && (
           <button
             onClick={() => setBindingPtt(true)}
             className="rounded bg-discord-card px-4 py-2 text-sm text-discord-text hover:bg-discord-hover"
           >
-            {bindingPtt ? "Press any key…" : `Keybind: ${friendlyKey(s.pttKey)}`}
+            {bindingPtt ? t("vset.pressKey") : `${t("vset.keybind")}: ${friendlyKey(s.pttKey)}`}
           </button>
         )}
       </section>
 
       {/* SCREEN SHARE */}
       <section className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">Screen share</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.screenShare")}</h3>
         <Select
-          label="Resolution"
+          label={t("vset.resolution")}
           value={s.screenResolution}
           onChange={(v) => s.set({ screenResolution: v as ScreenResolution })}
           options={RES_OPTIONS}
         />
         <Select
-          label="Frame rate"
+          label={t("vset.frameRate")}
           value={String(s.screenFps)}
           onChange={(v) => s.set({ screenFps: Number(v) as ScreenFps })}
           options={FPS_OPTIONS.map((f) => ({ value: String(f), label: `${f} FPS` }))}
         />
-        <Toggle label="Share system audio" checked={s.screenAudio} onChange={(v) => s.set({ screenAudio: v })} />
-        <p className="text-xs text-discord-faint">
-          Applies to your next screen share. High resolutions/FPS need more upload bandwidth and CPU/GPU.
-        </p>
+        <Toggle label={t("vset.shareSystemAudio")} checked={s.screenAudio} onChange={(v) => s.set({ screenAudio: v })} />
+        <p className="text-xs text-discord-faint">{t("vset.screenHelp")}</p>
       </section>
 
       {/* SOUNDS */}
       <section className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">Sounds</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.sounds")}</h3>
         <Toggle
-          label="Play app sounds (join / leave / mute / message)"
+          label={t("vset.playSounds")}
           checked={s.soundsEnabled}
           onChange={(v) => s.set({ soundsEnabled: v })}
         />
         {s.soundsEnabled && (
           <>
             <Slider
-              label={`Sound volume — ${s.soundVolume}%`}
+              label={`${t("vset.soundVolume")} — ${s.soundVolume}%`}
               min={0}
               max={100}
               value={s.soundVolume}
@@ -186,10 +183,10 @@ export default function VoiceSettings() {
               }}
             />
             <div className="flex flex-wrap gap-2">
-              <SoundPreview label="Join" onClick={() => previewSound("voiceJoin", s.soundVolume)} />
-              <SoundPreview label="Leave" onClick={() => previewSound("voiceLeave", s.soundVolume)} />
-              <SoundPreview label="Mute" onClick={() => previewSound("mute", s.soundVolume)} />
-              <SoundPreview label="Message" onClick={() => previewSound("message", s.soundVolume)} />
+              <SoundPreview label={t("voice.call")} onClick={() => previewSound("voiceJoin", s.soundVolume)} />
+              <SoundPreview label={t("voice.leave")} onClick={() => previewSound("voiceLeave", s.soundVolume)} />
+              <SoundPreview label={t("voice.mute")} onClick={() => previewSound("mute", s.soundVolume)} />
+              <SoundPreview label={t("profile.message")} onClick={() => previewSound("message", s.soundVolume)} />
             </div>
           </>
         )}
