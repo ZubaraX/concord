@@ -11,6 +11,14 @@ ipcMain.on("app:getVersion", (e) => {
   e.returnValue = app.getVersion();
 });
 
+// Auto-update status, mirrored to the renderer so it can show a download screen
+// before the app restarts into the new build. Buffered so a renderer that
+// mounts late can still read the latest state synchronously.
+let lastUpdateStatus = { state: "idle" };
+ipcMain.on("update:status:get", (e) => {
+  e.returnValue = lastUpdateStatus;
+});
+
 // App/window icon (embedded into the .exe by electron-builder; also used for
 // the dev taskbar icon when the source file is present).
 const ICON = path.join(__dirname, "..", "build", "icon.ico");
@@ -85,7 +93,22 @@ app.whenReady().then(() => {
     autoUpdater.autoInstallOnAppQuit = true;
     const startedAt = Date.now();
     let installing = false;
-    autoUpdater.on("update-downloaded", () => {
+
+    const sendUpdate = (payload) => {
+      lastUpdateStatus = payload;
+      if (win && !win.isDestroyed()) win.webContents.send("update:status", payload);
+    };
+
+    autoUpdater.on("update-available", (info) =>
+      sendUpdate({ state: "available", version: info?.version, percent: 0 })
+    );
+    autoUpdater.on("download-progress", (p) =>
+      sendUpdate({ state: "downloading", percent: Math.round(p?.percent || 0) })
+    );
+    autoUpdater.on("update-not-available", () => sendUpdate({ state: "none" }));
+    autoUpdater.on("error", () => sendUpdate({ state: "error" }));
+    autoUpdater.on("update-downloaded", (info) => {
+      sendUpdate({ state: "downloaded", version: info?.version, percent: 100 });
       if (installing) return;
       // Only relaunch immediately for an update found right after launch (so the
       // app starts on the latest build, as intended). If an update arrives later
@@ -93,13 +116,17 @@ app.whenReady().then(() => {
       // applied automatically on the next quit (autoInstallOnAppQuit).
       if (Date.now() - startedAt > 90 * 1000) return;
       installing = true;
-      // isSilent = true (no extra installer UI), isForceRunAfter = true (relaunch).
-      try {
-        autoUpdater.quitAndInstall(true, true);
-      } catch {
-        installing = false;
-      }
+      // Brief pause so the renderer can show "installing / restarting", then
+      // install silently and relaunch into the new version.
+      setTimeout(() => {
+        try {
+          autoUpdater.quitAndInstall(true, true);
+        } catch {
+          installing = false;
+        }
+      }, 900);
     });
+
     autoUpdater.checkForUpdates().catch(() => {});
     // Keep checking hourly for long-running sessions.
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 60 * 60 * 1000);

@@ -12,11 +12,20 @@ interface ImportMeta {
 /** Build-time app version, injected by Vite's `define`. */
 declare const __APP_VERSION__: string;
 
+type UpdateState = "idle" | "none" | "available" | "downloading" | "downloaded" | "error";
+interface UpdateStatus {
+  state: UpdateState;
+  version?: string;
+  percent?: number;
+}
+
 interface ConcordBridge {
   isDesktop: boolean;
   platform: string;
   version?: string;
   versions: { electron: string; chrome: string; node: string };
+  getUpdateStatus?: () => UpdateStatus;
+  onUpdate?: (cb: (status: UpdateStatus) => void) => () => void;
   send: (channel: string, payload?: unknown) => void;
 }
 

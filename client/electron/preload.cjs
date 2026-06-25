@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld("concord", {
     chrome: process.versions.chrome,
     node: process.versions.node,
   },
+  // Auto-update status: read the latest synchronously on mount, and subscribe
+  // to live push updates (download progress, downloaded, etc.).
+  getUpdateStatus: () => ipcRenderer.sendSync("update:status:get"),
+  onUpdate: (cb) => {
+    const listener = (_e, payload) => cb(payload);
+    ipcRenderer.on("update:status", listener);
+    return () => ipcRenderer.removeListener("update:status", listener);
+  },
   // Placeholder channel for future native features (tray, notifications…).
   send: (channel, payload) => ipcRenderer.send(channel, payload),
 });
