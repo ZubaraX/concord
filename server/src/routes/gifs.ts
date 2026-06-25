@@ -1,37 +1,25 @@
-import { Agent, request } from "undici";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../lib/auth.js";
 import { config } from "../config.js";
 
-// KLIPY half-closes idle keep-alive sockets, so reusing one hangs the next
-// request (~70s). We use undici's `request` directly (Node's global fetch uses a
-// separate bundled undici we can't reconfigure) with a dispatcher that drops
-// connections almost immediately (keepAliveTimeout ~1ms) and forces IPv4 — so
-// every call gets a fresh, working socket. headers/body timeouts bound it.
-const klipyDispatcher = new Agent({
-  connect: { family: 4 },
-  keepAliveTimeout: 1,
-  keepAliveMaxTimeout: 1,
-  pipelining: 0,
-});
-
-async function getJson(url: string, timeoutMs = 8000, attempts = 2): Promise<any> {
+// KLIPY half-closes idle keep-alive sockets, so reusing one (a rapid back-to-
+// back request) stalls the next call. Requests spaced apart (real scrolling)
+// always work; for the occasional rapid case, a failed attempt discards the
+// dead socket, so a short retry lands on a fresh connection. Normal KLIPY
+// latency is well under a second.
+async function getJson(url: string, timeoutMs = 5000, attempts = 4): Promise<any> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await request(url, {
-        dispatcher: klipyDispatcher,
-        headersTimeout: timeoutMs,
-        bodyTimeout: timeoutMs,
+      const r = await fetch(url, {
+        signal: AbortSignal.timeout(timeoutMs),
         headers: { "user-agent": "Concord/1.0", accept: "application/json" },
       });
-      if (res.statusCode >= 400) {
-        res.body.dump();
-        throw new Error(`HTTP ${res.statusCode}`);
-      }
-      return await res.body.json();
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
     } catch (e) {
-      lastErr = e;
+      lastErr = e; // dead reused socket — brief pause lets the pool drop it, then retry fresh
+      if (i < attempts - 1) await new Promise((res) => setTimeout(res, 300));
     }
   }
   throw lastErr;
