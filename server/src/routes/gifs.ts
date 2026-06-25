@@ -1,25 +1,29 @@
+import { fetch as undiciFetch, Agent } from "undici";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../lib/auth.js";
 import { config } from "../config.js";
 
-// KLIPY half-closes idle keep-alive sockets, so reusing one (a rapid back-to-
-// back request) stalls the next call. Requests spaced apart (real scrolling)
-// always work; for the occasional rapid case, a failed attempt discards the
-// dead socket, so a short retry lands on a fresh connection. Normal KLIPY
-// latency is well under a second.
-async function getJson(url: string, timeoutMs = 5000, attempts = 4): Promise<any> {
+// KLIPY's keep-alive handling is hostile: any reused socket hangs the next
+// request (~70s). Node's built-in fetch pools connections and we can't
+// reconfigure its dispatcher, so we use undici's own fetch with a FRESH,
+// isolated Agent per request (closed afterwards) — every call gets a brand-new
+// connection, so there's nothing dead to reuse. family:4 dodges flaky IPv6.
+async function getJson(url: string, timeoutMs = 8000, attempts = 2): Promise<any> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
+    const dispatcher = new Agent({ connect: { family: 4 }, pipelining: 0 });
     try {
-      const r = await fetch(url, {
+      const r = await undiciFetch(url, {
+        dispatcher,
         signal: AbortSignal.timeout(timeoutMs),
         headers: { "user-agent": "Concord/1.0", accept: "application/json" },
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return await r.json();
     } catch (e) {
-      lastErr = e; // dead reused socket — brief pause lets the pool drop it, then retry fresh
-      if (i < attempts - 1) await new Promise((res) => setTimeout(res, 300));
+      lastErr = e;
+    } finally {
+      dispatcher.close().catch(() => {});
     }
   }
   throw lastErr;
