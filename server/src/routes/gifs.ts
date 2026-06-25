@@ -1,34 +1,27 @@
-import https from "node:https";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../lib/auth.js";
 import { config } from "../config.js";
 
 // Node's global fetch (undici) pools keep-alive connections, and KLIPY half-
-// closes idle ones — so a reused socket hangs ~70s on the *next* request. We
-// fetch via node:https with keepAlive:false (a fresh connection each time) to
-// sidestep that entirely.
-const noKeepAlive = new https.Agent({ keepAlive: false });
-function getJson(url: string, timeoutMs = 15000): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { agent: noKeepAlive, timeout: timeoutMs }, (res) => {
-      if (res.statusCode && res.statusCode >= 400) {
-        res.resume();
-        return reject(new Error(`HTTP ${res.statusCode}`));
-      }
-      let data = "";
-      res.setEncoding("utf8");
-      res.on("data", (c) => (data += c));
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          reject(e);
-        }
+// closes idle ones — so a *reused* socket hangs on the next request. A reused
+// dead socket fails fast on a short timeout; the retry then opens a fresh
+// connection and succeeds. Normal KLIPY latency is well under a second, so a 4s
+// per-attempt timeout is a comfortable margin.
+async function getJson(url: string, timeoutMs = 4000, attempts = 3): Promise<any> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { "User-Agent": "Concord/1.0", Accept: "application/json" },
       });
-    });
-    req.on("timeout", () => req.destroy(new Error("timeout")));
-    req.on("error", reject);
-  });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    } catch (e) {
+      lastErr = e; // most likely a reused dead keep-alive socket — retry gets a fresh one
+    }
+  }
+  throw lastErr;
 }
 
 // Server-side GIF search proxy, so the API key stays off the client.
