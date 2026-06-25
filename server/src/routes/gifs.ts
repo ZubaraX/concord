@@ -1,33 +1,29 @@
-import { fetch as undiciFetch, Agent } from "undici";
+import { execFile } from "node:child_process";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../lib/auth.js";
 import { config } from "../config.js";
 
-// KLIPY's keep-alive handling is hostile: any reused socket hangs the next
-// request (~70s). Node's built-in fetch pools connections and we can't
-// reconfigure its dispatcher, so we use undici's own fetch with a FRESH,
-// isolated Agent per request (closed afterwards) — every call gets a brand-new
-// connection, so there's nothing dead to reuse. family:4 dodges flaky IPv6.
-async function getJson(url: string, timeoutMs = 8000, attempts = 2): Promise<any> {
-  let lastErr: unknown;
-  for (let i = 0; i < attempts; i++) {
-    const dispatcher = new Agent({ connect: { family: 4 }, pipelining: 0 });
-    try {
-      const r = await undiciFetch(url, {
-        dispatcher,
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: { "user-agent": "Concord/1.0", accept: "application/json" },
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return await r.json();
-    } catch (e) {
-      lastErr = e;
-      console.error(`[gif] attempt ${i + 1} failed:`, (e as Error)?.name, (e as Error)?.message);
-    } finally {
-      dispatcher.close().catch(() => {});
-    }
-  }
-  throw lastErr;
+// KLIPY half-closes idle keep-alive sockets, and Node's HTTP client (undici)
+// reuses them — which hangs the next request (~70s) inside this app. After a
+// long fight with dispatchers we just shell out to `curl` (forced IPv4, fresh
+// connection, no pooling), which is rock-solid here. Falls back gracefully via
+// the caller's try/catch if curl is unavailable.
+function getJson(url: string, timeoutMs = 10000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "curl",
+      ["-s", "-4", "--max-time", String(Math.ceil(timeoutMs / 1000)), "-A", "Concord/1.0", "-H", "Accept: application/json", url],
+      { maxBuffer: 16 * 1024 * 1024, timeout: timeoutMs + 2000 },
+      (err, stdout) => {
+        if (err) return reject(err);
+        try {
+          resolve(JSON.parse(stdout));
+        } catch (e) {
+          reject(e);
+        }
+      }
+    );
+  });
 }
 
 // Server-side GIF search proxy, so the API key stays off the client.
