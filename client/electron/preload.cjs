@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld("concord", {
     chrome: process.versions.chrome,
     node: process.versions.node,
   },
+  // Screen-share source picker (desktop only).
+  getDesktopSources: () => ipcRenderer.invoke("desktop:getSources"),
+  setDesktopSource: (id) => ipcRenderer.send("desktop:setSource", id),
+
   // Auto-update status: read the latest synchronously on mount, and subscribe
   // to live push updates (download progress, downloaded, etc.).
   getUpdateStatus: () => ipcRenderer.sendSync("update:status:get"),

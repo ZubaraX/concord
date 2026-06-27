@@ -19,6 +19,28 @@ ipcMain.on("update:status:get", (e) => {
   e.returnValue = lastUpdateStatus;
 });
 
+// Screen-share source picker. The renderer fetches the available screens/windows
+// (with thumbnails), shows its own picker, then tells us which one to capture;
+// the display-media handler below honors that choice.
+let pendingSourceId = null;
+ipcMain.handle("desktop:getSources", async () => {
+  const sources = await desktopCapturer.getSources({
+    types: ["screen", "window"],
+    thumbnailSize: { width: 320, height: 180 },
+    fetchWindowIcons: true,
+  });
+  return sources.map((s) => ({
+    id: s.id,
+    name: s.name,
+    isScreen: s.id.startsWith("screen:"),
+    thumbnail: s.thumbnail.toDataURL(),
+    appIcon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : null,
+  }));
+});
+ipcMain.on("desktop:setSource", (_e, id) => {
+  pendingSourceId = id;
+});
+
 // App/window icon (embedded into the .exe by electron-builder; also used for
 // the dev taskbar icon when the source file is present).
 const ICON = path.join(__dirname, "..", "build", "icon.ico");
@@ -67,16 +89,18 @@ function createWindow() {
   win.on("closed", () => (win = null));
 }
 
-// Screen-share source picker (used by the future "Go Live" feature). Grants
-// the full primary screen at maximum available resolution — no FPS/res cap.
+// Captures whichever screen/window the renderer's picker selected (pendingSourceId),
+// falling back to the first screen. System audio (loopback) is included.
 function wireScreenShare() {
   session.defaultSession.setDisplayMediaRequestHandler(
     (_request, callback) => {
       desktopCapturer.getSources({ types: ["screen", "window"] }).then((sources) => {
-        callback({ video: sources[0], audio: "loopback" });
+        const chosen = sources.find((s) => s.id === pendingSourceId) || sources[0];
+        pendingSourceId = null;
+        callback({ video: chosen, audio: "loopback" });
       });
     },
-    { useSystemPicker: true }
+    { useSystemPicker: false }
   );
 }
 

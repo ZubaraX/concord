@@ -91,6 +91,9 @@ const en = {
   "gif.search": "Search GIFs…",
   "gif.noResults": "No GIFs found.",
   "gif.loading": "Loading…",
+  "screen.title": "Choose what to share",
+  "screen.screens": "Screens",
+  "screen.windows": "Windows",
   "gifcat.laugh": "Laugh",
   "gifcat.love": "Love",
   "gifcat.sad": "Sad",
@@ -120,6 +123,7 @@ const en = {
   "voice.inCall": "In call",
   "voice.connecting": "Connecting…",
   "voice.connected": "Voice Connected",
+  "voice.participants": "Participants",
 
   // Members / profile
   "members.title": "Members",
@@ -268,6 +272,9 @@ const ru: Record<keyof typeof en, string> = {
   "gif.search": "Поиск GIF…",
   "gif.noResults": "Ничего не найдено.",
   "gif.loading": "Загрузка…",
+  "screen.title": "Выберите, чем поделиться",
+  "screen.screens": "Экраны",
+  "screen.windows": "Окна",
   "gifcat.laugh": "Смех",
   "gifcat.love": "Любовь",
   "gifcat.sad": "Грусть",
@@ -296,6 +303,7 @@ const ru: Record<keyof typeof en, string> = {
   "voice.inCall": "В звонке",
   "voice.connecting": "Подключение…",
   "voice.connected": "Голос подключён",
+  "voice.participants": "Участники",
 
   "members.title": "Участники",
   "members.online": "В сети",

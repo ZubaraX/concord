@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useVoice } from "../store/voice";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../api/client";
+import { useVoice, type RemoteEntry } from "../store/voice";
 import { useSettings } from "../store/settings";
+import { useVoiceVolumes } from "../store/voiceVolumes";
+import { useI18n } from "../lib/i18n";
+import Avatar from "./Avatar";
+import type { User } from "../types";
 
 // Always-mounted: plays remote audio (honoring output device + volume) and
 // shows a grid of any screen-share video. Click a tile to expand; expanded
@@ -17,8 +23,10 @@ export default function VoiceOverlay() {
   return (
     <>
       {audioStreams.map((r) => (
-        <AudioSink key={r.socketId} stream={r.audio!} />
+        <AudioSink key={r.socketId} userId={r.userId} stream={r.audio!} />
       ))}
+
+      {channelId && remotes.length > 0 && <ParticipantsPanel remotes={remotes} />}
 
       {/* Floating emoji reactions during a call */}
       {channelId && effects.length > 0 && (
@@ -59,19 +67,81 @@ export default function VoiceOverlay() {
   );
 }
 
-function AudioSink({ stream }: { stream: MediaStream }) {
+function AudioSink({ stream, userId }: { stream: MediaStream; userId: string }) {
   const ref = useRef<HTMLAudioElement>(null);
   const { outputVolume, outputDeviceId } = useSettings();
+  const userVol = useVoiceVolumes((s) => s.volumes[userId] ?? 100);
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream;
   }, [stream]);
   useEffect(() => {
     const el = ref.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
     if (!el) return;
-    el.volume = Math.min(outputVolume / 100, 1);
+    // Combine the global output volume with this user's personal volume (local only).
+    el.volume = Math.min((outputVolume / 100) * (userVol / 100), 1);
     if (outputDeviceId && el.setSinkId) el.setSinkId(outputDeviceId).catch(() => {});
-  }, [outputVolume, outputDeviceId]);
+  }, [outputVolume, outputDeviceId, userVol]);
   return <audio ref={ref} autoPlay />;
+}
+
+// Small panel listing the other people in the call, each with a personal volume
+// slider (local-only — never affects what others hear).
+function ParticipantsPanel({ remotes }: { remotes: RemoteEntry[] }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(true);
+  // De-dupe by userId (a user may have several streams/sockets).
+  const byUser = new Map<string, RemoteEntry>();
+  for (const r of remotes) if (!byUser.has(r.userId)) byUser.set(r.userId, r);
+  const users = [...byUser.values()];
+  if (users.length === 0) return null;
+
+  return (
+    <div className="pointer-events-auto fixed bottom-20 left-4 z-40 w-60 rounded-lg bg-discord-rail/95 shadow-xl ring-1 ring-black/40">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wide text-discord-muted"
+      >
+        <span>{t("voice.participants")} — {users.length}</span>
+        <span>{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="max-h-64 space-y-2 overflow-y-auto px-3 pb-3">
+          {users.map((r) => (
+            <ParticipantRow key={r.userId} userId={r.userId} speaking={false} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ParticipantRow({ userId }: { userId: string; speaking?: boolean }) {
+  const { data: user } = useQuery<User>({
+    queryKey: ["profile", userId],
+    queryFn: () => api<User>(`/api/users/${userId}`),
+    staleTime: 5 * 60_000,
+  });
+  const vol = useVoiceVolumes((s) => s.volumes[userId] ?? 100);
+  const setVolume = useVoiceVolumes((s) => s.setVolume);
+  const name = user?.displayName ?? user?.username ?? "…";
+
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <Avatar user={user ?? { username: "?", displayName: name, avatarUrl: null }} size={24} status={user?.status ?? "ONLINE"} />
+        <span className="min-w-0 flex-1 truncate text-sm text-discord-text">{name}</span>
+        <span className="text-[10px] tabular-nums text-discord-faint">{vol}%</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={200}
+        value={vol}
+        onChange={(e) => setVolume(userId, Number(e.target.value))}
+        className="mt-1 w-full accent-discord-accent"
+      />
+    </div>
+  );
 }
 
 function VideoTile({

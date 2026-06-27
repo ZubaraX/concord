@@ -19,11 +19,21 @@ interface UpdateStatus {
   percent?: number;
 }
 
+interface DesktopSource {
+  id: string;
+  name: string;
+  isScreen: boolean;
+  thumbnail: string;
+  appIcon: string | null;
+}
+
 interface ConcordBridge {
   isDesktop: boolean;
   platform: string;
   version?: string;
   versions: { electron: string; chrome: string; node: string };
+  getDesktopSources?: () => Promise<DesktopSource[]>;
+  setDesktopSource?: (id: string) => void;
   getUpdateStatus?: () => UpdateStatus;
   onUpdate?: (cb: (status: UpdateStatus) => void) => () => void;
   send: (channel: string, payload?: unknown) => void;

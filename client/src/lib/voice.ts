@@ -13,6 +13,7 @@ import { useVoice, type RemoteEntry } from "../store/voice";
 import { useSettings } from "../store/settings";
 import { RES_MAP } from "../store/settings";
 import { playSound } from "./sound";
+import { pickScreenSource } from "../store/screenPicker";
 
 type Kind = "audio" | "screen" | "camera";
 
@@ -388,13 +389,19 @@ export async function toggleScreen() {
     broadcastStreamKinds();
     return;
   }
+  // Let the user choose which screen/window to share (desktop). On web the
+  // browser shows its own picker.
+  const chosen = await pickScreenSource();
+  if (chosen === null) return; // cancelled
+  if (chosen !== "default") window.concord?.setDesktopSource?.(chosen);
+
   const s = cfg();
   const video: MediaTrackConstraints =
     s.screenResolution === "source"
       ? { frameRate: { ideal: s.screenFps } }
       : { ...RES_MAP[s.screenResolution], frameRate: { ideal: s.screenFps } };
   try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: false });
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: s.screenAudio });
   } catch {
     return;
   }
