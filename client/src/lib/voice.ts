@@ -266,6 +266,11 @@ export function sendVoiceEmoji(emoji: string) {
   if (channelId) getSocket()?.emit("voice:emoji", { channelId, emoji });
 }
 
+/** Our live mic stream (for local speaking detection), or null when not in a call. */
+export function getMicStream(): MediaStream | null {
+  return micRawTrack ? micStream : null;
+}
+
 // ── socket wiring ──────────────────────────────────────────────────────────────
 export function initVoice() {
   if (inited) return;

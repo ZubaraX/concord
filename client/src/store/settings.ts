@@ -32,6 +32,10 @@ export interface SettingsState {
   // Interface language.
   lang: "en" | "ru";
 
+  // In-call overlay (separate always-on-top window showing who's speaking).
+  overlayEnabled: boolean;
+  overlayCorner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
   set: (p: Partial<SettingsState>) => void;
 }
 
@@ -65,6 +69,9 @@ export const useSettings = create<SettingsState>()(
       soundVolume: 60,
 
       lang: (typeof navigator !== "undefined" && navigator.language?.startsWith("ru") ? "ru" : "en"),
+
+      overlayEnabled: true,
+      overlayCorner: "top-right",
 
       set: (p) => set(p),
     }),

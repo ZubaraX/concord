@@ -191,6 +191,27 @@ export default function VoiceSettings() {
           </>
         )}
       </section>
+
+      {/* CALL OVERLAY (desktop only) */}
+      {window.concord?.isDesktop && (
+        <section className="space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.overlay")}</h3>
+          <Toggle label={t("vset.overlayEnable")} checked={s.overlayEnabled} onChange={(v) => s.set({ overlayEnabled: v })} />
+          {s.overlayEnabled && (
+            <Select
+              label={t("vset.overlayPosition")}
+              value={s.overlayCorner}
+              onChange={(v) => s.set({ overlayCorner: v as typeof s.overlayCorner })}
+              options={[
+                { value: "top-left", label: t("vset.cornerTL") },
+                { value: "top-right", label: t("vset.cornerTR") },
+                { value: "bottom-left", label: t("vset.cornerBL") },
+                { value: "bottom-right", label: t("vset.cornerBR") },
+              ]}
+            />
+          )}
+        </section>
+      )}
     </div>
   );
 }

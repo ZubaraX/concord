@@ -25,6 +25,7 @@ import UserProfileModal from "../components/UserProfileModal";
 import WhatsNewModal from "../components/WhatsNewModal";
 import Lightbox from "../components/Lightbox";
 import ScreenPicker from "../components/ScreenPicker";
+import OverlayController from "../components/OverlayController";
 import { appVersion, changesSince, type ChangelogEntry } from "../lib/changelog";
 import { initVoice } from "../lib/voice";
 
@@ -200,6 +201,7 @@ export default function AppLayout() {
       {whatsNew.length > 0 && <WhatsNewModal entries={whatsNew} onClose={() => setWhatsNew([])} />}
       <Lightbox />
       <ScreenPicker />
+      <OverlayController />
     </div>
   );
 }

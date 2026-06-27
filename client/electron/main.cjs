@@ -1,6 +1,6 @@
 // Concord desktop shell (Electron). Loads the built React app and connects to
 // whatever server URL the user configures in-app (e.g. a Codespaces URL).
-const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain } = require("electron");
+const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain, screen } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { autoUpdater } = require("electron-updater");
@@ -39,6 +39,63 @@ ipcMain.handle("desktop:getSources", async () => {
 });
 ipcMain.on("desktop:setSource", (_e, id) => {
   pendingSourceId = id;
+});
+
+// ── In-call speaking overlay (separate always-on-top window) ───────────────
+/** @type {BrowserWindow | null} */
+let overlayWin = null;
+const OVERLAY_W = 230;
+
+function buildOverlay() {
+  if (overlayWin && !overlayWin.isDestroyed()) return overlayWin;
+  overlayWin = new BrowserWindow({
+    width: OVERLAY_W,
+    height: 320,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: false,
+    webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false },
+  });
+  overlayWin.setAlwaysOnTop(true, "screen-saver");
+  overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  if (DEV_URL) overlayWin.loadURL(DEV_URL + "#overlay");
+  else overlayWin.loadFile(path.join(__dirname, "..", "dist", "index.html"), { hash: "overlay" });
+  overlayWin.on("closed", () => (overlayWin = null));
+  return overlayWin;
+}
+
+function positionOverlay(corner) {
+  if (!overlayWin || overlayWin.isDestroyed()) return;
+  const { workArea } = screen.getPrimaryDisplay();
+  const [w, h] = overlayWin.getSize();
+  const m = 16;
+  const x = corner?.includes("left") ? workArea.x + m : workArea.x + workArea.width - w - m;
+  const y = corner?.includes("top") ? workArea.y + m : workArea.y + workArea.height - h - m;
+  overlayWin.setPosition(Math.round(x), Math.round(y));
+}
+
+// The main renderer pushes call state; we mirror it to the overlay window and
+// show/hide it accordingly.
+ipcMain.on("overlay:state", (_e, state) => {
+  const active = state && state.enabled && state.active && (state.participants?.length ?? 0) > 0;
+  if (!active) {
+    if (overlayWin && !overlayWin.isDestroyed()) overlayWin.hide();
+    return;
+  }
+  const win2 = buildOverlay();
+  const send = () => {
+    if (overlayWin && !overlayWin.isDestroyed()) overlayWin.webContents.send("overlay:data", state);
+  };
+  if (win2.webContents.isLoading()) win2.webContents.once("did-finish-load", send);
+  else send();
+  positionOverlay(state.corner);
+  if (!win2.isVisible()) win2.showInactive();
 });
 
 // App/window icon (embedded into the .exe by electron-builder; also used for

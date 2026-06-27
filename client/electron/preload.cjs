@@ -16,6 +16,14 @@ contextBridge.exposeInMainWorld("concord", {
   getDesktopSources: () => ipcRenderer.invoke("desktop:getSources"),
   setDesktopSource: (id) => ipcRenderer.send("desktop:setSource", id),
 
+  // In-call speaking overlay: main app pushes state; the overlay window subscribes.
+  sendOverlayState: (state) => ipcRenderer.send("overlay:state", state),
+  onOverlayData: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on("overlay:data", listener);
+    return () => ipcRenderer.removeListener("overlay:data", listener);
+  },
+
   // Auto-update status: read the latest synchronously on mount, and subscribe
   // to live push updates (download progress, downloaded, etc.).
   getUpdateStatus: () => ipcRenderer.sendSync("update:status:get"),
