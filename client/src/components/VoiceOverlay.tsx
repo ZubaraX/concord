@@ -18,12 +18,18 @@ export default function VoiceOverlay() {
   const audioStreams = remotes.filter((r) => r.audio);
   const screenTiles = remotes.filter((r) => r.screen);
   const cameraTiles = remotes.filter((r) => r.camera);
+  // Screen shares can carry system audio (loopback) in their stream — play it
+  // through a dedicated audio element (the video tiles are muted to avoid echo).
+  const screenAudio = remotes.filter((r) => r.screen && r.screen.getAudioTracks().length > 0);
   const showGrid = screenOn || cameraOn || screenTiles.length > 0 || cameraTiles.length > 0;
 
   return (
     <>
       {audioStreams.map((r) => (
         <AudioSink key={r.socketId} userId={r.userId} stream={r.audio!} />
+      ))}
+      {screenAudio.map((r) => (
+        <AudioSink key={`sa-${r.socketId}`} userId={r.userId} stream={r.screen!} />
       ))}
 
       {channelId && remotes.length > 0 && <ParticipantsPanel remotes={remotes} />}
@@ -54,7 +60,7 @@ export default function VoiceOverlay() {
             <VideoTile stream={localCamera} label="You" muted onExpand={setExpanded} />
           )}
           {screenTiles.map((r) => (
-            <VideoTile key={`s-${r.socketId}`} stream={r.screen!} label="Screen share" onExpand={setExpanded} />
+            <VideoTile key={`s-${r.socketId}`} stream={r.screen!} label="Screen share" muted onExpand={setExpanded} />
           ))}
           {cameraTiles.map((r) => (
             <VideoTile key={`c-${r.socketId}`} stream={r.camera!} label="Camera" onExpand={setExpanded} />
@@ -157,11 +163,14 @@ function VideoTile({
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream;
-  }, [stream]);
+    if (ref.current) {
+      ref.current.srcObject = stream;
+      ref.current.muted = !!muted; // imperative: React's `muted` prop is unreliable
+    }
+  }, [stream, muted]);
   return (
     <div className="pointer-events-auto group relative overflow-hidden rounded-lg border border-black/40 bg-black shadow-xl">
-      <video ref={ref} autoPlay playsInline muted={muted} className="h-48 w-80 object-contain" />
+      <video ref={ref} autoPlay playsInline className="h-48 w-80 object-contain" />
       <button
         onClick={() => onExpand({ stream, label })}
         className="absolute right-1 top-1 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
@@ -211,8 +220,8 @@ function ExpandedView({
         </div>
       </div>
       <div className="flex flex-1 items-center justify-center p-4" onMouseDown={(e) => e.stopPropagation()}>
-        {/* No native controls — a screen share is a live stream, not a video file. */}
-        <video ref={ref} autoPlay playsInline className="max-h-full max-w-full" />
+        {/* Muted: any system audio plays through the dedicated audio sink. */}
+        <video ref={ref} autoPlay playsInline muted className="max-h-full max-w-full" />
       </div>
     </div>
   );
