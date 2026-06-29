@@ -54,7 +54,7 @@ export default function CreateChannelModal({
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && submit()}
         placeholder={type === "VOICE" ? "General" : "new-channel"}
-        className="mt-1.5 w-full rounded bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+        className="mt-1.5 w-full rounded bg-discord-deep px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
       />
 
       {error && <div className="mt-2 text-sm text-discord-danger">{error}</div>}
@@ -66,7 +66,7 @@ export default function CreateChannelModal({
         <button
           onClick={submit}
           disabled={busy || !name.trim()}
-          className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4] disabled:opacity-60"
+          className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-discord-accentDark disabled:opacity-60"
         >
           {busy ? "Creating…" : "Create Channel"}
         </button>

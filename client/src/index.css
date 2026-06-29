@@ -2,8 +2,146 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ── Themes ────────────────────────────────────────────────────────────────
+   Each variable is a space-separated RGB triplet so Tailwind's `<alpha-value>`
+   works. The default (:root) is the classic blurple dark theme. Other themes
+   override the variables via [data-theme="…"] on <html>. */
+:root,
+[data-theme="blurple"] {
   color-scheme: dark;
+  --c-bg: 49 51 56;
+  --c-sidebar: 43 45 49;
+  --c-rail: 30 31 34;
+  --c-deep: 30 31 34;
+  --c-card: 56 58 64;
+  --c-hover: 64 66 73;
+  --c-active: 64 66 73;
+  --c-input: 56 58 64;
+  --c-accent: 88 101 242;
+  --c-accentDark: 71 82 196;
+  --c-green: 35 165 90;
+  --c-danger: 218 55 60;
+  --c-dangerDark: 161 40 40;
+  --c-link: 0 168 252;
+  --c-text: 219 222 225;
+  --c-muted: 148 155 164;
+  --c-faint: 128 132 142;
+  --grad: radial-gradient(1200px 800px at 100% 0%, rgb(var(--c-accent) / 0.10), transparent 60%);
+}
+
+/* Midnight — deep indigo, vivid violet accent. */
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --c-bg: 26 27 46;
+  --c-sidebar: 22 23 40;
+  --c-rail: 16 16 30;
+  --c-deep: 16 16 30;
+  --c-card: 36 38 64;
+  --c-hover: 48 50 82;
+  --c-active: 48 50 82;
+  --c-input: 30 31 54;
+  --c-accent: 124 92 255;
+  --c-accentDark: 92 64 220;
+  --c-green: 46 196 120;
+  --c-danger: 235 80 90;
+  --c-dangerDark: 170 45 55;
+  --c-link: 96 165 250;
+  --c-text: 226 228 240;
+  --c-muted: 150 152 180;
+  --c-faint: 120 122 150;
+  --grad: radial-gradient(1200px 800px at 100% 0%, rgb(var(--c-accent) / 0.16), transparent 60%);
+}
+
+/* Aurora — teal/emerald. */
+[data-theme="aurora"] {
+  color-scheme: dark;
+  --c-bg: 20 38 38;
+  --c-sidebar: 16 32 32;
+  --c-rail: 10 24 24;
+  --c-deep: 10 24 24;
+  --c-card: 26 50 50;
+  --c-hover: 34 64 62;
+  --c-active: 34 64 62;
+  --c-input: 22 44 44;
+  --c-accent: 20 184 166;
+  --c-accentDark: 13 148 136;
+  --c-green: 34 197 94;
+  --c-danger: 244 63 94;
+  --c-dangerDark: 180 40 65;
+  --c-link: 56 189 248;
+  --c-text: 220 235 232;
+  --c-muted: 140 170 165;
+  --c-faint: 110 140 135;
+  --grad: radial-gradient(1200px 800px at 0% 0%, rgb(var(--c-accent) / 0.16), transparent 60%);
+}
+
+/* Sunset — warm orange/pink. */
+[data-theme="sunset"] {
+  color-scheme: dark;
+  --c-bg: 41 28 36;
+  --c-sidebar: 35 23 31;
+  --c-rail: 26 16 22;
+  --c-deep: 26 16 22;
+  --c-card: 54 36 46;
+  --c-hover: 68 44 56;
+  --c-active: 68 44 56;
+  --c-input: 46 30 40;
+  --c-accent: 244 114 94;
+  --c-accentDark: 219 84 70;
+  --c-green: 52 199 120;
+  --c-danger: 239 68 68;
+  --c-dangerDark: 170 45 45;
+  --c-link: 255 159 110;
+  --c-text: 240 226 230;
+  --c-muted: 180 150 160;
+  --c-faint: 150 120 130;
+  --grad: radial-gradient(1200px 900px at 100% 100%, rgb(var(--c-accent) / 0.16), transparent 60%);
+}
+
+/* Crimson — bold red. */
+[data-theme="crimson"] {
+  color-scheme: dark;
+  --c-bg: 38 24 26;
+  --c-sidebar: 32 20 22;
+  --c-rail: 24 14 16;
+  --c-deep: 24 14 16;
+  --c-card: 52 32 34;
+  --c-hover: 66 40 42;
+  --c-active: 66 40 42;
+  --c-input: 44 28 30;
+  --c-accent: 239 68 68;
+  --c-accentDark: 190 40 45;
+  --c-green: 34 197 94;
+  --c-danger: 244 63 94;
+  --c-dangerDark: 170 40 55;
+  --c-link: 251 146 120;
+  --c-text: 240 224 226;
+  --c-muted: 184 150 152;
+  --c-faint: 150 118 120;
+  --grad: radial-gradient(1100px 800px at 0% 0%, rgb(var(--c-accent) / 0.14), transparent 60%);
+}
+
+/* Light — bright, for daytime. */
+[data-theme="light"] {
+  color-scheme: light;
+  --c-bg: 255 255 255;
+  --c-sidebar: 242 243 245;
+  --c-rail: 228 230 235;
+  --c-deep: 235 236 240;
+  --c-card: 233 234 238;
+  --c-hover: 222 224 230;
+  --c-active: 219 221 227;
+  --c-input: 235 236 240;
+  --c-accent: 88 101 242;
+  --c-accentDark: 71 82 196;
+  --c-green: 24 156 80;
+  --c-danger: 217 48 53;
+  --c-dangerDark: 170 35 40;
+  --c-link: 0 110 200;
+  --c-text: 35 38 45;
+  --c-muted: 95 100 110;
+  --c-faint: 130 135 145;
+  --grad: radial-gradient(1200px 800px at 100% 0%, rgb(var(--c-accent) / 0.08), transparent 60%);
 }
 
 html,
@@ -16,6 +154,37 @@ body,
 body {
   @apply bg-discord-rail text-discord-text font-sans antialiased;
   overflow: hidden;
+  /* Subtle accent-tinted gradient adds depth behind the panels. */
+  background-image: var(--grad);
+}
+
+/* ── Depth / "voluminous" touches ─────────────────────────────────────────── */
+/* Primary surfaces get a gentle diagonal gradient for richness. The gradient
+   covers any `hover:bg-*` color change, so hover feedback is done via brightness. */
+.bg-discord-accent {
+  background-image: linear-gradient(135deg, rgb(var(--c-accent)), rgb(var(--c-accentDark)));
+}
+.bg-discord-green {
+  background-image: linear-gradient(135deg, rgb(var(--c-green)), rgb(var(--c-green) / 0.78));
+}
+.bg-discord-danger {
+  background-image: linear-gradient(135deg, rgb(var(--c-danger)), rgb(var(--c-dangerDark)));
+}
+.bg-discord-accent,
+.bg-discord-green,
+.bg-discord-danger {
+  transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.bg-discord-accent:hover,
+.bg-discord-green:hover,
+.bg-discord-danger:hover {
+  filter: brightness(1.1);
+}
+/* Don't gradient the subtle translucent tints (e.g. bg-discord-accent/15). */
+[class*="bg-discord-accent/"],
+[class*="bg-discord-green/"],
+[class*="bg-discord-danger/"] {
+  background-image: none;
 }
 
 /* Floating emoji reactions in calls. */
@@ -25,17 +194,17 @@ body {
   100% { transform: translateY(-260px) scale(1); opacity: 0; }
 }
 
-/* Thin Discord-style scrollbars. */
+/* Thin themed scrollbars. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #1a1b1e transparent;
+  scrollbar-color: rgb(var(--c-rail)) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #1a1b1e;
+  background: rgb(var(--c-rail));
   border-radius: 4px;
 }
 *::-webkit-scrollbar-track {

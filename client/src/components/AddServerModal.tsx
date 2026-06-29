@@ -70,7 +70,7 @@ export default function AddServerModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && create()}
             placeholder="My Awesome Server"
-            className="mt-1.5 w-full rounded bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+            className="mt-1.5 w-full rounded bg-discord-deep px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
           />
           <Footer error={error}>
             <button onClick={create} disabled={busy} className="primary">
@@ -87,7 +87,7 @@ export default function AddServerModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setCode(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && join()}
             placeholder="abc123XY or http://localhost:4000/invite/abc123XY"
-            className="mt-1.5 w-full rounded bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+            className="mt-1.5 w-full rounded bg-discord-deep px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
           />
           <Footer error={error}>
             <button onClick={join} disabled={busy} className="primary">
@@ -115,7 +115,7 @@ function Footer({ error, children }: { error: string | null; children: React.Rea
   return (
     <div className="mt-5">
       {error && <div className="mb-2 text-sm text-discord-danger">{error}</div>}
-      <div className="flex justify-end [&_.primary]:rounded [&_.primary]:bg-discord-accent [&_.primary]:px-5 [&_.primary]:py-2 [&_.primary]:font-medium [&_.primary]:text-white [&_.primary:hover]:bg-[#4752c4] [&_.primary:disabled]:opacity-60">
+      <div className="flex justify-end [&_.primary]:rounded [&_.primary]:bg-discord-accent [&_.primary]:px-5 [&_.primary]:py-2 [&_.primary]:font-medium [&_.primary]:text-white [&_.primary:hover]:bg-discord-accentDark [&_.primary:disabled]:opacity-60">
         {children}
       </div>
     </div>

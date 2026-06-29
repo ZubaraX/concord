@@ -144,7 +144,7 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
       ? { color: "bg-yellow-500", text: t("voice.connecting"), textColor: "text-white" }
       : { color: "bg-discord-green", text: t("voice.connected"), textColor: "text-white" };
   return (
-    <div className="relative border-t border-black/30 bg-[#232428] px-2 py-2">
+    <div className="relative border-t border-black/30 bg-discord-deep px-2 py-2">
       <div className="flex items-center gap-2 px-1">
         <span className="relative flex h-2.5 w-2.5">
           {conn !== "failed" && (

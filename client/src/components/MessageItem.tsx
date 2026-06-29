@@ -139,7 +139,7 @@ function MessageItem({
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
               if (e.key === "Escape") setEditing(false);
             }}
-            className="w-full resize-none rounded bg-[#1e1f22] px-3 py-2 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+            className="w-full resize-none rounded bg-discord-deep px-3 py-2 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
           />
         ) : (
           message.content && (
@@ -169,7 +169,7 @@ function MessageItem({
             {e.image && <img src={e.image} alt="" className="h-16 w-16 shrink-0 rounded object-cover" loading="lazy" />}
             <div className="min-w-0">
               {e.site && <div className="text-xs text-discord-faint">{e.site}</div>}
-              {e.title && <div className="truncate font-medium text-[#00a8fc]">{e.title}</div>}
+              {e.title && <div className="truncate font-medium text-discord-link">{e.title}</div>}
               {e.description && <div className="line-clamp-2 text-sm text-discord-muted">{e.description}</div>}
             </div>
           </a>
@@ -254,7 +254,7 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
     >
       <span className="text-2xl">📄</span>
       <span className="min-w-0">
-        <span className="block truncate text-sm text-[#00a8fc]">{attachment.filename}</span>
+        <span className="block truncate text-sm text-discord-link">{attachment.filename}</span>
         <span className="block text-xs text-discord-faint">{prettySize(attachment.size)}</span>
       </span>
     </a>

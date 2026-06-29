@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.4.0",
+    date: "2026-06-29",
+    items: [
+      "Темы оформления: Блюрпл, Полночь, Аврора, Закат, Багровая, Светлая (Настройки → Приложение)",
+      "Более объёмный и цветной интерфейс: градиенты, акцентные подсветки, глубина",
+      "Оверлей звонка теперь «сквозной» для кликов — не мешает работе под ним",
+    ],
+  },
+  {
     version: "0.3.2",
     date: "2026-06-25",
     items: [

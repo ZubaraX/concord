@@ -11,10 +11,23 @@ import VoiceSettings from "./VoiceSettings";
 
 const STATUSES: PresenceStatus[] = ["ONLINE", "IDLE", "DND", "OFFLINE"];
 
+type ThemeId = "blurple" | "midnight" | "aurora" | "sunset" | "crimson" | "light";
+// Swatch colors for the theme picker (preview only; the live theme is driven by
+// CSS variables in index.css).
+const THEMES: { id: ThemeId; accent: string; accent2: string; bg: string; fg: string }[] = [
+  { id: "blurple", accent: "#5865f2", accent2: "#4752c4", bg: "#1e1f22", fg: "#dbdee1" },
+  { id: "midnight", accent: "#7c5cff", accent2: "#5c40dc", bg: "#10101e", fg: "#e2e4f0" },
+  { id: "aurora", accent: "#14b8a6", accent2: "#0d9488", bg: "#0a1818", fg: "#dcebe8" },
+  { id: "sunset", accent: "#f4725e", accent2: "#db5446", bg: "#1a1016", fg: "#f0e2e6" },
+  { id: "crimson", accent: "#ef4444", accent2: "#be282d", bg: "#180e10", fg: "#f0e0e2" },
+  { id: "light", accent: "#5865f2", accent2: "#4752c4", bg: "#e4e6eb", fg: "#23262d" },
+];
+
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { user, updateProfile, logout } = useAuth();
   const { t } = useI18n();
   const lang = useSettings((s) => s.lang);
+  const theme = useSettings((s) => s.theme);
   const setSettings = useSettings((s) => s.set);
   const [tab, setTab] = useState<"profile" | "voice" | "app">("profile");
 
@@ -132,7 +145,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setBio(e.target.value)}
               rows={3}
               maxLength={4000}
-              className="mt-1.5 w-full resize-none rounded bg-[#1e1f22] px-3 py-2 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+              className="mt-1.5 w-full resize-none rounded bg-discord-deep px-3 py-2 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
             />
           </div>
 
@@ -140,7 +153,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             <button
               onClick={saveProfile}
               disabled={busy}
-              className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4] disabled:opacity-60"
+              className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-discord-accentDark disabled:opacity-60"
             >
               {busy ? t("settings.saving") : t("settings.saveProfile")}
             </button>
@@ -149,6 +162,34 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <div className="space-y-5">
+          {/* Theme */}
+          <div>
+            <label className="text-xs font-bold uppercase text-discord-muted">{t("settings.theme")}</label>
+            <p className="mb-2 mt-0.5 text-xs text-discord-faint">{t("settings.themeDesc")}</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {THEMES.map((th) => (
+                <button
+                  key={th.id}
+                  onClick={() => setSettings({ theme: th.id })}
+                  className={`flex items-center gap-2 rounded-lg p-2 ring-2 transition ${
+                    theme === th.id ? "ring-discord-accent" : "ring-transparent hover:ring-white/20"
+                  }`}
+                  style={{ background: th.bg }}
+                >
+                  <span
+                    className="h-6 w-6 shrink-0 rounded-full"
+                    style={{ background: `linear-gradient(135deg, ${th.accent}, ${th.accent2})` }}
+                  />
+                  <span className="truncate text-sm" style={{ color: th.fg }}>
+                    {t(`theme.${th.id}` as never)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <hr className="border-black/20" />
+
           {/* Language */}
           <div>
             <label className="text-xs font-bold uppercase text-discord-muted">{t("settings.language")}</label>
@@ -172,7 +213,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             <>
               <Field label={t("settings.serverUrl")} value={server} onChange={setServer} placeholder="http://localhost:4000" />
               <div className="flex items-center gap-3">
-                <button onClick={saveServer} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4]">
+                <button onClick={saveServer} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-discord-accentDark">
                   {t("settings.saveServerUrl")}
                 </button>
                 {msg && <span className="text-sm text-discord-muted">{msg}</span>}
@@ -183,7 +224,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
           <button
             onClick={() => logout()}
-            className="rounded bg-discord-danger px-5 py-2 font-medium text-white hover:bg-[#a12828]"
+            className="rounded bg-discord-danger px-5 py-2 font-medium text-white hover:bg-discord-dangerDark"
           >
             {t("settings.logout")}
           </button>
@@ -227,7 +268,7 @@ function Field({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+        className="mt-1.5 w-full rounded bg-discord-deep px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
       />
     </div>
   );

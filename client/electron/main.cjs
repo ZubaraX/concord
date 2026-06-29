@@ -64,6 +64,9 @@ function buildOverlay() {
   });
   overlayWin.setAlwaysOnTop(true, "screen-saver");
   overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // Click-through: the overlay never intercepts mouse events — clicks pass to
+  // whatever is underneath it.
+  overlayWin.setIgnoreMouseEvents(true);
   if (DEV_URL) overlayWin.loadURL(DEV_URL + "#overlay");
   else overlayWin.loadFile(path.join(__dirname, "..", "dist", "index.html"), { hash: "overlay" });
   overlayWin.on("closed", () => (overlayWin = null));

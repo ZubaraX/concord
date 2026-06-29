@@ -42,9 +42,9 @@ export default function InviteModal({ onClose }: { onClose: () => void }) {
               readOnly
               value={link}
               onFocus={(e) => e.currentTarget.select()}
-              className="flex-1 rounded bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none"
+              className="flex-1 rounded bg-discord-deep px-3 py-2.5 text-discord-text outline-none"
             />
-            <button onClick={copy} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4]">
+            <button onClick={copy} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-discord-accentDark">
               {copied ? "Copied!" : "Copy"}
             </button>
           </div>

@@ -50,7 +50,7 @@ export default function UserProfileModal({ userId, onClose }: { userId: string; 
               <Avatar user={u} size={80} status={u.status} />
             </div>
           </div>
-          <div className="rounded-lg bg-[#1e1f22] p-4">
+          <div className="rounded-lg bg-discord-deep p-4">
             <div className="flex items-baseline gap-2">
               <div className="text-xl font-bold text-white">{u.displayName ?? u.username}</div>
               {u.pronouns && <div className="text-sm text-discord-faint">{u.pronouns}</div>}
@@ -71,7 +71,7 @@ export default function UserProfileModal({ userId, onClose }: { userId: string; 
             )}
             {!isMe && (
               <div className="mt-4 flex gap-2">
-                <button onClick={() => message(false)} className="flex-1 rounded bg-discord-accent py-2 text-sm font-medium text-white hover:bg-[#4752c4]">
+                <button onClick={() => message(false)} className="flex-1 rounded bg-discord-accent py-2 text-sm font-medium text-white hover:bg-discord-accentDark">
                   💬 {t("profile.message")}
                 </button>
                 <button onClick={() => message(true)} className="flex flex-1 items-center justify-center gap-2 rounded bg-discord-green py-2 text-sm font-medium text-white hover:brightness-110">

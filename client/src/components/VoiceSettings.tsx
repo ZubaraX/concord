@@ -84,11 +84,11 @@ export default function VoiceSettings() {
         <div className="flex items-center gap-3">
           <button
             onClick={toggleTest}
-            className={`rounded px-4 py-2 text-sm font-medium ${testing ? "bg-discord-danger text-white" : "bg-discord-accent text-white hover:bg-[#4752c4]"}`}
+            className={`rounded px-4 py-2 text-sm font-medium ${testing ? "bg-discord-danger text-white" : "bg-discord-accent text-white hover:bg-discord-accentDark"}`}
           >
             {testing ? t("vset.stopTest") : t("vset.testMic")}
           </button>
-          <div className="h-3 flex-1 overflow-hidden rounded bg-[#1e1f22]">
+          <div className="h-3 flex-1 overflow-hidden rounded bg-discord-deep">
             <div className="h-full bg-discord-green transition-[width] duration-75" style={{ width: `${Math.min(level * 140, 100)}%` }} />
           </div>
         </div>
@@ -248,7 +248,7 @@ function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+        className="mt-1.5 w-full rounded bg-discord-deep px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

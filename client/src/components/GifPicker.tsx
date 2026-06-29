@@ -106,7 +106,7 @@ export default function GifPicker({ onPick, onClose }: { onPick: (url: string) =
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder={t("gif.search")}
-        className="mb-2 w-full rounded bg-[#1e1f22] px-3 py-2 text-sm text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+        className="mb-2 w-full rounded bg-discord-deep px-3 py-2 text-sm text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
       />
 
       {showCategories && (

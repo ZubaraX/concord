@@ -126,9 +126,9 @@ function AddFriend({ onDone }: { onDone: () => void }) {
           onChange={(e) => setTag(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           placeholder="username#0000"
-          className="flex-1 rounded bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+          className="flex-1 rounded bg-discord-deep px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
         />
-        <button onClick={submit} disabled={busy} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-[#4752c4] disabled:opacity-60">
+        <button onClick={submit} disabled={busy} className="rounded bg-discord-accent px-5 py-2 font-medium text-white hover:bg-discord-accentDark disabled:opacity-60">
           {t("friends.send")}
         </button>
       </div>

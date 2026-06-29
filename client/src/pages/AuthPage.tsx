@@ -33,7 +33,7 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#5865f2] to-[#404eed] p-4">
+    <div className="flex h-full items-center justify-center bg-gradient-to-br from-discord-accent to-discord-accentDark p-4">
       <div className="w-full max-w-md rounded-md bg-discord-bg p-8 shadow-2xl">
         <h1 className="text-center text-2xl font-bold text-white">
           {mode === "login" ? t("auth.welcome") : t("auth.createAccount")}
@@ -60,7 +60,7 @@ export default function AuthPage() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-sm bg-discord-accent py-2.5 font-medium text-white transition hover:bg-[#4752c4] disabled:opacity-60"
+            className="w-full rounded-sm bg-discord-accent py-2.5 font-medium text-white transition hover:bg-discord-accentDark disabled:opacity-60"
           >
             {busy ? t("auth.loading") : mode === "login" ? t("auth.login") : t("auth.register")}
           </button>
@@ -72,7 +72,7 @@ export default function AuthPage() {
               setMode(mode === "login" ? "register" : "login");
               setError(null);
             }}
-            className="text-[#00a8fc] hover:underline"
+            className="text-discord-link hover:underline"
           >
             {mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}
           </button>
@@ -103,7 +103,7 @@ function Field(props: {
         value={props.value}
         placeholder={props.placeholder}
         onChange={(e) => props.onChange(e.target.value)}
-        className="mt-1.5 w-full rounded-sm border-none bg-[#1e1f22] px-3 py-2.5 text-discord-text outline-none ring-discord-accent focus:ring-1"
+        className="mt-1.5 w-full rounded-sm border-none bg-discord-deep px-3 py-2.5 text-discord-text outline-none ring-discord-accent focus:ring-1"
       />
     </label>
   );

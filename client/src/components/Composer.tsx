@@ -114,7 +114,7 @@ export default function Composer({
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 border-b border-black/20 p-3">
           {attachments.map((a, i) => (
-            <div key={i} className="flex items-center gap-2 rounded bg-[#1e1f22] px-2 py-1 text-xs">
+            <div key={i} className="flex items-center gap-2 rounded bg-discord-deep px-2 py-1 text-xs">
               <span className="max-w-[180px] truncate text-discord-text">{a.filename}</span>
               <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} className="text-discord-muted hover:text-discord-danger">✕</button>
             </div>

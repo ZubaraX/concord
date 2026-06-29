@@ -32,6 +32,9 @@ export interface SettingsState {
   // Interface language.
   lang: "en" | "ru";
 
+  // Color theme.
+  theme: "blurple" | "midnight" | "aurora" | "sunset" | "crimson" | "light";
+
   // In-call overlay (separate always-on-top window showing who's speaking).
   overlayEnabled: boolean;
   overlayCorner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -69,6 +72,8 @@ export const useSettings = create<SettingsState>()(
       soundVolume: 60,
 
       lang: (typeof navigator !== "undefined" && navigator.language?.startsWith("ru") ? "ru" : "en"),
+
+      theme: "blurple",
 
       overlayEnabled: true,
       overlayCorner: "top-right",
