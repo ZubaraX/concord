@@ -1,6 +1,7 @@
 import { useAuth } from "../store/auth";
 import { useUI } from "../store/ui";
 import { useI18n } from "../lib/i18n";
+import { GearIcon } from "./Icons";
 import Avatar from "./Avatar";
 
 // Bottom-left user panel: avatar, name, custom status, settings gear.
@@ -26,7 +27,7 @@ export default function UserPanel() {
         title={t("settings.title")}
         className="rounded p-1.5 text-discord-muted transition hover:bg-discord-hover hover:text-white"
       >
-        ⚙
+        <GearIcon size={20} />
       </button>
     </div>
   );

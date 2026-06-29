@@ -10,6 +10,7 @@ import { joinVoice } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
 import Avatar from "./Avatar";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
+import { UserIcon, MessageIcon, PhoneIcon, UserPlusIcon, CopyIcon, SpeakerIcon, ExpandIcon, DownloadIcon, ExternalLinkIcon, XIcon } from "./Icons";
 import type { User } from "../types";
 
 const screenVolKey = (userId: string) => `${userId}::screen`;
@@ -155,12 +156,12 @@ function ParticipantRow({ entry }: { entry: RemoteEntry }) {
   }
 
   const items: MenuItem[] = [
-    { label: t("profile.viewProfile"), icon: "👤", onClick: () => openProfile(userId) },
-    { label: t("profile.message"), icon: "💬", onClick: () => openDMWith(false) },
-    { label: t("voice.call"), icon: "📞", onClick: () => openDMWith(true) },
+    { label: t("profile.viewProfile"), icon: <UserIcon size={16} />, onClick: () => openProfile(userId) },
+    { label: t("profile.message"), icon: <MessageIcon size={16} />, onClick: () => openDMWith(false) },
+    { label: t("voice.call"), icon: <PhoneIcon size={16} />, onClick: () => openDMWith(true) },
     {
       label: t("friends.addFriend"),
-      icon: "➕",
+      icon: <UserPlusIcon size={16} />,
       onClick: () =>
         user &&
         api("/api/friends/request", {
@@ -170,7 +171,7 @@ function ParticipantRow({ entry }: { entry: RemoteEntry }) {
           .then(() => useNotify.getState().push({ title: "Friend request sent", body: name }))
           .catch((e) => useNotify.getState().push({ title: "Couldn't add friend", body: (e as Error).message })),
     },
-    { label: t("common.copy") + " ID", icon: "🆔", onClick: () => navigator.clipboard?.writeText(userId) },
+    { label: t("common.copy") + " ID", icon: <CopyIcon size={16} />, onClick: () => navigator.clipboard?.writeText(userId) },
   ];
 
   return (
@@ -185,7 +186,7 @@ function ParticipantRow({ entry }: { entry: RemoteEntry }) {
       >
         <Avatar user={user ?? { username: "?", displayName: name, avatarUrl: null }} size={26} status={user?.status ?? "ONLINE"} />
         <span className="min-w-0 flex-1 truncate text-sm text-discord-text">{name}</span>
-        {hasScreenAudio && <span title="sharing audio" className="text-xs">🔊</span>}
+        {hasScreenAudio && <SpeakerIcon size={14} className="text-discord-green" />}
       </button>
       {actions && <ContextMenu x={actions.x} y={actions.y} items={items} onClose={() => setActions(null)} />}
       {vol && (
@@ -294,10 +295,10 @@ function VideoTile({
       <video ref={ref} autoPlay playsInline className="h-48 w-80 object-contain" />
       <button
         onClick={() => onExpand({ stream, label })}
-        className="absolute right-1 top-1 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
+        className="absolute right-1 top-1 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
         title="Expand"
       >
-        ⛶ Expand
+        <ExpandIcon size={14} />
       </button>
       <span className="absolute bottom-1 left-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
         {label}
@@ -331,12 +332,12 @@ function ExpandedView({
         <div className="flex gap-2">
           <button
             onClick={() => ref.current?.requestFullscreen?.()}
-            className="rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
+            className="flex items-center gap-1.5 rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
           >
-            ⛶ Fullscreen
+            <ExpandIcon size={15} /> Fullscreen
           </button>
-          <button onClick={onClose} className="rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">
-            ✕ Close
+          <button onClick={onClose} className="flex items-center gap-1.5 rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">
+            <XIcon size={15} /> Close
           </button>
         </div>
       </div>

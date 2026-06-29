@@ -4,7 +4,7 @@ import { useUI } from "../store/ui";
 import { useAuth } from "../store/auth";
 import { joinVoice } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
-import { PhoneIcon } from "./Icons";
+import { PhoneIcon, MessageIcon } from "./Icons";
 import type { User } from "../types";
 import Modal from "./Modal";
 import Avatar from "./Avatar";
@@ -71,8 +71,8 @@ export default function UserProfileModal({ userId, onClose }: { userId: string; 
             )}
             {!isMe && (
               <div className="mt-4 flex gap-2">
-                <button onClick={() => message(false)} className="flex-1 rounded bg-discord-accent py-2 text-sm font-medium text-white hover:bg-discord-accentDark">
-                  💬 {t("profile.message")}
+                <button onClick={() => message(false)} className="flex flex-1 items-center justify-center gap-2 rounded bg-discord-accent py-2 text-sm font-medium text-white hover:bg-discord-accentDark">
+                  <MessageIcon size={16} /> {t("profile.message")}
                 </button>
                 <button onClick={() => message(true)} className="flex flex-1 items-center justify-center gap-2 rounded bg-discord-green py-2 text-sm font-medium text-white hover:brightness-110">
                   <PhoneIcon size={16} /> {t("voice.call")}

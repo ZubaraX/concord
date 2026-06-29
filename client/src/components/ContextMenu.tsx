@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 export interface MenuItem {
   label: string;
-  icon?: string;
+  icon?: ReactNode;
   danger?: boolean;
   onClick: () => void;
 }
@@ -64,7 +64,7 @@ export default function ContextMenu({
               : "text-discord-text hover:bg-discord-accent hover:text-white"
           }`}
         >
-          {it.icon && <span className="w-4 text-center">{it.icon}</span>}
+          {it.icon && <span className="flex w-4 justify-center">{it.icon}</span>}
           {it.label}
         </button>
       ))}

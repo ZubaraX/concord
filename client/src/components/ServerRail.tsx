@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { useUI } from "../store/ui";
+import { PlusIcon } from "./Icons";
 import type { Guild } from "../types";
 
 // The 72px server rail: round guild icons, add-server, home.
@@ -32,7 +33,7 @@ export default function ServerRail({ guilds }: { guilds: Guild[] }) {
       </div>
 
       <RailButton label="Add or Join a Server" onClick={() => openModal("addServer")} accent>
-        <span className="text-2xl leading-none text-discord-green">+</span>
+        <span className="text-discord-green group-hover:text-white"><PlusIcon size={24} /></span>
       </RailButton>
     </nav>
   );

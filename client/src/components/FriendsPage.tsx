@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { joinVoice } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
+import { UsersIcon, MessageIcon, PhoneIcon, CheckIcon, XIcon } from "./Icons";
 import type { Friend, User } from "../types";
 import Avatar from "./Avatar";
 
@@ -41,7 +42,7 @@ export default function FriendsPage() {
   return (
     <main className="flex flex-1 flex-col bg-discord-bg">
       <header className="flex h-12 items-center gap-4 border-b border-black/20 px-4 shadow-sm">
-        <span className="font-semibold text-white">👥 {t("friends.title")}</span>
+        <span className="flex items-center gap-2 font-semibold text-white"><UsersIcon size={18} /> {t("friends.title")}</span>
         <div className="flex gap-1">
           <TabBtn active={tab === "online"} onClick={() => setTab("online")}>{t("friends.online")}</TabBtn>
           <TabBtn active={tab === "all"} onClick={() => setTab("all")}>{t("friends.all")}</TabBtn>
@@ -78,8 +79,8 @@ export default function FriendsPage() {
                     {f.user.username}#{f.user.discriminator}
                   </div>
                 </div>
-                <IconBtn title={t("profile.message")} onClick={() => openOrCreateDM(f.user.id)}>💬</IconBtn>
-                <IconBtn title={t("voice.call")} onClick={() => openOrCreateDM(f.user.id, true)}>📞</IconBtn>
+                <IconBtn title={t("profile.message")} onClick={() => openOrCreateDM(f.user.id)}><MessageIcon size={16} /></IconBtn>
+                <IconBtn title={t("voice.call")} onClick={() => openOrCreateDM(f.user.id, true)}><PhoneIcon size={16} /></IconBtn>
               </div>
             ))}
           </div>
@@ -138,8 +139,9 @@ function AddFriend({ onDone }: { onDone: () => void }) {
 }
 
 function PendingList({ pending, onChange }: { pending?: Pending; onChange: () => void }) {
+  const { t } = useI18n();
   if (!pending || (pending.incoming.length === 0 && pending.outgoing.length === 0)) {
-    return <p className="text-discord-muted">No pending requests.</p>;
+    return <p className="text-discord-muted">{t("friends.empty")}</p>;
   }
   const accept = (id: string) => api(`/api/friends/${id}/accept`, { method: "POST" }).then(onChange);
   const remove = (id: string) => api(`/api/friends/${id}`, { method: "DELETE" }).then(onChange);
@@ -151,8 +153,8 @@ function PendingList({ pending, onChange }: { pending?: Pending; onChange: () =>
           <h3 className="mb-2 text-xs font-bold uppercase text-discord-muted">Incoming — {pending.incoming.length}</h3>
           {pending.incoming.map((p) => (
             <Row key={p.id} user={p.user}>
-              <IconBtn title="Accept" onClick={() => accept(p.id)}>✓</IconBtn>
-              <IconBtn title="Decline" onClick={() => remove(p.id)}>✕</IconBtn>
+              <IconBtn title={t("friends.accept")} onClick={() => accept(p.id)}><CheckIcon size={16} /></IconBtn>
+              <IconBtn title={t("friends.decline")} onClick={() => remove(p.id)}><XIcon size={16} /></IconBtn>
             </Row>
           ))}
         </div>
@@ -162,7 +164,7 @@ function PendingList({ pending, onChange }: { pending?: Pending; onChange: () =>
           <h3 className="mb-2 text-xs font-bold uppercase text-discord-muted">Outgoing — {pending.outgoing.length}</h3>
           {pending.outgoing.map((p) => (
             <Row key={p.id} user={p.user}>
-              <IconBtn title="Cancel" onClick={() => remove(p.id)}>✕</IconBtn>
+              <IconBtn title={t("friends.remove")} onClick={() => remove(p.id)}><XIcon size={16} /></IconBtn>
             </Row>
           ))}
         </div>

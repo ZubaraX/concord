@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.4.3",
+    date: "2026-06-30",
+    items: [
+      "Аккуратные SVG-иконки вместо эмодзи в кнопках и меню (настройки, вложения, звонок, друзья, профиль, просмотр фото и др.)",
+      "Эмодзи-реакции остаются эмодзи — заменены только иконки интерфейса",
+    ],
+  },
+  {
     version: "0.4.2",
     date: "2026-06-29",
     items: [

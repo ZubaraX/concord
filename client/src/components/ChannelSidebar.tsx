@@ -7,7 +7,7 @@ import { useVoice } from "../store/voice";
 import { useUnread } from "../store/unread";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, sendVoiceEmoji } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
-import { MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PhoneOffIcon } from "./Icons";
+import { MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon } from "./Icons";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
@@ -154,7 +154,7 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
         </span>
         <div className="min-w-0 flex-1 leading-tight">
           <div className={clsx("truncate text-sm font-semibold", status.textColor)}>{status.text}</div>
-          <div className="truncate text-xs text-discord-muted">🔊 {channelName}</div>
+          <div className="flex items-center gap-1 truncate text-xs text-discord-muted"><SpeakerIcon size={12} /> {channelName}</div>
         </div>
         <button
           onClick={leaveVoice}
@@ -176,7 +176,7 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
           <ScreenIcon size={18} />
         </CallBtn>
         <CallBtn active={emojiOpen} onClick={() => setEmojiOpen((v) => !v)} label={t("voice.react")}>
-          😀
+          <SmileIcon size={18} />
         </CallBtn>
       </div>
 
@@ -322,7 +322,7 @@ function HomeSidebar({
             >
               <Avatar user={dm.otherUser} size={28} status={dm.otherUser?.status ?? "OFFLINE"} />
               <span className="truncate">{dm.name}</span>
-              {inCall && <span className="ml-auto text-xs text-discord-green">📞</span>}
+              {inCall && <span className="ml-auto text-discord-green"><PhoneIcon size={13} /></span>}
               {n > 0 && <span className={clsx("rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white", inCall ? "ml-1" : "ml-auto")}>{n}</span>}
             </button>
           );

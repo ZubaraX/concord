@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n";
+import { PaperclipIcon, SmileIcon, XIcon } from "./Icons";
 import type { UploadedFile } from "../api/client";
 import type { Message } from "../types";
 import EmojiPicker from "./EmojiPicker";
@@ -107,7 +108,7 @@ export default function Composer({
             {t("composer.replyingTo", { name: "" })}{" "}
             <strong className="text-discord-text">{replyingTo.author.displayName ?? replyingTo.author.username}</strong>
           </span>
-          <button onClick={onClearReply} className="hover:text-white">✕</button>
+          <button onClick={onClearReply} className="hover:text-white"><XIcon size={14} /></button>
         </div>
       )}
 
@@ -116,7 +117,7 @@ export default function Composer({
           {attachments.map((a, i) => (
             <div key={i} className="flex items-center gap-2 rounded bg-discord-deep px-2 py-1 text-xs">
               <span className="max-w-[180px] truncate text-discord-text">{a.filename}</span>
-              <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} className="text-discord-muted hover:text-discord-danger">✕</button>
+              <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} className="text-discord-muted hover:text-discord-danger"><XIcon size={14} /></button>
             </div>
           ))}
         </div>
@@ -127,10 +128,10 @@ export default function Composer({
         <button
           onClick={() => fileInput.current?.click()}
           disabled={uploading}
-          className="pb-1 text-2xl leading-none text-discord-muted hover:text-discord-text disabled:opacity-50"
+          className="pb-1.5 leading-none text-discord-muted hover:text-discord-text disabled:opacity-50"
           title={t("composer.uploadFile")}
         >
-          {uploading ? "…" : "＋"}
+          {uploading ? <span className="text-2xl leading-none">…</span> : <PaperclipIcon size={22} />}
         </button>
         <textarea
           ref={textarea}
@@ -151,10 +152,10 @@ export default function Composer({
         </button>
         <button
           onClick={() => setShowEmoji((v) => !v)}
-          className="pb-1 text-xl leading-none text-discord-muted hover:text-discord-text"
+          className="pb-1.5 leading-none text-discord-muted hover:text-discord-text"
           title={t("composer.emoji")}
         >
-          😀
+          <SmileIcon size={22} />
         </button>
         {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
         {showGif && <GifPicker onPick={sendGif} onClose={() => setShowGif(false)} />}

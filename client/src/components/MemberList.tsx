@@ -10,6 +10,7 @@ import { useI18n } from "../lib/i18n";
 import type { Guild, GuildMember, PresenceStatus, User } from "../types";
 import Avatar from "./Avatar";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
+import { UserIcon, MessageIcon, PhoneIcon, UserPlusIcon, CopyIcon } from "./Icons";
 
 export default function MemberList() {
   const { currentGuildId, openDM, openProfile } = useUI();
@@ -53,18 +54,18 @@ export default function MemberList() {
 
   function menuItems(u: User): MenuItem[] {
     return [
-      { label: t("profile.viewProfile"), icon: "👤", onClick: () => openProfile(u.id) },
-      { label: t("profile.message"), icon: "💬", onClick: () => openDMWith(u) },
-      { label: t("voice.call"), icon: "📞", onClick: () => openDMWith(u, true) },
+      { label: t("profile.viewProfile"), icon: <UserIcon size={16} />, onClick: () => openProfile(u.id) },
+      { label: t("profile.message"), icon: <MessageIcon size={16} />, onClick: () => openDMWith(u) },
+      { label: t("voice.call"), icon: <PhoneIcon size={16} />, onClick: () => openDMWith(u, true) },
       {
         label: t("friends.addFriend"),
-        icon: "➕",
+        icon: <UserPlusIcon size={16} />,
         onClick: () =>
           api("/api/friends/request", { method: "POST", body: JSON.stringify({ username: u.username, discriminator: u.discriminator }) })
             .then(() => useNotify.getState().push({ title: "Friend request sent", body: `${u.username}#${u.discriminator}` }))
             .catch((e) => useNotify.getState().push({ title: "Couldn't add friend", body: (e as Error).message })),
       },
-      { label: t("common.copy") + " ID", icon: "🆔", onClick: () => navigator.clipboard?.writeText(u.id) },
+      { label: t("common.copy") + " ID", icon: <CopyIcon size={16} />, onClick: () => navigator.clipboard?.writeText(u.id) },
     ];
   }
 
