@@ -27,6 +27,8 @@ model User {
   status        String   @default("OFFLINE")
   customStatus  String?
   pronouns      String?
+  resetCode     String?
+  resetExpires  DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

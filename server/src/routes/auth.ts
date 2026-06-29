@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../lib/db.js";
@@ -8,6 +9,7 @@ import {
   authenticate,
 } from "../lib/auth.js";
 import { config } from "../config.js";
+import { sendMail } from "../lib/mail.js";
 import { emitToGuild } from "../services/guilds.js";
 
 const credentials = z.object({
@@ -171,5 +173,60 @@ export async function authRoutes(app: FastifyInstance) {
     for (const m of memberships) emitToGuild(m.guildId, "user:update", { guildId: m.guildId });
 
     return reply.send({ user: publicUser(user) });
+  });
+
+  // ── Password reset by email ────────────────────────────────────────────────
+  // Request a code. Always returns ok (don't reveal whether the email exists).
+  app.post("/forgot", async (req, reply) => {
+    const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Invalid email" });
+
+    const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+    if (user) {
+      const code = randomBytes(4).toString("hex").toUpperCase(); // 8-char code
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { resetCode: code, resetExpires: new Date(Date.now() + 30 * 60 * 1000) },
+      });
+      await sendMail(
+        user.email,
+        "Concord — password reset code",
+        `Your Concord password reset code is: ${code}\n\nEnter it in the app to set a new password. The code expires in 30 minutes.\nIf you didn't request this, you can ignore this email.`
+      );
+    }
+    return reply.send({ ok: true });
+  });
+
+  // Apply a new password using the emailed code.
+  app.post("/reset", async (req, reply) => {
+    const parsed = z
+      .object({
+        email: z.string().email(),
+        code: z.string().min(4).max(64),
+        password: z.string().min(6).max(256),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Invalid input" });
+
+    const { email, code, password } = parsed.data;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (
+      !user ||
+      !user.resetCode ||
+      user.resetCode !== code.trim().toUpperCase() ||
+      !user.resetExpires ||
+      user.resetExpires < new Date()
+    ) {
+      return reply.code(400).send({ error: "Invalid or expired code" });
+    }
+
+    const passwordHash = await hashPassword(password);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, resetCode: null, resetExpires: null },
+    });
+    // Revoke existing refresh tokens so old sessions can't continue.
+    await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+    return reply.send({ ok: true });
   });
 }

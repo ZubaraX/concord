@@ -48,6 +48,14 @@ const schema = z.object({
   // set the GIF picker simply returns no results. See routes/gifs.ts.
   KLIPY_KEY: z.string().default(""),
   TENOR_KEY: z.string().default(""),
+
+  // Outgoing email (password reset). Without SMTP_HOST the reset code is just
+  // logged server-side (dev / no-mail fallback).
+  SMTP_HOST: z.string().default(""),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().default(""),
+  SMTP_PASS: z.string().default(""),
+  SMTP_FROM: z.string().default(""),
 });
 
 const parsed = schema.safeParse(process.env);
