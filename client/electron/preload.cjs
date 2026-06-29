@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld("concord", {
   getDesktopSources: () => ipcRenderer.invoke("desktop:getSources"),
   setDesktopSource: (id) => ipcRenderer.send("desktop:setSource", id),
 
+  // Taskbar/dock unread badge.
+  setBadge: (dataUrl, count) => ipcRenderer.send("app:setBadge", { dataUrl, count }),
+
   // In-call speaking overlay: main app pushes state; the overlay window subscribes.
   sendOverlayState: (state) => ipcRenderer.send("overlay:state", state),
   onOverlayData: (cb) => {

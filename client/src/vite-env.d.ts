@@ -34,6 +34,7 @@ interface ConcordBridge {
   versions: { electron: string; chrome: string; node: string };
   getDesktopSources?: () => Promise<DesktopSource[]>;
   setDesktopSource?: (id: string) => void;
+  setBadge?: (dataUrl: string | null, count: number) => void;
   sendOverlayState?: (state: unknown) => void;
   onOverlayData?: (cb: (data: { participants?: unknown[] } & Record<string, unknown>) => void) => () => void;
   getUpdateStatus?: () => UpdateStatus;

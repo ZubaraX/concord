@@ -1,6 +1,6 @@
 // Concord desktop shell (Electron). Loads the built React app and connects to
 // whatever server URL the user configures in-app (e.g. a Codespaces URL).
-const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain, screen, nativeImage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { autoUpdater } = require("electron-updater");
@@ -39,6 +39,27 @@ ipcMain.handle("desktop:getSources", async () => {
 });
 ipcMain.on("desktop:setSource", (_e, id) => {
   pendingSourceId = id;
+});
+
+// Unread badge: the renderer draws a small badge image and sends it (with the
+// count). We show it as a taskbar overlay (Windows) and dock badge (mac/Linux).
+ipcMain.on("app:setBadge", (_e, payload) => {
+  const count = (payload && payload.count) || 0;
+  try {
+    app.badgeCount = count; // macOS/Linux dock
+  } catch {
+    /* ignore */
+  }
+  if (!win || win.isDestroyed()) return;
+  try {
+    if (payload && payload.dataUrl) {
+      win.setOverlayIcon(nativeImage.createFromDataURL(payload.dataUrl), `${count} unread`);
+    } else {
+      win.setOverlayIcon(null, "");
+    }
+  } catch {
+    /* setOverlayIcon is Windows-only */
+  }
 });
 
 // ── In-call speaking overlay (separate always-on-top window) ───────────────
@@ -83,10 +104,15 @@ function positionOverlay(corner) {
   overlayWin.setPosition(Math.round(x), Math.round(y));
 }
 
-// The main renderer pushes call state; we mirror it to the overlay window and
-// show/hide it accordingly.
-ipcMain.on("overlay:state", (_e, state) => {
-  const active = state && state.enabled && state.active && (state.participants?.length ?? 0) > 0;
+// `overlayCollapsed` is toggled by a global hotkey (Ctrl/Cmd+Shift+O) so the
+// user can hide the always-on-top overlay without disabling the feature.
+let overlayCollapsed = false;
+let lastOverlayState = null;
+
+function applyOverlay() {
+  const state = lastOverlayState;
+  const active =
+    state && state.enabled && state.active && (state.participants?.length ?? 0) > 0 && !overlayCollapsed;
   if (!active) {
     if (overlayWin && !overlayWin.isDestroyed()) overlayWin.hide();
     return;
@@ -99,6 +125,12 @@ ipcMain.on("overlay:state", (_e, state) => {
   else send();
   positionOverlay(state.corner);
   if (!win2.isVisible()) win2.showInactive();
+}
+
+// The main renderer pushes call state; we mirror it to the overlay window.
+ipcMain.on("overlay:state", (_e, state) => {
+  lastOverlayState = state;
+  applyOverlay();
 });
 
 // App/window icon (embedded into the .exe by electron-builder; also used for
@@ -220,6 +252,13 @@ app.whenReady().then(() => {
   globalShortcut.register("CommandOrControl+Shift+C", () => {
     if (!win) return createWindow();
     win.isVisible() ? win.hide() : win.show();
+  });
+
+  // Global hotkey: collapse/restore the speaking overlay (it's click-through,
+  // so it can't be dismissed by clicking it).
+  globalShortcut.register("CommandOrControl+Shift+O", () => {
+    overlayCollapsed = !overlayCollapsed;
+    applyOverlay();
   });
 
   app.on("activate", () => {
