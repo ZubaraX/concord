@@ -131,6 +131,9 @@ const en = {
   "voice.connecting": "Connecting…",
   "voice.connected": "Voice Connected",
   "voice.participants": "Participants",
+  "voice.rowHint": "Click for actions · right-click for volume",
+  "voice.userVolume": "User volume",
+  "voice.screenVolume": "Screen audio",
 
   // Members / profile
   "members.title": "Members",
@@ -326,6 +329,9 @@ const ru: Record<keyof typeof en, string> = {
   "voice.connecting": "Подключение…",
   "voice.connected": "Голос подключён",
   "voice.participants": "Участники",
+  "voice.rowHint": "Клик — действия · правый клик — громкость",
+  "voice.userVolume": "Громкость пользователя",
+  "voice.screenVolume": "Звук демонстрации",
 
   "members.title": "Участники",
   "members.online": "В сети",

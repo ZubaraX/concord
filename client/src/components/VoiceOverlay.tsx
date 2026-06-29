@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useVoice, type RemoteEntry } from "../store/voice";
 import { useSettings } from "../store/settings";
 import { useVoiceVolumes } from "../store/voiceVolumes";
+import { useUI } from "../store/ui";
+import { useNotify } from "../store/notify";
+import { joinVoice } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
 import Avatar from "./Avatar";
+import ContextMenu, { type MenuItem } from "./ContextMenu";
 import type { User } from "../types";
+
+const screenVolKey = (userId: string) => `${userId}::screen`;
 
 // Always-mounted: plays remote audio (honoring output device + volume) and
 // shows a grid of any screen-share video. Click a tile to expand; expanded
@@ -29,7 +35,7 @@ export default function VoiceOverlay() {
         <AudioSink key={r.socketId} userId={r.userId} stream={r.audio!} />
       ))}
       {screenAudio.map((r) => (
-        <AudioSink key={`sa-${r.socketId}`} userId={r.userId} stream={r.screen!} />
+        <AudioSink key={`sa-${r.socketId}`} userId={r.userId} volKey={screenVolKey(r.userId)} stream={r.screen!} />
       ))}
 
       {channelId && remotes.length > 0 && <ParticipantsPanel remotes={remotes} />}
@@ -73,10 +79,10 @@ export default function VoiceOverlay() {
   );
 }
 
-function AudioSink({ stream, userId }: { stream: MediaStream; userId: string }) {
+function AudioSink({ stream, userId, volKey }: { stream: MediaStream; userId: string; volKey?: string }) {
   const ref = useRef<HTMLAudioElement>(null);
   const { outputVolume, outputDeviceId } = useSettings();
-  const userVol = useVoiceVolumes((s) => s.volumes[userId] ?? 100);
+  const userVol = useVoiceVolumes((s) => s.volumes[volKey ?? userId] ?? 100);
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream;
   }, [stream]);
@@ -102,7 +108,7 @@ function ParticipantsPanel({ remotes }: { remotes: RemoteEntry[] }) {
   if (users.length === 0) return null;
 
   return (
-    <div className="pointer-events-auto fixed bottom-20 left-4 z-40 w-60 rounded-lg bg-discord-rail/95 shadow-xl ring-1 ring-black/40">
+    <div className="pointer-events-auto fixed bottom-20 left-4 z-40 w-60 rounded-lg bg-discord-rail/95 shadow-panel ring-1 ring-black/40">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wide text-discord-muted"
@@ -111,41 +117,156 @@ function ParticipantsPanel({ remotes }: { remotes: RemoteEntry[] }) {
         <span>{open ? "▾" : "▸"}</span>
       </button>
       {open && (
-        <div className="max-h-64 space-y-2 overflow-y-auto px-3 pb-3">
+        <div className="max-h-64 space-y-0.5 overflow-y-auto px-2 pb-2">
           {users.map((r) => (
-            <ParticipantRow key={r.userId} userId={r.userId} speaking={false} />
+            <ParticipantRow key={r.userId} entry={r} />
           ))}
+          <p className="px-1 pt-1 text-[10px] leading-tight text-discord-faint">{t("voice.rowHint")}</p>
         </div>
       )}
     </div>
   );
 }
 
-function ParticipantRow({ userId }: { userId: string; speaking?: boolean }) {
+function ParticipantRow({ entry }: { entry: RemoteEntry }) {
+  const userId = entry.userId;
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const { openProfile, openDM } = useUI();
+  const [actions, setActions] = useState<{ x: number; y: number } | null>(null);
+  const [vol, setVol] = useState<{ x: number; y: number } | null>(null);
   const { data: user } = useQuery<User>({
     queryKey: ["profile", userId],
     queryFn: () => api<User>(`/api/users/${userId}`),
     staleTime: 5 * 60_000,
   });
-  const vol = useVoiceVolumes((s) => s.volumes[userId] ?? 100);
-  const setVolume = useVoiceVolumes((s) => s.setVolume);
   const name = user?.displayName ?? user?.username ?? "…";
+  const hasScreenAudio = !!entry.screen && entry.screen.getAudioTracks().length > 0;
+
+  async function openDMWith(call = false) {
+    try {
+      const dm = await api<{ id: string }>("/api/dms", { method: "POST", body: JSON.stringify({ userId }) });
+      qc.invalidateQueries({ queryKey: ["dms"] });
+      openDM(dm.id);
+      if (call) joinVoice(dm.id);
+    } catch (e) {
+      useNotify.getState().push({ title: "Can't open DM", body: (e as Error).message });
+    }
+  }
+
+  const items: MenuItem[] = [
+    { label: t("profile.viewProfile"), icon: "👤", onClick: () => openProfile(userId) },
+    { label: t("profile.message"), icon: "💬", onClick: () => openDMWith(false) },
+    { label: t("voice.call"), icon: "📞", onClick: () => openDMWith(true) },
+    {
+      label: t("friends.addFriend"),
+      icon: "➕",
+      onClick: () =>
+        user &&
+        api("/api/friends/request", {
+          method: "POST",
+          body: JSON.stringify({ username: user.username, discriminator: user.discriminator }),
+        })
+          .then(() => useNotify.getState().push({ title: "Friend request sent", body: name }))
+          .catch((e) => useNotify.getState().push({ title: "Couldn't add friend", body: (e as Error).message })),
+    },
+    { label: t("common.copy") + " ID", icon: "🆔", onClick: () => navigator.clipboard?.writeText(userId) },
+  ];
 
   return (
-    <div>
-      <div className="flex items-center gap-2">
-        <Avatar user={user ?? { username: "?", displayName: name, avatarUrl: null }} size={24} status={user?.status ?? "ONLINE"} />
+    <>
+      <button
+        onClick={(e) => setActions({ x: e.clientX, y: e.clientY })}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setVol({ x: e.clientX, y: e.clientY });
+        }}
+        className="flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-left hover:bg-discord-hover"
+      >
+        <Avatar user={user ?? { username: "?", displayName: name, avatarUrl: null }} size={26} status={user?.status ?? "ONLINE"} />
         <span className="min-w-0 flex-1 truncate text-sm text-discord-text">{name}</span>
-        <span className="text-[10px] tabular-nums text-discord-faint">{vol}%</span>
-      </div>
+        {hasScreenAudio && <span title="sharing audio" className="text-xs">🔊</span>}
+      </button>
+      {actions && <ContextMenu x={actions.x} y={actions.y} items={items} onClose={() => setActions(null)} />}
+      {vol && (
+        <VolumePopup x={vol.x} y={vol.y} userId={userId} name={name} hasScreenAudio={hasScreenAudio} onClose={() => setVol(null)} />
+      )}
+    </>
+  );
+}
+
+// Right-click volume control: separate sliders for voice and (if present) the
+// shared system audio — all local-only.
+function VolumePopup({
+  x,
+  y,
+  userId,
+  name,
+  hasScreenAudio,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  userId: string;
+  name: string;
+  hasScreenAudio: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  const volumes = useVoiceVolumes((s) => s.volumes);
+  const setVolume = useVoiceVolumes((s) => s.setVolume);
+  const voice = volumes[userId] ?? 100;
+  const screen = volumes[screenVolKey(userId)] ?? 100;
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    setTimeout(() => window.addEventListener("mousedown", onDown), 0);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 160) }}
+      className="fixed z-[80] w-56 rounded-lg bg-discord-rail p-3 shadow-panel ring-1 ring-black/50"
+    >
+      <div className="mb-2 truncate text-sm font-semibold text-white">{name}</div>
+      <label className="flex items-center justify-between text-xs text-discord-muted">
+        <span>{t("voice.userVolume")}</span>
+        <span className="tabular-nums">{voice}%</span>
+      </label>
       <input
         type="range"
         min={0}
         max={200}
-        value={vol}
+        value={voice}
         onChange={(e) => setVolume(userId, Number(e.target.value))}
-        className="mt-1 w-full accent-discord-accent"
+        className="mb-2 w-full accent-discord-accent"
       />
+      {hasScreenAudio && (
+        <>
+          <label className="flex items-center justify-between text-xs text-discord-muted">
+            <span>{t("voice.screenVolume")}</span>
+            <span className="tabular-nums">{screen}%</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={200}
+            value={screen}
+            onChange={(e) => setVolume(screenVolKey(userId), Number(e.target.value))}
+            className="w-full accent-discord-accent"
+          />
+        </>
+      )}
     </div>
   );
 }
