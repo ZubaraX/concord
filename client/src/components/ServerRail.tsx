@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useUI } from "../store/ui";
-import { PlusIcon } from "./Icons";
+import { PlusIcon, UsersIcon } from "./Icons";
 import type { Guild } from "../types";
 
 // The 72px server rail: round guild icons, add-server, home.
@@ -9,8 +9,8 @@ export default function ServerRail({ guilds }: { guilds: Guild[] }) {
 
   return (
     <nav className="flex w-[72px] flex-col items-center gap-2 bg-discord-rail py-3">
-      <RailButton label="Direct Messages" active={!currentGuildId} onClick={() => setGuild(null)}>
-        <span className="text-2xl font-bold">C</span>
+      <RailButton label="Friends & Direct Messages" active={!currentGuildId} onClick={() => setGuild(null)}>
+        <UsersIcon size={26} />
       </RailButton>
 
       <div className="my-1 h-0.5 w-8 rounded bg-discord-card" />
