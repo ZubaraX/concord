@@ -1,0 +1,81 @@
+name: Android APK
+
+# Builds the React client into a native Android app (Capacitor) and publishes a
+# debug APK to the "android" GitHub Release. Runs on demand or when the client
+# changes. GitHub's Ubuntu runners ship with the Android SDK preinstalled.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web client (server URL baked in)
+        working-directory: client
+        run: npm run build
+        env:
+          VITE_API_URL: http://138.16.224.172
+
+      - name: Add Android platform
+        working-directory: client
+        run: npx cap add android
+
+      - name: Allow mic/camera permissions in the manifest
+        run: |
+          MANIFEST=client/android/app/src/main/AndroidManifest.xml
+          sed -i '/android.permission.INTERNET/a\    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' "$MANIFEST"
+          echo "--- permissions ---"; grep uses-permission "$MANIFEST"
+
+      - name: Sync web assets into the Android project
+        working-directory: client
+        run: npx cap sync android
+
+      - name: Point Gradle at the runner's Android SDK
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > client/android/local.properties
+
+      - name: Build debug APK
+        working-directory: client/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Stage APK
+        run: cp client/android/app/build/outputs/apk/debug/app-debug.apk ./concord-android.apk
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: concord-android-apk
+          path: concord-android.apk
+
+      - name: Publish to the "android" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android
+          name: Concord for Android
+          body: |
+            Debug APK of the Concord Android app (Capacitor wrapper around the web client).
+            Install on your phone (you may need to allow "install from unknown sources").
+          files: concord-android.apk

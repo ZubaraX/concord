@@ -17,6 +17,9 @@
   },
   "comment": "All deps are build-time only: Vite bundles the renderer into dist/, so the packaged Electron app has zero runtime npm dependencies. This keeps electron-builder from running its (monorepo-destructive) production-dependency install step.",
   "devDependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
     "@tanstack/react-query": "^5.62.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
