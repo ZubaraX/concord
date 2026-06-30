@@ -194,6 +194,43 @@ body {
   100% { transform: translateY(-260px) scale(1); opacity: 0; }
 }
 
+/* ── Visual effects / motion ───────────────────────────────────────────────
+   All entrance animations are gated behind prefers-reduced-motion so they fully
+   switch off for users who ask for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes cc-pop {
+    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes cc-fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes cc-gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  @keyframes cc-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgb(var(--c-accent) / 0); }
+    50% { box-shadow: 0 0 22px 2px rgb(var(--c-accent) / 0.35); }
+  }
+
+  /* Pop-in for modals, menus and popovers. */
+  .cc-pop { animation: cc-pop 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  /* Gentle rise for list items / messages. */
+  .cc-fade-up { animation: cc-fade-up 0.2s ease-out both; }
+  /* Slowly drifting multi-stop gradient (login screen). */
+  .cc-anim-gradient { background-size: 220% 220%; animation: cc-gradient 16s ease infinite; }
+  /* Pulsing accent glow (e.g. incoming-call avatar). */
+  .cc-glow { animation: cc-glow 1.8s ease-in-out infinite; }
+}
+
+/* Subtle lift on interactive icon/rail buttons. */
+.cc-lift { transition: transform 0.12s ease, filter 0.12s ease; }
+.cc-lift:hover { transform: translateY(-2px); }
+.cc-lift:active { transform: translateY(0) scale(0.96); }
+
 /* Thin themed scrollbars. */
 * {
   scrollbar-width: thin;

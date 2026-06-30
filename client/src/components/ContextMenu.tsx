@@ -49,7 +49,7 @@ export default function ContextMenu({
       style={{ left, top }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
-      className="fixed z-[70] w-52 rounded-md bg-discord-rail p-1.5 shadow-xl ring-1 ring-black/40"
+      className="cc-pop fixed z-[70] w-52 rounded-md bg-discord-rail p-1.5 shadow-xl ring-1 ring-black/40"
     >
       {items.map((it, i) => (
         <button

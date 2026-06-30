@@ -250,7 +250,7 @@ export default function ChatArea() {
       <div className="flex-1 overflow-y-auto py-4">
         <Welcome name={channel.name} isDM={isDM} />
         {messages.map((m, i) => (
-          <div key={m.id}>
+          <div key={m.id} className="cc-fade-up">
             {firstUnreadId === m.id && (
               <div className="my-1 flex items-center gap-2 px-4">
                 <div className="h-px flex-1 bg-discord-danger/60" />

@@ -13,7 +13,7 @@ export default function WhatsNewModal({
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-discord-rail shadow-2xl ring-1 ring-black/40"
+        className="cc-pop flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-discord-rail shadow-2xl ring-1 ring-black/40"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-discord-accent/15 px-6 py-5">

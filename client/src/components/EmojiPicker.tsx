@@ -31,7 +31,7 @@ export default function EmojiPicker({ onPick, onClose }: { onPick: (e: string) =
   return (
     <div
       ref={ref}
-      className="absolute bottom-12 right-0 z-50 grid max-h-64 w-72 grid-cols-8 gap-0.5 overflow-y-auto rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40"
+      className="cc-pop absolute bottom-12 right-0 z-50 grid max-h-64 w-72 grid-cols-8 gap-0.5 overflow-y-auto rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40"
     >
       {EMOJIS.map((e, i) => (
         <button

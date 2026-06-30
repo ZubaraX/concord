@@ -15,8 +15,8 @@ export default function IncomingCallModal({
 
   return (
     <div className="fixed inset-x-0 top-6 z-[80] flex justify-center">
-      <div className="w-80 rounded-xl bg-discord-rail p-5 text-center shadow-2xl ring-1 ring-black/40">
-        <div className="mx-auto mb-3 flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-discord-green text-3xl">
+      <div className="cc-pop w-80 rounded-xl bg-discord-rail p-5 text-center shadow-2xl ring-1 ring-black/40">
+        <div className="cc-glow mx-auto mb-3 flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-discord-green text-3xl">
           📞
         </div>
         <div className="text-lg font-semibold text-white">{name}</div>

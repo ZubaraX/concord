@@ -78,8 +78,8 @@ export default function AuthPage() {
     : t("auth.resetPassword");
 
   return (
-    <div className="flex h-full items-center justify-center bg-gradient-to-br from-discord-accent to-discord-accentDark p-4">
-      <div className="w-full max-w-md rounded-md bg-discord-bg p-8 shadow-2xl">
+    <div className="cc-anim-gradient flex h-full items-center justify-center bg-gradient-to-br from-discord-accent via-discord-accentDark to-discord-accent p-4">
+      <div className="cc-pop w-full max-w-md rounded-md bg-discord-bg p-8 shadow-2xl">
         <h1 className="text-center text-2xl font-bold text-white">{title}</h1>
         <p className="mt-1 text-center text-sm text-discord-muted">{subtitle}</p>
 

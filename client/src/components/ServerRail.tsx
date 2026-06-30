@@ -60,7 +60,7 @@ function RailButton({
       disabled={disabled}
       onClick={onClick}
       className={clsx(
-        "group relative flex h-12 w-12 items-center justify-center overflow-hidden bg-discord-card text-discord-text transition-all duration-200",
+        "cc-lift group relative flex h-12 w-12 items-center justify-center overflow-hidden bg-discord-card text-discord-text transition-all duration-200",
         active ? "rounded-2xl bg-discord-accent text-white" : "rounded-3xl hover:rounded-2xl",
         accent ? "hover:bg-discord-green hover:text-white" : "hover:bg-discord-accent hover:text-white"
       )}

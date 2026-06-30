@@ -99,7 +99,7 @@ export default function GifPicker({ onPick, onClose }: { onPick: (url: string) =
   return (
     <div
       ref={ref}
-      className="absolute bottom-12 right-0 z-50 flex h-[30rem] w-[26rem] flex-col rounded-lg bg-discord-rail p-3 shadow-xl ring-1 ring-black/40"
+      className="cc-pop absolute bottom-12 right-0 z-50 flex h-[30rem] w-[26rem] flex-col rounded-lg bg-discord-rail p-3 shadow-xl ring-1 ring-black/40"
     >
       <input
         autoFocus

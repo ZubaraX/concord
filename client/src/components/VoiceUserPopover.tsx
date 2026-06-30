@@ -104,7 +104,7 @@ export default function VoiceUserPopover({
     <div
       ref={ref}
       style={{ left, top }}
-      className="fixed z-[80] w-60 rounded-lg bg-discord-rail p-3 shadow-panel ring-1 ring-black/50"
+      className="cc-pop fixed z-[80] w-60 rounded-lg bg-discord-rail p-3 shadow-panel ring-1 ring-black/50"
     >
       <div className="mb-2 flex items-center gap-2">
         <Avatar user={user ?? { username: "?", displayName: name, avatarUrl: null }} size={30} status={user?.status ?? "ONLINE"} />
