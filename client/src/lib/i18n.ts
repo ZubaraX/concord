@@ -37,6 +37,8 @@ const en = {
 
   // App chrome
   "app.connecting": "Connecting to Concord…",
+  "android.updateTitle": "Update available — v{v}",
+  "android.update": "Update",
   "nav.home": "Home",
   "nav.friends": "Friends",
   "nav.directMessages": "Direct Messages",
@@ -258,6 +260,8 @@ const ru: Record<keyof typeof en, string> = {
   "auth.backToLogin": "Назад ко входу",
 
   "app.connecting": "Подключение к Concord…",
+  "android.updateTitle": "Доступно обновление — v{v}",
+  "android.update": "Обновить",
   "nav.home": "Главная",
   "nav.friends": "Друзья",
   "nav.directMessages": "Личные сообщения",

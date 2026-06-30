@@ -61,8 +61,12 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Stage APK
-        run: cp client/android/app/build/outputs/apk/debug/app-debug.apk ./concord-android.apk
+      - name: Stage APK + update manifest
+        run: |
+          cp client/android/app/build/outputs/apk/debug/app-debug.apk ./concord-android.apk
+          VERSION=$(node -p "require('./client/package.json').version")
+          printf '{ "version": "%s", "url": "https://github.com/ZubaraX/concord/releases/download/android/concord-android.apk" }\n' "$VERSION" > android-latest.json
+          echo "manifest: $(cat android-latest.json)"
 
       - name: Upload as workflow artifact
         uses: actions/upload-artifact@v4
@@ -78,4 +82,7 @@ jobs:
           body: |
             Debug APK of the Concord Android app (Capacitor wrapper around the web client).
             Install on your phone (you may need to allow "install from unknown sources").
-          files: concord-android.apk
+            The app checks this release on launch and offers an in-app update when a newer APK is published.
+          files: |
+            concord-android.apk
+            android-latest.json

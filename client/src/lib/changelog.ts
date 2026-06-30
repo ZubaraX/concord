@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.4.12",
+    date: "2026-06-30",
+    items: [
+      "Android: проверка обновлений при запуске — баннер «Обновить» скачивает и ставит новый APK в один тап (Android не даёт обновлять APK молча)",
+    ],
+  },
+  {
     version: "0.4.11",
     date: "2026-06-30",
     items: [
