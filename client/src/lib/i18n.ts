@@ -146,6 +146,9 @@ const en = {
   "voice.rowHint": "Click for actions · right-click for volume",
   "voice.userVolume": "User volume",
   "voice.screenVolume": "Screen audio",
+  "voice.hideScreen": "Hide screen share",
+  "voice.showScreen": "Show screen share",
+  "common.more": "More",
 
   // Members / profile
   "members.title": "Members",
@@ -356,6 +359,9 @@ const ru: Record<keyof typeof en, string> = {
   "voice.rowHint": "Клик — действия · правый клик — громкость",
   "voice.userVolume": "Громкость пользователя",
   "voice.screenVolume": "Звук демонстрации",
+  "voice.hideScreen": "Скрыть демонстрацию",
+  "voice.showScreen": "Показать демонстрацию",
+  "common.more": "Ещё",
 
   "members.title": "Участники",
   "members.online": "В сети",

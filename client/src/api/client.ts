@@ -75,13 +75,18 @@ export interface UploadedFile {
 }
 
 /** Upload a single file (no size cap server-side). Returns attachment metadata. */
-export async function uploadFile(file: File): Promise<UploadedFile> {
+export async function uploadFile(file: File, retry = true): Promise<UploadedFile> {
   const form = new FormData();
   form.append("file", file);
   const headers = new Headers();
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
   // Note: do NOT set Content-Type; the browser adds the multipart boundary.
   const res = await fetch(serverPath("/api/upload"), { method: "POST", body: form, headers });
+  // Same transparent refresh-on-401 as api(): the 15-min access token often
+  // expires between sessions, which used to make uploads fail intermittently.
+  if (res.status === 401 && retry && (await refreshAccess())) {
+    return uploadFile(file, false);
+  }
   if (!res.ok) throw new Error(`Upload failed (${res.status})`);
   return res.json();
 }
