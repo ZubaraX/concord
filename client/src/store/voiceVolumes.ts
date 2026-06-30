@@ -8,6 +8,9 @@ interface VoiceVolumesState {
   setVolume: (userId: string, percent: number) => void;
 }
 
+// Volume key for a user's screen-share audio (separate from their voice).
+export const screenVolKey = (userId: string) => `${userId}::screen`;
+
 export const useVoiceVolumes = create<VoiceVolumesState>()(
   persist(
     (set) => ({

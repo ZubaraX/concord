@@ -7,7 +7,9 @@ import { useVoice } from "../store/voice";
 import { useUnread } from "../store/unread";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, sendVoiceEmoji } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
+import { useAuth } from "../store/auth";
 import { MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon } from "./Icons";
+import VoiceUserPopover from "./VoiceUserPopover";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
@@ -15,12 +17,17 @@ import UserPanel from "./UserPanel";
 import CreateChannelModal from "./CreateChannelModal";
 import Avatar from "./Avatar";
 
+// Shared popover state shape for adjusting a call participant's volume/actions.
+type VolPopover = { userId: string; x: number; y: number } | null;
+
 export default function ChannelSidebar() {
   const { currentGuildId, currentChannelId, setChannel, openModal, openDM, openFriends } = useUI();
   const { t } = useI18n();
   const voice = useVoice();
+  const myId = useAuth((s) => s.user?.id);
   const unread = useUnread((s) => s.counts);
   const [createCtx, setCreateCtx] = useState<{ type: "TEXT" | "VOICE"; parentId?: string } | null>(null);
+  const [volPop, setVolPop] = useState<VolPopover>(null);
 
   const { data: guild } = useQuery<Guild>({
     queryKey: ["guild", currentGuildId],
@@ -97,12 +104,24 @@ export default function ChannelSidebar() {
                   onClick={() => (c.type === "VOICE" ? joinVoice(c.id) : c.type === "TEXT" && setChannel(c.id))}
                 />
                 {c.type === "VOICE" &&
-                  (voice.occupancy[c.id] ?? []).map((uid) => (
-                    <div key={uid} className="ml-9 flex items-center gap-1.5 py-0.5 text-sm text-discord-muted">
-                      <span className="h-2 w-2 rounded-full bg-discord-green" />
-                      <span className="truncate">{nameOf[uid] ?? t("common.someone")}</span>
-                    </div>
-                  ))}
+                  (voice.occupancy[c.id] ?? []).map((uid) => {
+                    // Clicking someone in the call you're in opens their volume/actions.
+                    const clickable = voice.channelId === c.id && uid !== myId;
+                    return (
+                      <button
+                        key={uid}
+                        onClick={clickable ? (e) => setVolPop({ userId: uid, x: e.clientX, y: e.clientY }) : undefined}
+                        title={clickable ? t("voice.adjustVolume") : undefined}
+                        className={clsx(
+                          "ml-9 flex w-[calc(100%-2.25rem)] items-center gap-1.5 rounded px-1 py-0.5 text-left text-sm text-discord-muted",
+                          clickable && "cursor-pointer hover:bg-discord-hover hover:text-discord-text"
+                        )}
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-discord-green" />
+                        <span className="truncate">{nameOf[uid] ?? t("common.someone")}</span>
+                      </button>
+                    );
+                  })}
               </div>
             ))}
           </div>
@@ -129,6 +148,9 @@ export default function ChannelSidebar() {
         <VoiceControlBar channelName={channels.find((c) => c.id === voice.channelId)?.name ?? "Voice"} />
       )}
       <UserPanel />
+      {volPop && (
+        <VoiceUserPopover userId={volPop.userId} x={volPop.x} y={volPop.y} onClose={() => setVolPop(null)} />
+      )}
     </aside>
   );
 }
@@ -278,7 +300,9 @@ function HomeSidebar({
 }) {
   const { t } = useI18n();
   const voice = useVoice();
+  const myId = useAuth((s) => s.user?.id);
   const unread = useUnread((s) => s.counts);
+  const [volPop, setVolPop] = useState<VolPopover>(null);
   const { data: dms = [] } = useQuery<DMSummary[]>({
     queryKey: ["dms"],
     queryFn: () => api<DMSummary[]>("/api/dms"),
@@ -305,26 +329,54 @@ function HomeSidebar({
         </div>
         {dms.length === 0 && <div className="px-2 py-1 text-sm text-discord-faint">{t("nav.noDms")}</div>}
         {dms.map((dm) => {
-          const inCall = (voice.occupancy[dm.id] ?? []).length > 0;
+          const occ = voice.occupancy[dm.id] ?? [];
+          const inCall = occ.length > 0;
+          const callHere = voice.channelId === dm.id;
+          const others = callHere ? occ.filter((u) => u !== myId) : [];
+          const ringing = callHere && others.length === 0; // you're in, waiting for them
           const n = activeChannelId === dm.id ? 0 : unread[dm.id] || 0;
           return (
-            <button
-              key={dm.id}
-              onClick={() => onDM(dm.id)}
-              className={clsx(
-                "mt-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm",
-                activeChannelId === dm.id
-                  ? "bg-discord-active text-white"
-                  : n > 0
-                  ? "font-semibold text-white hover:bg-discord-hover"
-                  : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+            <div key={dm.id}>
+              <button
+                onClick={() => onDM(dm.id)}
+                className={clsx(
+                  "mt-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm",
+                  activeChannelId === dm.id
+                    ? "bg-discord-active text-white"
+                    : n > 0
+                    ? "font-semibold text-white hover:bg-discord-hover"
+                    : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+                )}
+              >
+                <Avatar user={dm.otherUser} size={28} status={dm.otherUser?.status ?? "OFFLINE"} />
+                <span className="truncate">{dm.name}</span>
+                {inCall && (
+                  <span className="ml-auto text-discord-green">
+                    <PhoneIcon size={13} className={ringing ? "animate-pulse" : undefined} />
+                  </span>
+                )}
+                {n > 0 && <span className={clsx("rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white", inCall ? "ml-1" : "ml-auto")}>{n}</span>}
+              </button>
+
+              {/* Active DM call: show "calling…" while alone, else the participants. */}
+              {ringing && (
+                <div className="ml-9 mt-0.5 flex items-center gap-1.5 py-0.5 text-xs text-discord-green">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-discord-green" />
+                  {t("voice.calling")}
+                </div>
               )}
-            >
-              <Avatar user={dm.otherUser} size={28} status={dm.otherUser?.status ?? "OFFLINE"} />
-              <span className="truncate">{dm.name}</span>
-              {inCall && <span className="ml-auto text-discord-green"><PhoneIcon size={13} /></span>}
-              {n > 0 && <span className={clsx("rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white", inCall ? "ml-1" : "ml-auto")}>{n}</span>}
-            </button>
+              {others.map((uid) => (
+                <button
+                  key={uid}
+                  onClick={(e) => setVolPop({ userId: uid, x: e.clientX, y: e.clientY })}
+                  title={t("voice.adjustVolume")}
+                  className="ml-9 mt-0.5 flex w-[calc(100%-2.25rem)] cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-left text-sm text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+                >
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-discord-green" />
+                  <span className="truncate">{uid === dm.otherUser?.id ? dm.name : t("common.someone")}</span>
+                </button>
+              ))}
+            </div>
           );
         })}
       </div>
@@ -332,6 +384,9 @@ function HomeSidebar({
         <VoiceControlBar channelName={dms.find((d) => d.id === voice.channelId)?.name ?? "Call"} />
       )}
       <UserPanel />
+      {volPop && (
+        <VoiceUserPopover userId={volPop.userId} x={volPop.x} y={volPop.y} onClose={() => setVolPop(null)} />
+      )}
     </aside>
   );
 }
