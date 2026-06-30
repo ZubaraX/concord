@@ -226,6 +226,13 @@ body {
   .cc-glow { animation: cc-glow 1.8s ease-in-out infinite; }
 }
 
+/* Brief highlight when you jump to a message (reply → original). */
+@keyframes cc-flash {
+  0%, 100% { background-color: transparent; }
+  20% { background-color: rgb(var(--c-accent) / 0.22); }
+}
+.cc-flash { animation: cc-flash 1.5s ease-out; }
+
 /* Subtle lift on interactive icon/rail buttons. */
 .cc-lift { transition: transform 0.12s ease, filter 0.12s ease; }
 .cc-lift:hover { transform: translateY(-2px); }

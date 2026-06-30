@@ -9,6 +9,15 @@ import Avatar from "./Avatar";
 import { renderMarkdown } from "../lib/markdown";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 
+// Scroll to a message (if it's currently loaded) and flash-highlight it.
+export function jumpToMessage(id: string) {
+  const el = document.getElementById(`msg-${id}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("cc-flash");
+  setTimeout(() => el.classList.remove("cc-flash"), 1600);
+}
+
 function MessageItem({
   message,
   grouped,
@@ -87,10 +96,11 @@ function MessageItem({
 
   return (
     <div
+      id={`msg-${message.id}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
-      className={`group relative flex gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
+      className={`group relative flex scroll-mt-6 gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
     >
       <div className="w-10 shrink-0">
         {!grouped ? (
@@ -122,10 +132,15 @@ function MessageItem({
         )}
 
         {message.replyTo && (
-          <div className="mb-0.5 truncate text-xs text-discord-muted">
-            ↰ <strong>{message.replyTo.author.displayName ?? message.replyTo.author.username}</strong>{" "}
-            {message.replyTo.content.slice(0, 80)}
-          </div>
+          <button
+            onClick={() => message.replyTo && jumpToMessage(message.replyTo.id)}
+            className="mb-0.5 flex max-w-full items-center gap-1 truncate text-left text-xs text-discord-muted hover:text-discord-text"
+            title="Jump to message"
+          >
+            <span className="text-discord-faint">↰</span>
+            <strong>{message.replyTo.author.displayName ?? message.replyTo.author.username}</strong>{" "}
+            <span className="truncate">{message.replyTo.content.slice(0, 80)}</span>
+          </button>
         )}
 
         {message.pinned && <div className="mb-0.5 text-[10px] font-semibold text-yellow-500">📌 Pinned</div>}
