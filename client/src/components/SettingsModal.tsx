@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useAuth } from "../store/auth";
 import { useSettings } from "../store/settings";
 import { useI18n, LANGUAGES, type Lang } from "../lib/i18n";
-import { appVersion } from "../lib/changelog";
+import { appVersion, recentChanges } from "../lib/changelog";
+import WhatsNewModal from "./WhatsNewModal";
 import { getServerUrl, setServerUrl, serverPinned } from "../lib/serverUrl";
 import type { PresenceStatus } from "../types";
 import Modal from "./Modal";
@@ -43,6 +44,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [server, setServer] = useState(getServerUrl());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
 
   if (!user) return null;
 
@@ -229,12 +231,16 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             {t("settings.logout")}
           </button>
 
-          <div className="flex items-center gap-2 pt-2 text-xs text-discord-faint">
+          <div className="flex items-center gap-3 pt-2 text-xs text-discord-faint">
             <span className="rounded bg-discord-card px-2 py-1 font-mono">Concord</span>
             <span>{t("settings.version")} {appVersion()}</span>
+            <button onClick={() => setShowWhatsNew(true)} className="text-discord-link hover:underline">
+              {t("settings.whatsNew")}
+            </button>
           </div>
         </div>
       )}
+      {showWhatsNew && <WhatsNewModal entries={recentChanges()} onClose={() => setShowWhatsNew(false)} />}
     </Modal>
   );
 }

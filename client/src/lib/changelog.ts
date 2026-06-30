@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.4.10",
+    date: "2026-06-30",
+    items: [
+      "Кнопка «Что нового» в Настройках → Приложение — можно открыть список изменений вручную в любой момент (раньше окно иногда не всплывало после обновления)",
+    ],
+  },
+  {
     version: "0.4.9",
     date: "2026-06-30",
     items: [
@@ -205,6 +212,11 @@ export function cmpVersion(a: string, b: string): number {
     if (d !== 0) return d;
   }
   return 0;
+}
+
+/** The most recent changelog entries (newest first) — for the manual "What's New". */
+export function recentChanges(n = 6): ChangelogEntry[] {
+  return CHANGELOG.slice(0, n);
 }
 
 /** Changelog entries strictly newer than `since`, up to and including the current version. */
