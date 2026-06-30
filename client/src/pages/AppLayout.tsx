@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { connectSocket, disconnectSocket, getSocket } from "../lib/socket";
@@ -37,6 +38,8 @@ export default function AppLayout() {
   const ringingChannels = useRef<Set<string>>(new Set());
   const [incoming, setIncoming] = useState<{ channelId: string; name: string } | null>(null);
   const [whatsNew, setWhatsNew] = useState<ChangelogEntry[]>([]);
+  // Mobile: the rail + channel sidebar slide in as a drawer over the chat.
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     connectSocket();
@@ -178,12 +181,32 @@ export default function AppLayout() {
   // Home view with nothing open → Friends page; otherwise the chat.
   const showFriends = currentGuildId === null && currentChannelId === null;
 
+  // On phones, choosing a channel/guild slides the nav drawer away to show chat.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [currentChannelId, currentGuildId]);
+
   return (
-    <div className="flex h-full w-full overflow-hidden">
-      <ServerRail guilds={guilds} />
-      <ChannelSidebar />
-      {showFriends ? <FriendsPage /> : <ChatArea />}
-      <MemberList />
+    <div className="relative flex h-full w-full overflow-hidden">
+      {/* Server rail + channel sidebar: a slide-in drawer on phones, static on desktop. */}
+      <div
+        className={clsx(
+          "flex h-full shrink-0 transition-transform duration-200 md:static md:z-auto md:translate-x-0",
+          "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-2xl",
+          navOpen ? "translate-x-0" : "max-md:-translate-x-full"
+        )}
+      >
+        <ServerRail guilds={guilds} />
+        <ChannelSidebar />
+      </div>
+      {navOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setNavOpen(false)} />
+      )}
+
+      <div className="flex min-w-0 flex-1">
+        {showFriends ? <FriendsPage onOpenNav={() => setNavOpen(true)} /> : <ChatArea onOpenNav={() => setNavOpen(true)} />}
+        <MemberList />
+      </div>
 
       <VoiceOverlay />
       <Toasts />

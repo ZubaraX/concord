@@ -9,7 +9,7 @@ import { getLastRead, setLastRead } from "../lib/lastRead";
 import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera } from "../lib/voice";
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
-import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PinIcon } from "./Icons";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PinIcon, MenuIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
@@ -22,7 +22,7 @@ interface ChannelInfo {
   guildId: string | null;
 }
 
-export default function ChatArea() {
+export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const { currentChannelId } = useUI();
   const { t } = useI18n();
   const voice = useVoice();
@@ -191,6 +191,13 @@ export default function ChatArea() {
         </div>
       )}
       <header className="flex h-12 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
+        <button
+          onClick={onOpenNav}
+          className="-ml-1 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white md:hidden"
+          title="Channels"
+        >
+          <MenuIcon size={20} />
+        </button>
         <span className="text-xl text-discord-faint">{isDM ? "@" : "#"}</span>
         <span className="font-semibold text-white">{channel.name}</span>
         {channel.topic && (

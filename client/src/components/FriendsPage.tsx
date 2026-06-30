@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { joinVoice } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
-import { UsersIcon, MessageIcon, PhoneIcon, CheckIcon, XIcon } from "./Icons";
+import { UsersIcon, MessageIcon, PhoneIcon, CheckIcon, XIcon, MenuIcon } from "./Icons";
 import type { Friend, User } from "../types";
 import Avatar from "./Avatar";
 
@@ -14,7 +14,7 @@ interface Pending {
   outgoing: { id: string; user: User }[];
 }
 
-export default function FriendsPage() {
+export default function FriendsPage({ onOpenNav }: { onOpenNav?: () => void }) {
   const [tab, setTab] = useState<Tab>("online");
   const qc = useQueryClient();
   const { openDM } = useUI();
@@ -42,6 +42,9 @@ export default function FriendsPage() {
   return (
     <main className="flex flex-1 flex-col bg-discord-bg">
       <header className="flex h-12 items-center gap-4 border-b border-black/20 px-4 shadow-sm">
+        <button onClick={onOpenNav} className="-ml-1 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white md:hidden" title="Menu">
+          <MenuIcon size={20} />
+        </button>
         <span className="flex items-center gap-2 font-semibold text-white"><UsersIcon size={18} /> {t("friends.title")}</span>
         <div className="flex gap-1">
           <TabBtn active={tab === "online"} onClick={() => setTab("online")}>{t("friends.online")}</TabBtn>
