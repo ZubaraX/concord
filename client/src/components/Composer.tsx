@@ -302,12 +302,13 @@ export default function Composer({
         </div>
       )}
 
-      <div className={`flex items-end gap-3 px-4 py-2.5 ${rec ? "hidden" : ""}`}>
+      {/* Uniform 36px square controls so nothing drifts on narrow screens. */}
+      <div className={`flex items-end gap-1 px-2 py-2 sm:gap-2 sm:px-3 ${rec ? "hidden" : ""}`}>
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => e.target.files && addFiles(e.target.files)} />
         <button
           onClick={() => fileInput.current?.click()}
           disabled={uploading}
-          className="pb-1.5 leading-none text-discord-muted hover:text-discord-text disabled:opacity-50"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text disabled:opacity-50"
           title={t("composer.uploadFile")}
         >
           {uploading ? <span className="text-2xl leading-none">…</span> : <PaperclipIcon size={22} />}
@@ -321,25 +322,25 @@ export default function Composer({
           onPaste={onPaste}
           onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0)}
           placeholder={t("composer.message", { name: channelName })}
-          className="max-h-48 flex-1 resize-none bg-transparent py-1 text-discord-text outline-none placeholder:text-discord-faint"
+          className="max-h-48 min-w-0 flex-1 resize-none bg-transparent py-2 text-discord-text outline-none placeholder:text-discord-faint"
         />
         <button
           onClick={startRecording}
-          className="pb-1.5 leading-none text-discord-muted hover:text-discord-text"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text"
           title={t("composer.record")}
         >
           <MicIcon size={20} />
         </button>
         <button
           onClick={() => setShowGif((v) => !v)}
-          className="pb-1 text-sm font-bold leading-none text-discord-muted hover:text-discord-text"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text"
           title={t("composer.gif")}
         >
           GIF
         </button>
         <button
           onClick={() => setShowEmoji((v) => !v)}
-          className="pb-1.5 leading-none text-discord-muted hover:text-discord-text"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text"
           title={t("composer.emoji")}
         >
           <SmileIcon size={22} />

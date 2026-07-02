@@ -355,7 +355,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                 <HeaderBtn active={voice.muted} onClick={toggleMute} title={voice.muted ? t("voice.unmute") : t("voice.mute")}>
                   {voice.muted ? <MicOffIcon size={16} /> : <MicIcon size={16} />}
                 </HeaderBtn>
-                <HeaderBtn active={voice.deafened} onClick={toggleDeafen} title={voice.deafened ? t("voice.undeafen") : t("voice.deafen")}>
+                <HeaderBtn className="max-sm:hidden" active={voice.deafened} onClick={toggleDeafen} title={voice.deafened ? t("voice.undeafen") : t("voice.deafen")}>
                   {voice.deafened ? <HeadphonesOffIcon size={16} /> : <HeadphonesIcon size={16} />}
                 </HeaderBtn>
                 <HeaderBtn active={voice.cameraOn} onClick={toggleCamera} title={voice.cameraOn ? t("voice.cameraOff") : t("voice.camera")}>
@@ -366,7 +366,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                     <FlipCameraIcon size={16} />
                   </HeaderBtn>
                 )}
-                <HeaderBtn active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
+                <HeaderBtn className="max-sm:hidden" active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
                   <ScreenIcon size={16} />
                 </HeaderBtn>
                 {isAndroidApp() && (
@@ -470,12 +470,12 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   );
 }
 
-function HeaderBtn({ active, onClick, title, children }: { active?: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
+function HeaderBtn({ active, onClick, title, children, className = "" }: { active?: boolean; onClick: () => void; title?: string; children: React.ReactNode; className?: string }) {
   return (
     <button
       onClick={onClick}
       title={title}
-      className={`flex items-center justify-center rounded-full p-2 ${active ? "bg-discord-accent text-white" : "bg-discord-card text-discord-text hover:bg-discord-hover"}`}
+      className={`flex shrink-0 items-center justify-center rounded-full p-2 ${active ? "bg-discord-accent text-white" : "bg-discord-card text-discord-text hover:bg-discord-hover"} ${className}`}
     >
       {children}
     </button>
