@@ -9,6 +9,41 @@ import { getIO, channelRoom } from "../realtime/io.js";
 export async function messageRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
+  // Message search: one channel (DM) or a whole guild. SQLite LIKE is
+  // case-sensitive for non-ASCII (Cyrillic!), so we match several case
+  // variants of the query — good enough without a full FTS index.
+  app.get("/search", async (req, reply) => {
+    const { q, guildId, channelId } = req.query as { q?: string; guildId?: string; channelId?: string };
+    const query = (q ?? "").trim();
+    if (query.length < 2) return reply.code(400).send({ error: "Query too short (min 2 chars)" });
+
+    if (channelId) {
+      if (!(await getAccessibleChannel(req.userId, channelId))) {
+        return reply.code(403).send({ error: "No access to this channel" });
+      }
+    } else if (guildId) {
+      const member = await prisma.guildMember.findUnique({
+        where: { guildId_userId: { guildId, userId: req.userId } },
+      });
+      if (!member) return reply.code(403).send({ error: "Not a member of this guild" });
+    } else {
+      return reply.code(400).send({ error: "guildId or channelId required" });
+    }
+
+    const capitalized = query.charAt(0).toUpperCase() + query.slice(1).toLowerCase();
+    const variants = [...new Set([query, query.toLowerCase(), query.toUpperCase(), capitalized])];
+    const messages = await prisma.message.findMany({
+      where: {
+        ...(channelId ? { channelId } : { channel: { guildId } }),
+        OR: variants.map((v) => ({ content: { contains: v } })),
+      },
+      include: messageInclude,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return reply.send(messages);
+  });
+
   // GET history (cursor-paginated, unlimited depth).
   app.get("/channels/:channelId/messages", async (req, reply) => {
     const { channelId } = req.params as { channelId: string };

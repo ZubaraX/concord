@@ -262,9 +262,15 @@ export function attachGateway(app: FastifyInstance) {
       for (const m of memberships) socket.join(guildRoom(m.guildId));
 
       if (cameOnline) {
-        await prisma.user.update({ where: { id: userId }, data: { status: "ONLINE" } }).catch(() => {});
+        // Only flip OFFLINE → ONLINE automatically; a manually chosen status
+        // (DND/IDLE, set via PATCH /me) survives socket reconnects.
+        const cur = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+        const status = cur && cur.status !== "OFFLINE" ? cur.status : "ONLINE";
+        if (cur?.status !== status) {
+          await prisma.user.update({ where: { id: userId }, data: { status } }).catch(() => {});
+        }
         for (const m of memberships) {
-          io.to(guildRoom(m.guildId)).emit("presence:update", { userId, status: "ONLINE" });
+          io.to(guildRoom(m.guildId)).emit("presence:update", { userId, status });
         }
       }
 

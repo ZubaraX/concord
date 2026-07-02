@@ -10,11 +10,12 @@ import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCa
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
 import { isAndroidApp } from "../lib/platform";
-import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon } from "./Icons";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
 import BookmarksModal from "./BookmarksModal";
+import SearchModal from "./SearchModal";
 
 interface ChannelInfo {
   id: string;
@@ -36,6 +37,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const [showPins, setShowPins] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -212,8 +214,16 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
 
         {/* During a DM call on a phone every pixel goes to the call controls. */}
         <button
-          onClick={() => setShowPins(true)}
+          onClick={() => setShowSearch(true)}
           className={`ml-auto shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${isDM && inThisCall ? "max-sm:hidden" : ""}`}
+          title={t("search.title")}
+        >
+          <SearchIcon size={18} />
+        </button>
+
+        <button
+          onClick={() => setShowPins(true)}
+          className={`shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${isDM && inThisCall ? "max-sm:hidden" : ""}`}
           title={t("channel.pinnedMessages")}
         >
           <PinIcon size={18} />
@@ -322,6 +332,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
 
       {showPins && <PinsModal channelId={channel.id} onClose={() => setShowPins(false)} />}
       {showBookmarks && <BookmarksModal onClose={() => setShowBookmarks(false)} />}
+      {showSearch && <SearchModal guildId={channel.guildId} channelId={channel.id} onClose={() => setShowSearch(false)} />}
     </main>
   );
 }

@@ -171,6 +171,13 @@ export async function authRoutes(app: FastifyInstance) {
       select: { guildId: true },
     });
     for (const m of memberships) emitToGuild(m.guildId, "user:update", { guildId: m.guildId });
+    // A manual status change (e.g. DND) must also hit the live presence maps,
+    // otherwise the connect-time ONLINE keeps overriding it in member lists.
+    if (body.data.status) {
+      for (const m of memberships) {
+        emitToGuild(m.guildId, "presence:update", { userId: req.userId, status: body.data.status });
+      }
+    }
 
     return reply.send({ user: publicUser(user) });
   });

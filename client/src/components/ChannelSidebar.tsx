@@ -11,8 +11,10 @@ import { useSpeaking, type SpeakStream } from "../lib/speaking";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
 import { isAndroidApp } from "../lib/platform";
-import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon } from "./Icons";
+import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon } from "./Icons";
+import { useMutes } from "../store/mutes";
 import VoiceUserPopover from "./VoiceUserPopover";
+import ContextMenu from "./ContextMenu";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
@@ -31,6 +33,8 @@ export default function ChannelSidebar() {
   const unread = useUnread((s) => s.counts);
   const [createCtx, setCreateCtx] = useState<{ type: "TEXT" | "VOICE"; parentId?: string } | null>(null);
   const [volPop, setVolPop] = useState<VolPopover>(null);
+  const [chanMenu, setChanMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
+  const mutes = useMutes();
 
   const { data: guild } = useQuery<Guild>({
     queryKey: ["guild", currentGuildId],
@@ -74,12 +78,22 @@ export default function ChannelSidebar() {
 
   return (
     <aside className="flex w-60 flex-col bg-discord-sidebar">
-      <div className="flex h-12 items-center justify-between border-b border-black/20 px-4 font-semibold shadow-sm">
-        <span className="truncate">{guild?.name ?? "…"}</span>
+      <div className="flex h-12 items-center gap-1 border-b border-black/20 px-4 font-semibold shadow-sm">
+        <span className="min-w-0 flex-1 truncate">{guild?.name ?? "…"}</span>
+        <button
+          onClick={() => mutes.toggleGuild(currentGuildId)}
+          title={mutes.guilds.includes(currentGuildId) ? t("mute.serverOff") : t("mute.server")}
+          className={clsx(
+            "shrink-0 rounded p-1.5 transition hover:bg-discord-hover",
+            mutes.guilds.includes(currentGuildId) ? "text-discord-danger" : "text-discord-muted hover:text-white"
+          )}
+        >
+          {mutes.guilds.includes(currentGuildId) ? <BellOffIcon size={16} /> : <BellIcon size={16} />}
+        </button>
         <button
           onClick={() => openModal("invite")}
           title={t("nav.invitePeople")}
-          className="rounded px-1.5 py-1 text-sm text-discord-muted transition hover:bg-discord-hover hover:text-white"
+          className="shrink-0 rounded px-1.5 py-1 text-sm text-discord-muted transition hover:bg-discord-hover hover:text-white"
         >
           {t("nav.invite")}
         </button>
@@ -113,7 +127,9 @@ export default function ChannelSidebar() {
                   channel={c}
                   active={c.type === "VOICE" ? voice.channelId === c.id : currentChannelId === c.id}
                   unread={c.type === "TEXT" ? unread[c.id] || 0 : 0}
+                  muted={mutes.channels.includes(c.id)}
                   onClick={() => (c.type === "VOICE" ? joinVoice(c.id) : c.type === "TEXT" && setChannel(c.id))}
+                  onContextMenu={(e) => { e.preventDefault(); setChanMenu({ x: e.clientX, y: e.clientY, channelId: c.id }); }}
                 />
                 {c.type === "VOICE" &&
                   (voice.occupancy[c.id] ?? []).map((uid) => {
@@ -169,6 +185,20 @@ export default function ChannelSidebar() {
       <UserPanel />
       {volPop && (
         <VoiceUserPopover userId={volPop.userId} x={volPop.x} y={volPop.y} onClose={() => setVolPop(null)} />
+      )}
+      {chanMenu && (
+        <ContextMenu
+          x={chanMenu.x}
+          y={chanMenu.y}
+          onClose={() => setChanMenu(null)}
+          items={[
+            {
+              label: mutes.channels.includes(chanMenu.channelId) ? t("mute.channelOff") : t("mute.channel"),
+              icon: mutes.channels.includes(chanMenu.channelId) ? <BellIcon size={15} /> : <BellOffIcon size={15} />,
+              onClick: () => mutes.toggleChannel(chanMenu.channelId),
+            },
+          ]}
+        />
       )}
     </aside>
   );
@@ -321,20 +351,26 @@ function ChannelRow({
   channel,
   active,
   unread = 0,
+  muted,
   onClick,
+  onContextMenu,
 }: {
   channel: Channel;
   active: boolean;
   unread?: number;
+  muted?: boolean;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const icon = channel.type === "VOICE" ? "🔊" : channel.type === "ANNOUNCEMENT" ? "📢" : "#";
-  const hasUnread = unread > 0 && !active;
+  const hasUnread = unread > 0 && !active && !muted;
   return (
     <button
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={clsx(
         "group relative mt-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm transition",
+        muted && "opacity-50",
         active
           ? "bg-discord-active text-white"
           : hasUnread
@@ -345,6 +381,7 @@ function ChannelRow({
       {hasUnread && <span className="absolute -left-1 h-2 w-2 rounded-full bg-white" />}
       <span className="w-4 text-center text-discord-faint">{icon}</span>
       <span className="truncate">{channel.name}</span>
+      {muted && <BellOffIcon size={12} className="ml-auto shrink-0 text-discord-faint" />}
       {hasUnread && (
         <span className="ml-auto rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white">{unread}</span>
       )}

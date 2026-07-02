@@ -33,7 +33,11 @@ import { appVersion, changesSince, type ChangelogEntry } from "../lib/changelog"
 import { initVoice } from "../lib/voice";
 import { startPushService } from "../lib/push";
 import { useI18n } from "../lib/i18n";
+import { isMuted } from "../store/mutes";
 import { MenuIcon, UsersIcon, GearIcon } from "../components/Icons";
+
+// Do-Not-Disturb: keep unread counters, but no sounds/toasts/popups.
+const isDnd = () => useAuth.getState().user?.status === "DND";
 
 export default function AppLayout() {
   const { currentGuildId, currentChannelId, setGuild, openDM, openFriends, openModal, modal, closeModal, profileUserId, closeProfile } = useUI();
@@ -110,8 +114,9 @@ export default function AppLayout() {
       const myId = useAuth.getState().user?.id;
       if (p.authorId === myId) return;
       if (useUI.getState().currentChannelId === p.channelId) return; // already reading it
+      if (isMuted(p.channelId, p.guildId)) return; // muted → no unread, no pings
       useUnread.getState().bump(p.channelId);
-      if (myId && p.mentions?.includes(myId)) {
+      if (myId && p.mentions?.includes(myId) && !isDnd()) {
         const who = p.authorName ?? "New mention";
         const body = p.content || "mentioned you";
         const open = () => {
@@ -128,7 +133,9 @@ export default function AppLayout() {
     const onDmMessage = (p: { channelId: string; message: Message }) => {
       invalidateDms();
       if (useUI.getState().currentChannelId === p.channelId) return; // already reading it
+      if (isMuted(p.channelId)) return; // muted conversation → silent
       useUnread.getState().bump(p.channelId);
+      if (isDnd()) return; // DND: unread counts yes, noise no
       const who = p.message.author.displayName ?? p.message.author.username;
       const body = p.message.content || (p.message.attachments?.length ? "📎 Attachment" : "");
       push({ title: who, body, actionLabel: "Open", onAction: () => openDM(p.channelId) });
@@ -143,6 +150,7 @@ export default function AppLayout() {
       const inThisCall = useVoice.getState().channelId === p.channelId;
       if (p.userIds.length > 0 && !inThisCall) {
         if (ringingChannels.current.has(p.channelId)) return;
+        if (isDnd() || isMuted(p.channelId)) return; // no ringing on DND/muted
         ringingChannels.current.add(p.channelId);
         setIncoming({ channelId: p.channelId, name: dm.name });
         desktopNotify("Incoming call", `${dm.name} is calling you`);
