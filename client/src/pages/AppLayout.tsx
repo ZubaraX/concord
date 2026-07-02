@@ -32,9 +32,12 @@ import AndroidUpdate from "../components/AndroidUpdate";
 import { appVersion, changesSince, type ChangelogEntry } from "../lib/changelog";
 import { initVoice } from "../lib/voice";
 import { startPushService } from "../lib/push";
+import { useI18n } from "../lib/i18n";
+import { MenuIcon, UsersIcon, GearIcon } from "../components/Icons";
 
 export default function AppLayout() {
-  const { currentGuildId, currentChannelId, setGuild, openDM, modal, closeModal, profileUserId, closeProfile } = useUI();
+  const { currentGuildId, currentChannelId, setGuild, openDM, openFriends, openModal, modal, closeModal, profileUserId, closeProfile } = useUI();
+  const { t } = useI18n();
   const qc = useQueryClient();
   const initialized = useRef(false);
   const ringingChannels = useRef<Set<string>>(new Set());
@@ -189,8 +192,35 @@ export default function AppLayout() {
     setNavOpen(false);
   }, [currentChannelId, currentGuildId]);
 
+  // ── Phone swipe gestures: right → open channels (or close member list),
+  //    left → close channels (or open member list in a guild). ──
+  const touchRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = touchRef.current;
+    touchRef.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    // Quick, mostly-horizontal, long enough — otherwise it's a scroll/tap.
+    if (Date.now() - s.t > 600 || Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.7) return;
+    const ui = useUI.getState();
+    if (dx > 0) {
+      if (ui.membersOpen) ui.closeMembers();
+      else if (s.x < window.innerWidth * 0.4) setNavOpen(true);
+    } else {
+      if (navOpen) setNavOpen(false);
+      else if (ui.currentGuildId && !ui.membersOpen && s.x > window.innerWidth * 0.6) ui.toggleMembers();
+    }
+  };
+
   return (
-    <div className="relative flex h-full w-full overflow-hidden">
+    <div className="flex h-full w-full flex-col">
+    <div className="relative flex min-h-0 w-full flex-1 overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Server rail + channel sidebar: a slide-in drawer on phones, static on desktop. */}
       <div
         className={clsx(
@@ -232,5 +262,28 @@ export default function AppLayout() {
       <TaskbarBadge />
       <AndroidUpdate />
     </div>
+
+    {/* Phones: bottom tab bar (Servers / Friends / Settings). */}
+    <nav className="flex shrink-0 border-t border-black/40 bg-discord-rail md:hidden">
+      <NavTab icon={<MenuIcon size={20} />} label={t("nav.servers")} onClick={() => setNavOpen(true)} />
+      <NavTab icon={<UsersIcon size={20} />} label={t("friends.title")} active={showFriends} onClick={openFriends} />
+      <NavTab icon={<GearIcon size={20} />} label={t("settings.title")} onClick={() => openModal("settings")} />
+    </nav>
+    </div>
+  );
+}
+
+function NavTab({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active?: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        "flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium",
+        active ? "text-white" : "text-discord-muted"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

@@ -158,6 +158,7 @@ const en = {
   "common.more": "More",
 
   // Members / profile
+  "nav.servers": "Servers",
   "members.title": "Members",
   "members.online": "Online",
   "members.offline": "Offline",
@@ -377,6 +378,7 @@ const ru: Record<keyof typeof en, string> = {
   "voice.showScreen": "Показать демонстрацию",
   "common.more": "Ещё",
 
+  "nav.servers": "Серверы",
   "members.title": "Участники",
   "members.online": "В сети",
   "members.offline": "Не в сети",

@@ -201,18 +201,19 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
         >
           <MenuIcon size={20} />
         </button>
-        <span className="text-xl text-discord-faint">{isDM ? "@" : "#"}</span>
-        <span className="font-semibold text-white">{channel.name}</span>
+        <span className="shrink-0 text-xl text-discord-faint">{isDM ? "@" : "#"}</span>
+        <span className="min-w-0 truncate font-semibold text-white">{channel.name}</span>
         {channel.topic && (
-          <>
-            <span className="mx-2 h-5 w-px bg-discord-card" />
+          <span className="hidden min-w-0 items-center gap-2 sm:flex">
+            <span className="h-5 w-px shrink-0 bg-discord-card" />
             <span className="truncate text-sm text-discord-muted">{channel.topic}</span>
-          </>
+          </span>
         )}
 
+        {/* During a DM call on a phone every pixel goes to the call controls. */}
         <button
           onClick={() => setShowPins(true)}
-          className="ml-auto rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white"
+          className={`ml-auto shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${isDM && inThisCall ? "max-sm:hidden" : ""}`}
           title={t("channel.pinnedMessages")}
         >
           <PinIcon size={18} />
@@ -220,7 +221,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
 
         <button
           onClick={() => setShowBookmarks(true)}
-          className="rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white"
+          className={`shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${isDM && inThisCall ? "max-sm:hidden" : ""}`}
           title="Bookmarks"
         >
           <BookmarkIcon size={18} />
@@ -238,18 +239,18 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
         )}
 
         {isDM && (
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {callMembers.length > 0 && !inThisCall && (
-              <span className="text-xs text-discord-green">● {t("voice.inCall")}</span>
+              <span className="shrink-0 text-xs text-discord-green">● {t("voice.inCall")}</span>
             )}
             {!inThisCall ? (
               <button
                 onClick={() => joinVoice(channel.id)}
-                className="flex items-center gap-2 rounded-full bg-discord-green px-4 py-1.5 text-sm font-medium text-white hover:brightness-110"
+                className="flex shrink-0 items-center gap-2 rounded-full bg-discord-green px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 sm:px-4"
                 title={t("voice.startCall")}
               >
                 <PhoneIcon size={16} />
-                {t("voice.call")}
+                <span className="hidden sm:inline">{t("voice.call")}</span>
               </button>
             ) : (
               <>
@@ -275,10 +276,10 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                 <button
                   onClick={leaveVoice}
                   title={t("voice.leave")}
-                  className="flex items-center gap-2 rounded-full bg-discord-danger px-4 py-1.5 text-sm font-medium text-white hover:brightness-110"
+                  className="flex shrink-0 items-center gap-2 rounded-full bg-discord-danger px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 sm:px-4"
                 >
                   <PhoneOffIcon size={16} />
-                  {t("voice.leave")}
+                  <span className="hidden sm:inline">{t("voice.leave")}</span>
                 </button>
               </>
             )}

@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { pipeline } from "node:stream/promises";
-import { createWriteStream, mkdirSync, statSync, unlinkSync } from "node:fs";
+import { createWriteStream, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { nanoid } from "nanoid";
+import convertHeic from "heic-convert";
 import { authenticate } from "../lib/auth.js";
 import { config } from "../config.js";
 
@@ -35,11 +36,33 @@ export async function uploadRoutes(app: FastifyInstance) {
       return reply.code(413).send({ error: "File exceeds the configured size limit" });
     }
 
+    let finalStored = stored;
+    let finalName = data.filename;
+    let finalMime = data.mimetype;
+
+    // iPhone photos arrive as HEIC/HEIF, which browsers can't render — convert
+    // to JPEG once here so every client (including old builds) just sees an
+    // image. Non-fatal: on any failure the original file is kept as-is.
+    const isHeic = /\.hei[cf]$/i.test(data.filename) || /image\/hei[cf]/i.test(data.mimetype);
+    if (isHeic) {
+      try {
+        const jpeg = await convertHeic({ buffer: readFileSync(dest), format: "JPEG", quality: 0.87 });
+        const jpgStored = stored.replace(/\.[^.]*$/, "") + ".jpg";
+        writeFileSync(join(dir, jpgStored), jpeg);
+        unlinkSync(dest);
+        finalStored = jpgStored;
+        finalName = data.filename.replace(/\.[^.]*$/, "") + ".jpg";
+        finalMime = "image/jpeg";
+      } catch (err) {
+        req.log.warn({ err }, "HEIC conversion failed — keeping original");
+      }
+    }
+
     return reply.send({
-      url: `/uploads/${stored}`,
-      filename: data.filename,
-      size: statSync(dest).size,
-      mimeType: data.mimetype,
+      url: `/uploads/${finalStored}`,
+      filename: finalName,
+      size: statSync(join(dir, finalStored)).size,
+      mimeType: finalMime,
     });
   });
 }
