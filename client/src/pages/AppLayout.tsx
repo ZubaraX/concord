@@ -49,6 +49,22 @@ export default function AppLayout() {
   const [whatsNew, setWhatsNew] = useState<ChangelogEntry[]>([]);
   // Mobile: the rail + channel sidebar slide in as a drawer over the chat.
   const [navOpen, setNavOpen] = useState(false);
+  // Android: the on-screen keyboard shrinks the viewport — hide the bottom nav
+  // while typing so the composer gets that space back.
+  const [typingFocus, setTypingFocus] = useState(false);
+
+  useEffect(() => {
+    const isField = (el: EventTarget | null) =>
+      el instanceof HTMLElement && (el.tagName === "TEXTAREA" || el.tagName === "INPUT");
+    const onFocusIn = (e: FocusEvent) => isField(e.target) && setTypingFocus(true);
+    const onFocusOut = (e: FocusEvent) => isField(e.target) && setTypingFocus(false);
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
 
   useEffect(() => {
     connectSocket();
@@ -271,8 +287,14 @@ export default function AppLayout() {
       <AndroidUpdate />
     </div>
 
-    {/* Phones: bottom tab bar (Servers / Friends / Settings). */}
-    <nav className="flex shrink-0 border-t border-black/40 bg-discord-rail md:hidden">
+    {/* Phones: bottom tab bar (Servers / Friends / Settings). Hidden while
+        typing so the keyboard-shrunk viewport goes to the chat. */}
+    <nav
+      className={clsx(
+        "flex shrink-0 border-t border-black/40 bg-discord-rail pb-[env(safe-area-inset-bottom)] md:hidden",
+        typingFocus && "hidden"
+      )}
+    >
       <NavTab icon={<MenuIcon size={20} />} label={t("nav.servers")} onClick={() => setNavOpen(true)} />
       <NavTab icon={<UsersIcon size={20} />} label={t("friends.title")} active={showFriends} onClick={openFriends} />
       <NavTab icon={<GearIcon size={20} />} label={t("settings.title")} onClick={() => openModal("settings")} />

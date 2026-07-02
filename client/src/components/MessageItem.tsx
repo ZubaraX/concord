@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../store/auth";
 import { useUI } from "../store/ui";
@@ -96,6 +96,26 @@ function MessageItem({
 
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number; emoji: string; dx: number; dy: number }[]>([]);
 
+  // Phones: swipe a message to the left → reply to it (long-press stays the
+  // context menu). Successful swipes stop propagation so the global
+  // drawer-gestures in AppLayout don't also fire.
+  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (Date.now() - s.t > 500 || dx > -60 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
+    e.stopPropagation();
+    onReply(message);
+  };
+
   function toggleReaction(emoji: string, at?: { x: number; y: number }) {
     setPicker(false);
     const mineReacted = (message.reactions ?? []).some((r) => r.emoji === emoji && r.userId === user?.id);
@@ -122,6 +142,8 @@ function MessageItem({
       id={`msg-${message.id}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
       className={`group relative flex scroll-mt-6 gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
     >

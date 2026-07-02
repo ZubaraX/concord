@@ -186,8 +186,8 @@ export default function VoiceStage({
         </div>
       </div>
 
-      {/* Bottom bar: join, or in-call controls. */}
-      <div className="relative flex items-center justify-center gap-2 border-t border-black/30 bg-discord-deep px-4 py-3">
+      {/* Bottom bar: join, or in-call controls (wraps on narrow phones). */}
+      <div className="relative flex flex-wrap items-center justify-center gap-2 border-t border-black/30 bg-discord-deep px-2 py-3 max-sm:gap-1.5 sm:px-4">
         {!inCall ? (
           <button
             onClick={() => joinVoice(channelId)}
@@ -222,7 +222,7 @@ export default function VoiceStage({
             <button
               onClick={leaveVoice}
               title={t("voice.leave")}
-              className="ml-2 flex h-11 items-center gap-2 rounded-full bg-discord-danger px-5 text-white hover:brightness-110"
+              className="ml-2 flex h-11 items-center gap-2 rounded-full bg-discord-danger px-5 text-white hover:brightness-110 max-sm:h-10 max-sm:px-4"
             >
               <PhoneOffIcon size={18} />
             </button>
@@ -286,7 +286,7 @@ function StageBtn({
       onClick={onClick}
       title={label}
       className={clsx(
-        "flex h-11 w-11 items-center justify-center rounded-full transition",
+        "flex h-11 w-11 items-center justify-center rounded-full transition max-sm:h-10 max-sm:w-10",
         active ? (danger ? "bg-discord-danger text-white" : "bg-discord-accent text-white") : "bg-discord-card text-discord-text hover:bg-discord-hover"
       )}
     >

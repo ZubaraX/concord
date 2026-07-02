@@ -239,9 +239,10 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
           <SearchIcon size={18} />
         </button>
 
+        {/* Phones: pins/bookmarks don't fit next to voice/call controls. */}
         <button
           onClick={() => setShowPins(true)}
-          className={`shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${isDM && inThisCall ? "max-sm:hidden" : ""}`}
+          className={`shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${(isDM && inThisCall) || isVoice ? "max-sm:hidden" : ""}`}
           title={t("channel.pinnedMessages")}
         >
           <PinIcon size={18} />
@@ -249,7 +250,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
 
         <button
           onClick={() => setShowBookmarks(true)}
-          className={`shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${isDM && inThisCall ? "max-sm:hidden" : ""}`}
+          className={`shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${(isDM && inThisCall) || isVoice ? "max-sm:hidden" : ""}`}
           title="Bookmarks"
         >
           <BookmarkIcon size={18} />

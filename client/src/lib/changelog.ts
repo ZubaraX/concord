@@ -14,6 +14,16 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.7.1",
+    date: "2026-07-02",
+    items: [
+      "📱 Свайп влево по сообщению — ответить на него",
+      "📱 Нижняя навигация прячется при наборе текста (больше места над клавиатурой)",
+      "📱 Кнопки звонка на сцене помещаются на узких экранах; меньше иконок в шапке войс-канала",
+      "📱 Тёмные системные панели Android (статус-бар/навигация) и отключён случайный зум",
+    ],
+  },
+  {
     version: "0.7.0",
     date: "2026-07-02",
     items: [
