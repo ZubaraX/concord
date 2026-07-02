@@ -238,6 +238,23 @@ body {
 .cc-lift:hover { transform: translateY(-2px); }
 .cc-lift:active { transform: translateY(0) scale(0.96); }
 
+/* ── Touch screens ─────────────────────────────────────────────────────────
+   No hover and fat fingers: icon buttons (they all carry a `title`) get a
+   comfortable ≥36px tap target, hover-revealed controls become always visible,
+   and sliders get extra grab height. */
+@media (pointer: coarse) {
+  button[title] {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .cc-touch-show {
+    opacity: 1 !important;
+  }
+  input[type="range"] {
+    height: 22px;
+  }
+}
+
 /* Thin themed scrollbars. */
 * {
   scrollbar-width: thin;

@@ -422,6 +422,14 @@ export async function toggleScreen() {
   setTimeout(() => peers.forEach((p) => tuneVideoSender(p.pc, vt, screenBitrate())), 300);
 }
 
+// Which phone camera to use ("user" = front, "environment" = back). On desktop
+// this is just a soft hint that any webcam satisfies.
+let cameraFacing: "user" | "environment" = "user";
+
+function cameraConstraints(facing: "user" | "environment"): MediaTrackConstraints {
+  return { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+}
+
 export async function toggleCamera() {
   if (st().cameraOn) {
     if (cameraStream) removeStreamFromPeers(cameraStream);
@@ -433,7 +441,7 @@ export async function toggleCamera() {
   }
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      video: cameraConstraints(cameraFacing),
       audio: false,
     });
   } catch {
@@ -443,6 +451,39 @@ export async function toggleCamera() {
   st().set({ cameraOn: true, localCamera: cameraStream });
   broadcastStreamKinds();
   peers.forEach((p) => addStreamToPeer(p.pc, cameraStream!));
+}
+
+// Switch front ↔ back camera mid-call (mobile). The new track replaces the old
+// one inside the SAME MediaStream and RTCRtpSenders, so the stream id (msid)
+// peers use to classify it as "camera" never changes — no renegotiation churn.
+export async function flipCamera() {
+  if (!cameraStream) return;
+  const next = cameraFacing === "user" ? "environment" : "user";
+  let raw: MediaStream;
+  try {
+    raw = await navigator.mediaDevices.getUserMedia({
+      video: { ...cameraConstraints(next), facingMode: { exact: next } },
+      audio: false,
+    });
+  } catch {
+    try {
+      // Some devices reject `exact` — retry with a soft preference.
+      raw = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(next), audio: false });
+    } catch {
+      return; // no other camera — keep the current one
+    }
+  }
+  cameraFacing = next;
+  const newTrack = raw.getVideoTracks()[0];
+  const oldTrack = cameraStream.getVideoTracks()[0];
+  if (oldTrack) cameraStream.removeTrack(oldTrack);
+  cameraStream.addTrack(newTrack);
+  peers.forEach((p) => {
+    const sender = p.pc.getSenders().find((s) => s.track === oldTrack);
+    sender?.replaceTrack(newTrack).catch(() => {});
+  });
+  oldTrack?.stop();
+  newTrack.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
 }
 
 function screenBitrate(): number {

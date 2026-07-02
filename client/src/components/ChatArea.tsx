@@ -6,10 +6,11 @@ import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
 import { useUnread } from "../store/unread";
 import { getLastRead, setLastRead } from "../lib/lastRead";
-import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera } from "../lib/voice";
+import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, flipCamera } from "../lib/voice";
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
-import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PinIcon, MenuIcon } from "./Icons";
+import { isAndroidApp } from "../lib/platform";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
@@ -23,7 +24,7 @@ interface ChannelInfo {
 }
 
 export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
-  const { currentChannelId } = useUI();
+  const { currentChannelId, toggleMembers } = useUI();
   const { t } = useI18n();
   const voice = useVoice();
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -215,6 +216,17 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
           <PinIcon size={18} />
         </button>
 
+        {/* Phones: the member list is a drawer — this opens it. Static on lg+. */}
+        {!isDM && (
+          <button
+            onClick={toggleMembers}
+            className="rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white lg:hidden"
+            title={t("members.title")}
+          >
+            <UsersIcon size={18} />
+          </button>
+        )}
+
         {isDM && (
           <div className="flex items-center gap-2">
             {callMembers.length > 0 && !inThisCall && (
@@ -237,9 +249,16 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                 <HeaderBtn active={voice.cameraOn} onClick={toggleCamera} title={voice.cameraOn ? t("voice.cameraOff") : t("voice.camera")}>
                   <CameraIcon size={16} />
                 </HeaderBtn>
-                <HeaderBtn active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
-                  <ScreenIcon size={16} />
-                </HeaderBtn>
+                {isAndroidApp() && voice.cameraOn && (
+                  <HeaderBtn onClick={flipCamera} title={t("voice.flipCamera")}>
+                    <FlipCameraIcon size={16} />
+                  </HeaderBtn>
+                )}
+                {!isAndroidApp() && (
+                  <HeaderBtn active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
+                    <ScreenIcon size={16} />
+                  </HeaderBtn>
+                )}
                 <button
                   onClick={leaveVoice}
                   title={t("voice.leave")}

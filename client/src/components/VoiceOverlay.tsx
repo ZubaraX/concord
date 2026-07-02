@@ -50,7 +50,7 @@ export default function VoiceOverlay() {
       )}
 
       {showGrid && (
-        <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex max-w-[60vw] flex-wrap justify-end gap-2">
+        <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex max-w-[60vw] flex-wrap justify-end gap-2 max-md:left-4 max-md:max-w-none">
           {screenOn && localScreen && (
             <VideoTile stream={localScreen} label="Your screen" muted onExpand={setExpanded} />
           )}
@@ -108,10 +108,10 @@ function VideoTile({
   }, [stream, muted]);
   return (
     <div className="pointer-events-auto group relative overflow-hidden rounded-lg border border-black/40 bg-black shadow-xl">
-      <video ref={ref} autoPlay playsInline className="h-48 w-80 object-contain" />
+      <video ref={ref} autoPlay playsInline className="h-48 w-80 max-w-[76vw] object-contain" />
       <button
         onClick={() => onExpand({ stream, label })}
-        className="absolute right-1 top-1 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
+        className="cc-touch-show absolute right-1 top-1 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
         title="Expand"
       >
         <ExpandIcon size={14} />

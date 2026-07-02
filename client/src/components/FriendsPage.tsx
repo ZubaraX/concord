@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { joinVoice } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
-import { UsersIcon, MessageIcon, PhoneIcon, CheckIcon, XIcon, MenuIcon } from "./Icons";
+import { UsersIcon, MessageIcon, PhoneIcon, CheckIcon, XIcon, MenuIcon, UserPlusIcon } from "./Icons";
 import type { Friend, User } from "../types";
 import Avatar from "./Avatar";
 
@@ -41,24 +41,29 @@ export default function FriendsPage({ onOpenNav }: { onOpenNav?: () => void }) {
 
   return (
     <main className="flex flex-1 flex-col bg-discord-bg">
-      <header className="flex h-12 items-center gap-4 border-b border-black/20 px-4 shadow-sm">
-        <button onClick={onOpenNav} className="-ml-1 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white md:hidden" title="Menu">
+      <header className="flex h-12 items-center gap-2 border-b border-black/20 px-3 shadow-sm">
+        <button onClick={onOpenNav} className="-ml-1 shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white md:hidden" title="Menu">
           <MenuIcon size={20} />
         </button>
-        <span className="flex items-center gap-2 font-semibold text-white"><UsersIcon size={18} /> {t("friends.title")}</span>
-        <div className="flex gap-1">
+        <span className="flex shrink-0 items-center gap-2 font-semibold text-white">
+          <UsersIcon size={18} />
+          <span className="hidden sm:inline">{t("friends.title")}</span>
+        </span>
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           <TabBtn active={tab === "online"} onClick={() => setTab("online")}>{t("friends.online")}</TabBtn>
           <TabBtn active={tab === "all"} onClick={() => setTab("all")}>{t("friends.all")}</TabBtn>
           <TabBtn active={tab === "pending"} onClick={() => setTab("pending")}>
             {t("friends.pending")}{pendingCount > 0 ? ` (${pendingCount})` : ""}
           </TabBtn>
-          <button
-            onClick={() => setTab("add")}
-            className={`rounded px-3 py-1 text-sm font-medium ${tab === "add" ? "bg-discord-green text-white" : "bg-discord-green/80 text-white hover:bg-discord-green"}`}
-          >
-            {t("friends.addFriend")}
-          </button>
         </div>
+        <button
+          onClick={() => setTab("add")}
+          title={t("friends.addFriend")}
+          className={`flex shrink-0 items-center gap-1.5 rounded px-3 py-1 text-sm font-medium ${tab === "add" ? "bg-discord-green text-white" : "bg-discord-green/80 text-white hover:bg-discord-green"}`}
+        >
+          <UserPlusIcon size={16} />
+          <span className="hidden sm:inline">{t("friends.addFriend")}</span>
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">

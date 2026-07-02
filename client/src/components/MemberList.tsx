@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { getSocket } from "../lib/socket";
@@ -13,7 +14,7 @@ import ContextMenu, { type MenuItem } from "./ContextMenu";
 import { UserIcon, MessageIcon, PhoneIcon, UserPlusIcon, CopyIcon } from "./Icons";
 
 export default function MemberList() {
-  const { currentGuildId, openDM, openProfile } = useUI();
+  const { currentGuildId, openDM, openProfile, membersOpen, closeMembers } = useUI();
   const { user: me } = useAuth();
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -76,13 +77,23 @@ export default function MemberList() {
   };
 
   return (
-    <aside className="hidden w-60 flex-col bg-discord-sidebar lg:flex">
-      <div className="flex-1 overflow-y-auto px-2 py-4">
-        <Section title={`${t("members.online")} — ${online.length}`} members={online} status={withStatus} onMenu={rowMenu} />
-        <Section title={`${t("members.offline")} — ${offline.length}`} members={offline} status={withStatus} onMenu={rowMenu} dim />
-      </div>
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.user)} onClose={() => setMenu(null)} />}
-    </aside>
+    <>
+      {/* Phones: slide-in drawer from the right (opened from the chat header). */}
+      {membersOpen && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={closeMembers} />}
+      <aside
+        className={clsx(
+          "w-60 flex-col bg-discord-sidebar",
+          "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-40 max-lg:shadow-2xl",
+          membersOpen ? "flex" : "hidden lg:flex"
+        )}
+      >
+        <div className="flex-1 overflow-y-auto px-2 py-4">
+          <Section title={`${t("members.online")} — ${online.length}`} members={online} status={withStatus} onMenu={rowMenu} />
+          <Section title={`${t("members.offline")} — ${offline.length}`} members={offline} status={withStatus} onMenu={rowMenu} dim />
+        </div>
+        {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.user)} onClose={() => setMenu(null)} />}
+      </aside>
+    </>
   );
 }
 
@@ -108,6 +119,7 @@ function Section({
         return (
           <div
             key={m.id}
+            onClick={(e) => onMenu(e, m.user)}
             onContextMenu={(e) => onMenu(e, m.user)}
             className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-discord-hover ${dim ? "opacity-50" : ""}`}
           >

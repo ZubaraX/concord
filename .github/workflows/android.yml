@@ -42,6 +42,17 @@ jobs:
         working-directory: client
         run: npx cap add android
 
+      # Replaces the default Capacitor robot icon with the app icon (same image
+      # as the desktop app) — reads client/assets/icon.png, writes launcher
+      # icons + splash into the freshly added android/ project.
+      - name: Generate launcher icons + splash from assets/icon.png
+        working-directory: client
+        run: >
+          npx --yes @capacitor/assets generate --android
+          --iconBackgroundColor '#313338' --iconBackgroundColorDark '#1e1f22'
+          --splashBackgroundColor '#313338' --splashBackgroundColorDark '#1e1f22'
+          --logoSplashScale 0.4
+
       - name: Allow mic/camera permissions in the manifest
         run: |
           MANIFEST=client/android/app/src/main/AndroidManifest.xml

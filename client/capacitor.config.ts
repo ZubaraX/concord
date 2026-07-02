@@ -8,11 +8,14 @@ const config: CapacitorConfig = {
   appName: "Concord",
   webDir: "dist",
   server: {
-    androidScheme: "https", // secure context (needed for getUserMedia/WebRTC)
-    cleartext: true, // allow http(s) to the self-hosted server
+    // http so the app shell (http://localhost) is same-scheme as the plain-HTTP
+    // server — otherwise images/video/API are blocked as mixed content. localhost
+    // is still a secure context, so getUserMedia/WebRTC keep working.
+    androidScheme: "http",
+    cleartext: true,
   },
   android: {
-    allowMixedContent: true, // https app shell → http API/WebSocket
+    allowMixedContent: true,
   },
 };
 

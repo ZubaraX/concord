@@ -5,10 +5,11 @@ import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
 import { useUnread } from "../store/unread";
-import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, sendVoiceEmoji } from "../lib/voice";
+import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, flipCamera, sendVoiceEmoji } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
-import { MicIcon, MicOffIcon, CameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon } from "./Icons";
+import { isAndroidApp } from "../lib/platform";
+import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon } from "./Icons";
 import VoiceUserPopover from "./VoiceUserPopover";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
@@ -187,16 +188,25 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
         </button>
       </div>
 
-      <div className="mt-2 grid grid-cols-4 gap-1.5">
+      <div className={clsx("mt-2 grid gap-1.5", isAndroidApp() && !cameraOn ? "grid-cols-3" : "grid-cols-4")}>
         <CallBtn active={muted} danger={muted} onClick={toggleMute} label={muted ? t("voice.unmute") : t("voice.mute")}>
           {muted ? <MicOffIcon size={18} /> : <MicIcon size={18} />}
         </CallBtn>
         <CallBtn active={cameraOn} onClick={toggleCamera} label={t("voice.camera")}>
           <CameraIcon size={18} />
         </CallBtn>
-        <CallBtn active={screenOn} onClick={toggleScreen} label={screenOn ? t("voice.stopShare") : t("voice.share")}>
-          <ScreenIcon size={18} />
-        </CallBtn>
+        {/* Phones: front/back camera switch takes the screen-share slot. */}
+        {isAndroidApp() && cameraOn && (
+          <CallBtn onClick={flipCamera} label={t("voice.flipCamera")}>
+            <FlipCameraIcon size={18} />
+          </CallBtn>
+        )}
+        {/* Screen share uses getDisplayMedia, unsupported in the Android WebView. */}
+        {!isAndroidApp() && (
+          <CallBtn active={screenOn} onClick={toggleScreen} label={screenOn ? t("voice.stopShare") : t("voice.share")}>
+            <ScreenIcon size={18} />
+          </CallBtn>
+        )}
         <CallBtn active={emojiOpen} onClick={() => setEmojiOpen((v) => !v)} label={t("voice.react")}>
           <SmileIcon size={18} />
         </CallBtn>
