@@ -39,6 +39,10 @@ jobs:
           # TLS via nginx/Let's Encrypt on the box; sslip.io maps the name to
           # 138.16.224.172 with no registration. :80 still serves old builds.
           VITE_API_URL: https://138-16-224-172.sslip.io
+          # Some networks can't reach the https domain (operators blocking
+          # sslip.io DNS, Android <7.1 distrusting LE roots) — the client
+          # auto-falls back to the plain-IP endpoint.
+          VITE_API_URL_FALLBACK: http://138.16.224.172
 
       - name: Add Android platform
         working-directory: client

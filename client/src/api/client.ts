@@ -1,5 +1,21 @@
-// Tiny fetch wrapper with bearer auth + transparent refresh-on-401.
-import { serverPath } from "../lib/serverUrl";
+// Tiny fetch wrapper with bearer auth + transparent refresh-on-401, plus a
+// one-shot primary↔fallback base switch on network-level failures (some
+// networks can't reach the https domain; see serverUrl.ts).
+import { serverPath, switchServerBase, reloadOnceAfterSwitch } from "../lib/serverUrl";
+
+// fetch() rejects with TypeError on DNS/TLS/connection failures — that's the
+// signal to try the other server base (HTTP errors like 401/500 are NOT).
+async function fetchWithFallback(path: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(serverPath(path), init);
+  } catch (err) {
+    if (!switchServerBase()) throw err;
+    const res = await fetch(serverPath(path), init); // retry against the other base
+    // It works — restart once on the good base so the socket rebinds too.
+    reloadOnceAfterSwitch();
+    return res;
+  }
+}
 
 const ACCESS_KEY = "concord.access";
 const REFRESH_KEY = "concord.refresh";
@@ -24,7 +40,7 @@ export const tokens = {
 async function refreshAccess(): Promise<boolean> {
   const refresh = tokens.refresh;
   if (!refresh) return false;
-  const res = await fetch(serverPath("/api/auth/refresh"), {
+  const res = await fetchWithFallback("/api/auth/refresh", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refreshToken: refresh }),
@@ -47,7 +63,7 @@ export async function api<T = unknown>(
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
 
   const rel = path.startsWith("/") ? path : `/api/${path}`;
-  const res = await fetch(serverPath(rel), {
+  const res = await fetchWithFallback(rel, {
     ...options,
     headers,
   });
@@ -81,7 +97,7 @@ export async function uploadFile(file: File, retry = true): Promise<UploadedFile
   const headers = new Headers();
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
   // Note: do NOT set Content-Type; the browser adds the multipart boundary.
-  const res = await fetch(serverPath("/api/upload"), { method: "POST", body: form, headers });
+  const res = await fetchWithFallback("/api/upload", { method: "POST", body: form, headers });
   // Same transparent refresh-on-401 as api(): the 15-min access token often
   // expires between sessions, which used to make uploads fail intermittently.
   if (res.status === 401 && retry && (await refreshAccess())) {

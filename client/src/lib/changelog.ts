@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.6.1",
+    date: "2026-07-02",
+    items: [
+      "📶 Приложение само находит рабочий путь к серверу: если HTTPS-адрес недоступен в вашей сети (бывает на мобильном интернете и старых Android), автоматически переключается на прямой IP — чинит «чаты не загружаются» на телефоне",
+    ],
+  },
+  {
     version: "0.6.0",
     date: "2026-07-02",
     items: [

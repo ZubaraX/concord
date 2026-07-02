@@ -32,6 +32,8 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: https://138-16-224-172.sslip.io
+          # Auto-fallback base for networks that can't reach the https domain.
+          VITE_API_URL_FALLBACK: http://138.16.224.172
 
       - name: Bundle Electron main/preload
         working-directory: client

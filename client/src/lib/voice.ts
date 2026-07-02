@@ -390,7 +390,7 @@ export async function joinVoice(channelId: string) {
     alert("Microphone access was denied.");
     return;
   }
-  st().set({ channelId, connecting: false, muted: false, connState: "connecting" });
+  st().set({ channelId, connecting: false, muted: false, connState: "connecting", joinedAt: Date.now() });
   getSocket()?.emit(
     "voice:join",
     { channelId },
@@ -424,7 +424,7 @@ export async function leaveVoice() {
   cameraStream?.getTracks().forEach((t) => t.stop());
   screenStream = null;
   cameraStream = null;
-  st().set({ channelId: null, remotes: [], screenOn: false, cameraOn: false, muted: false, deafened: false, pttActive: false, netStats: null, localScreen: null, localCamera: null, effects: [], connState: "idle" });
+  st().set({ channelId: null, remotes: [], screenOn: false, cameraOn: false, muted: false, deafened: false, pttActive: false, netStats: null, joinedAt: null, localScreen: null, localCamera: null, effects: [], connState: "idle" });
 }
 
 export function toggleMute() {
