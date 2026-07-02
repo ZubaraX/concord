@@ -15,9 +15,16 @@ export default function App() {
     hydrate();
   }, [hydrate]);
 
-  // Apply the selected color theme to the whole document.
+  // Apply the selected color theme to the whole document. The cc-theme-fade
+  // class briefly enables color transitions so switching feels like a
+  // crossfade, then drops off (permanent transitions slow the whole UI down).
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    const el = document.documentElement;
+    const first = !el.dataset.theme;
+    if (!first) el.classList.add("cc-theme-fade");
+    el.dataset.theme = theme;
+    const id = setTimeout(() => el.classList.remove("cc-theme-fade"), 450);
+    return () => clearTimeout(id);
   }, [theme]);
 
   return (

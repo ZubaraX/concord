@@ -94,11 +94,27 @@ function MessageItem({
     return [...map.entries()];
   }, [message.reactions, user?.id]);
 
-  function toggleReaction(emoji: string) {
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number; emoji: string; dx: number; dy: number }[]>([]);
+
+  function toggleReaction(emoji: string, at?: { x: number; y: number }) {
     setPicker(false);
     const mineReacted = (message.reactions ?? []).some((r) => r.emoji === emoji && r.userId === user?.id);
     const enc = encodeURIComponent(emoji);
     api(`/api/messages/${message.id}/reactions/${enc}`, { method: mineReacted ? "DELETE" : "PUT" }).catch(() => {});
+    // Tiny celebratory burst where you clicked (only when adding).
+    if (!mineReacted && at) {
+      const now = Date.now();
+      const parts = Array.from({ length: 6 }, (_, i) => ({
+        id: now + i,
+        x: at.x,
+        y: at.y,
+        emoji,
+        dx: Math.round((Math.random() - 0.5) * 90),
+        dy: -Math.round(30 + Math.random() * 60),
+      }));
+      setBursts((prev) => [...prev, ...parts]);
+      setTimeout(() => setBursts((prev) => prev.filter((p) => !parts.some((q) => q.id === p.id))), 800);
+    }
   }
 
   return (
@@ -202,7 +218,7 @@ function MessageItem({
             {reactionGroups.map(([emoji, g]) => (
               <button
                 key={emoji}
-                onClick={() => toggleReaction(emoji)}
+                onClick={(e) => toggleReaction(emoji, { x: e.clientX, y: e.clientY })}
                 className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm transition ${
                   g.mine
                     ? "border-discord-accent bg-discord-accent/20 text-white"
@@ -231,10 +247,26 @@ function MessageItem({
       {picker && (
         <div className="absolute right-3 top-7 z-10 flex gap-1 rounded-lg bg-discord-rail p-1.5 shadow-xl">
           {QUICK_EMOJIS.map((e) => (
-            <button key={e} onClick={() => toggleReaction(e)} className="rounded p-1 text-lg hover:bg-discord-hover">{e}</button>
+            <button
+              key={e}
+              onClick={(ev) => toggleReaction(e, { x: ev.clientX, y: ev.clientY })}
+              className="rounded p-1 text-lg hover:bg-discord-hover"
+            >
+              {e}
+            </button>
           ))}
         </div>
       )}
+
+      {bursts.map((p) => (
+        <span
+          key={p.id}
+          className="cc-burst pointer-events-none fixed z-[90] text-base"
+          style={{ left: p.x, top: p.y, "--dx": `${p.dx}px`, "--dy": `${p.dy}px` } as React.CSSProperties}
+        >
+          {p.emoji}
+        </span>
+      ))}
 
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
     </div>

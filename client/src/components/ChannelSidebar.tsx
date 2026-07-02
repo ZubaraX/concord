@@ -5,8 +5,9 @@ import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
 import { useUnread } from "../store/unread";
-import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCamera, flipCamera, sendVoiceEmoji } from "../lib/voice";
+import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCamera, flipCamera, sendVoiceEmoji, getMicStream } from "../lib/voice";
 import { useSettings } from "../store/settings";
+import { useSpeaking, type SpeakStream } from "../lib/speaking";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
 import { isAndroidApp } from "../lib/platform";
@@ -39,6 +40,15 @@ export default function ChannelSidebar() {
 
   const channels = guild?.channels ?? [];
   const grouped = useMemo(() => groupChannels(channels), [channels]);
+
+  // Who's talking right now (remote streams + own mic) → glowing indicator.
+  const speakStreams = useMemo<SpeakStream[]>(() => {
+    const arr: SpeakStream[] = voice.remotes.filter((r) => r.audio).map((r) => ({ id: r.userId, stream: r.audio! }));
+    const mic = getMicStream();
+    if (mic && myId) arr.push({ id: myId, stream: mic, enabled: !voice.muted && !voice.deafened });
+    return arr;
+  }, [voice.remotes, voice.muted, voice.deafened, myId]);
+  const speaking = useSpeaking(speakStreams);
 
   // userId -> display name, for voice occupancy labels.
   const nameOf = useMemo(() => {
@@ -119,8 +129,15 @@ export default function ChannelSidebar() {
                           clickable && "cursor-pointer hover:bg-discord-hover hover:text-discord-text"
                         )}
                       >
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-discord-green" />
-                        <span className="truncate">{nameOf[uid] ?? t("common.someone")}</span>
+                        <span
+                          className={clsx(
+                            "h-2 w-2 shrink-0 rounded-full transition-all",
+                            speaking[uid]
+                              ? "bg-discord-green shadow-[0_0_6px_2px_rgb(var(--c-green)/0.6)]"
+                              : "bg-discord-green/50"
+                          )}
+                        />
+                        <span className={clsx("truncate", speaking[uid] && "text-white")}>{nameOf[uid] ?? t("common.someone")}</span>
                       </button>
                     );
                   })}

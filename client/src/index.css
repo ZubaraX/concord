@@ -226,6 +226,22 @@ body {
   .cc-glow { animation: cc-glow 1.8s ease-in-out infinite; }
 }
 
+/* Reaction burst: a few emoji fly out from the click point and fade. */
+@keyframes cc-burst {
+  0% { transform: translate(-50%, -50%) scale(0.7); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.35); opacity: 0; }
+}
+.cc-burst { animation: cc-burst 0.75s ease-out forwards; }
+
+/* Theme switching: briefly crossfade every color (class added by App.tsx for
+   ~450ms around the data-theme swap, then removed so the UI stays snappy). */
+.cc-theme-fade,
+.cc-theme-fade *,
+.cc-theme-fade *::before,
+.cc-theme-fade *::after {
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, fill 0.35s ease !important;
+}
+
 /* Brief highlight when you jump to a message (reply → original). */
 @keyframes cc-flash {
   0%, 100% { background-color: transparent; }
