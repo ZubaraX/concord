@@ -7,6 +7,7 @@ import {
   verifyPassword,
   issueTokens,
   authenticate,
+  deviceLabel,
 } from "../lib/auth.js";
 import { config } from "../config.js";
 import { sendMail } from "../lib/mail.js";
@@ -89,7 +90,7 @@ export async function authRoutes(app: FastifyInstance) {
       },
     });
 
-    const tokens = await issueTokens(reply, user);
+    const tokens = await issueTokens(reply, user, deviceLabel(req));
     return reply.code(201).send({ user: publicUser(user), ...tokens });
   });
 
@@ -105,7 +106,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: "Invalid credentials" });
     }
 
-    const tokens = await issueTokens(reply, user);
+    const tokens = await issueTokens(reply, user, deviceLabel(req));
     return reply.send({ user: publicUser(user), ...tokens });
   });
 
@@ -180,6 +181,66 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ user: publicUser(user) });
+  });
+
+  // ── Active sessions (devices) ──────────────────────────────────────────────
+  // Each live refresh token = one signed-in device. The client sends its own
+  // refresh token in a header so we can mark "this device".
+  app.get("/sessions", { preHandler: authenticate }, async (req) => {
+    const current = req.headers["x-refresh-token"] as string | undefined;
+    const sessions = await prisma.refreshToken.findMany({
+      where: { userId: req.userId, revoked: false, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    return {
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        device: s.device,
+        createdAt: s.createdAt,
+        current: !!current && s.token === current,
+      })),
+    };
+  });
+
+  // Sign out one device.
+  app.delete("/sessions/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await prisma.refreshToken.deleteMany({ where: { id, userId: req.userId } });
+    return reply.code(204).send();
+  });
+
+  // Sign out everywhere except this device.
+  app.post("/sessions/revoke-others", { preHandler: authenticate }, async (req) => {
+    const current = (req.body as { refreshToken?: string } | null)?.refreshToken;
+    await prisma.refreshToken.deleteMany({
+      where: { userId: req.userId, ...(current ? { NOT: { token: current } } : {}) },
+    });
+    return { ok: true };
+  });
+
+  // Change password (verifies the current one; other devices get logged out).
+  app.post("/change-password", { preHandler: authenticate }, async (req, reply) => {
+    const body = z
+      .object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(6).max(256),
+        refreshToken: z.string().optional(),
+      })
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: "Новый пароль должен быть не короче 6 символов" });
+
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!user || !(await verifyPassword(user.passwordHash, body.data.currentPassword))) {
+      return reply.code(403).send({ error: "Неверный текущий пароль" });
+    }
+    await prisma.user.update({
+      where: { id: req.userId },
+      data: { passwordHash: await hashPassword(body.data.newPassword) },
+    });
+    await prisma.refreshToken.deleteMany({
+      where: { userId: req.userId, ...(body.data.refreshToken ? { NOT: { token: body.data.refreshToken } } : {}) },
+    });
+    return { ok: true };
   });
 
   // ── Password reset by email ────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import type { PresenceStatus } from "../types";
 import Modal from "./Modal";
 import Avatar from "./Avatar";
 import VoiceSettings from "./VoiceSettings";
+import SecuritySettings from "./SecuritySettings";
 
 const STATUSES: PresenceStatus[] = ["ONLINE", "IDLE", "DND", "OFFLINE"];
 
@@ -30,7 +31,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const lang = useSettings((s) => s.lang);
   const theme = useSettings((s) => s.theme);
   const setSettings = useSettings((s) => s.set);
-  const [tab, setTab] = useState<"profile" | "voice" | "app">("profile");
+  const [tab, setTab] = useState<"profile" | "voice" | "app" | "security">("profile");
 
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
@@ -81,10 +82,13 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         <Tab active={tab === "profile"} onClick={() => setTab("profile")}>{t("settings.tab.profile")}</Tab>
         <Tab active={tab === "voice"} onClick={() => setTab("voice")}>{t("settings.tab.voice")}</Tab>
         <Tab active={tab === "app"} onClick={() => setTab("app")}>{t("settings.tab.app")}</Tab>
+        <Tab active={tab === "security"} onClick={() => setTab("security")}>{t("settings.tab.security")}</Tab>
       </div>
 
       {tab === "voice" ? (
         <VoiceSettings />
+      ) : tab === "security" ? (
+        <SecuritySettings />
       ) : tab === "profile" ? (
         <div className="space-y-4">
           {/* Live banner + avatar preview */}

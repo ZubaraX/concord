@@ -65,6 +65,7 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
   revoked   Boolean  @default(false)
+  device    String? // short label from the login User-Agent ("Windows · приложение ПК")
 
   @@index([userId])
 }

@@ -17,7 +17,8 @@ export interface AccessPayload {
 
 export async function issueTokens(
   reply: FastifyReply,
-  user: { id: string; username: string }
+  user: { id: string; username: string },
+  device?: string
 ) {
   const accessToken = await reply.jwtSign(
     { username: user.username },
@@ -31,10 +32,27 @@ export async function issueTokens(
       token,
       userId: user.id,
       expiresAt: new Date(Date.now() + config.REFRESH_TOKEN_TTL * 1000),
+      device: device ?? null,
     },
   });
 
   return { accessToken, refreshToken: token };
+}
+
+/** Short human label for the sessions list, derived from the User-Agent. */
+export function deviceLabel(req: FastifyRequest): string {
+  const ua = String(req.headers["user-agent"] ?? "");
+  const os = /Android/i.test(ua)
+    ? "Android"
+    : /Windows/i.test(ua)
+    ? "Windows"
+    : /Mac OS|Macintosh/i.test(ua)
+    ? "macOS"
+    : /Linux/i.test(ua)
+    ? "Linux"
+    : "—";
+  const app = /Electron/i.test(ua) ? "приложение ПК" : /Android/i.test(ua) ? "приложение" : "браузер";
+  return `${os} · ${app}`;
 }
 
 // preHandler guard — verifies JWT and attaches request.userId.
