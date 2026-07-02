@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.8.3",
+    date: "2026-07-02",
+    items: [
+      "🔗 Ссылки-приглашения работают в один клик: в чате они превращаются в карточку с кнопкой «Присоединиться» (код вставлять больше не нужно)",
+      "📱 Android: клик по инвайт-ссылке где угодно (браузер, мессенджеры) открывает Concord и сразу вступает в сервер",
+    ],
+  },
+  {
     version: "0.8.2",
     date: "2026-07-02",
     items: [

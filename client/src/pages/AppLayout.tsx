@@ -31,7 +31,7 @@ import TaskbarBadge from "../components/TaskbarBadge";
 import AndroidUpdate from "../components/AndroidUpdate";
 import { appVersion, changesSince, type ChangelogEntry } from "../lib/changelog";
 import { initVoice } from "../lib/voice";
-import { startPushService, initShareListener } from "../lib/push";
+import { startPushService, initShareListener, initInviteListener } from "../lib/push";
 import { useShare } from "../store/share";
 import { useI18n } from "../lib/i18n";
 import { isMuted } from "../store/mutes";
@@ -73,6 +73,17 @@ export default function AppLayout() {
     requestNotifyPermission();
     startPushService(); // Android: background notifications (no-op elsewhere)
     initShareListener((s) => useShare.getState().set(s)); // Share → Concord
+    // Invite link tapped outside the app → join the server right away.
+    initInviteListener(async (code) => {
+      try {
+        const r = await api<{ guild: Guild }>(`/api/invites/${code}`, { method: "POST" });
+        qc.invalidateQueries({ queryKey: ["guilds"] });
+        useUI.getState().setGuild(r.guild.id);
+        useNotify.getState().push({ title: "✅", body: "Вы присоединились к серверу!" });
+      } catch (e) {
+        useNotify.getState().push({ title: "Приглашение", body: (e as Error).message });
+      }
+    });
     return () => disconnectSocket();
   }, []);
 

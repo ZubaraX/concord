@@ -28,11 +28,33 @@ import java.io.InputStream;
 public class PushPlugin extends Plugin {
   private static PushPlugin instance;
   private static JSObject pendingShare;
+  private static JSObject pendingInvite;
 
   @Override
   public void load() {
     instance = this;
     if (pendingShare != null) notifyListeners("share", pendingShare, true);
+    if (pendingInvite != null) notifyListeners("invite", pendingInvite, true);
+  }
+
+  // Invite links (https://…/invite/CODE) open the app via a VIEW intent-filter;
+  // the code is forwarded to JS which joins the server directly.
+  public static void handleInvite(Intent intent) {
+    if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
+    String path = intent.getData().getPath();
+    if (path == null || !path.startsWith("/invite/")) return;
+    String code = path.substring("/invite/".length());
+    if (code.isEmpty()) return;
+    JSObject d = new JSObject();
+    d.put("code", code);
+    pendingInvite = d;
+    if (instance != null) instance.notifyListeners("invite", d, true);
+  }
+
+  @PluginMethod
+  public void getPendingInvite(PluginCall call) {
+    call.resolve(pendingInvite != null ? pendingInvite : new JSObject());
+    pendingInvite = null;
   }
 
   @PluginMethod

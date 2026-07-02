@@ -14,11 +14,13 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(ScreenCapPlugin.class);
     super.onCreate(savedInstanceState);
     PushPlugin.handleShare(this, getIntent());
+    PushPlugin.handleInvite(getIntent());
   }
 
   @Override
   protected void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     PushPlugin.handleShare(this, intent);
+    PushPlugin.handleInvite(intent);
   }
 }

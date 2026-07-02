@@ -12,7 +12,9 @@ interface PushServicePlugin {
   stop(): Promise<void>;
   setSpeakerphone(opts: { on: boolean }): Promise<void>;
   getPendingShare(): Promise<{ text?: string; mimeType?: string; dataB64?: string }>;
+  getPendingInvite(): Promise<{ code?: string }>;
   addListener(event: "share", cb: (d: { text?: string; mimeType?: string; dataB64?: string }) => void): Promise<unknown>;
+  addListener(event: "invite", cb: (d: { code?: string }) => void): Promise<unknown>;
 }
 
 const PushService = registerPlugin<PushServicePlugin>("PushService");
@@ -39,6 +41,23 @@ export function initShareListener(onShare: (s: SharedContent) => void) {
     PushService.getPendingShare()
       .then((d) => {
         if (d && (d.text || d.dataB64)) onShare(d);
+      })
+      .catch(() => {});
+  } catch {
+    /* old APK */
+  }
+}
+
+/** Invite links tapped outside the app open it with a code — join directly. */
+export function initInviteListener(onInvite: (code: string) => void) {
+  if (!isAndroidApp()) return;
+  try {
+    PushService.addListener("invite", (d) => {
+      if (d?.code) onInvite(d.code);
+    });
+    PushService.getPendingInvite()
+      .then((d) => {
+        if (d?.code) onInvite(d.code);
       })
       .catch(() => {});
   } catch {

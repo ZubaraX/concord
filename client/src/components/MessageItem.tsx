@@ -9,6 +9,7 @@ import type { Attachment, LinkEmbed, Message } from "../types";
 import Avatar from "./Avatar";
 import { renderMarkdown } from "../lib/markdown";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
+import InviteCard from "./InviteCard";
 
 // Scroll to a message (if it's currently loaded) and flash-highlight it.
 export function jumpToMessage(id: string) {
@@ -40,6 +41,12 @@ function MessageItem({
 
   // Parse markdown once per content change, not on every parent re-render.
   const body = useMemo(() => renderMarkdown(message.content), [message.content]);
+
+  // Invite links become one-click join cards (no code pasting).
+  const inviteCodes = useMemo(() => {
+    const codes = [...(message.content ?? "").matchAll(/\/invite\/([\w-]{4,})/g)].map((m) => m[1]);
+    return [...new Set(codes)].slice(0, 2);
+  }, [message.content]);
 
   const embeds = useMemo<LinkEmbed[]>(() => {
     if (!message.embedsJson) return [];
@@ -209,6 +216,10 @@ function MessageItem({
             </div>
           )
         )}
+
+        {inviteCodes.map((c) => (
+          <InviteCard key={c} code={c} />
+        ))}
 
         {message.attachments?.length > 0 && (
           <div className="mt-1 flex flex-col gap-2">
