@@ -76,10 +76,16 @@ jobs:
       # ephemeral runners generate a fresh debug key every build (signature
       # mismatch), and the generated project always says versionCode 1 (the
       # installer treats every APK as "already installed").
-      - name: Stable signing key (secret keystore instead of the runner's random one)
+      # NB: the keystore is wired EXPLICITLY into build.gradle — dropping it
+      # into ~/.android/debug.keystore silently didn't take (AGP looked
+      # elsewhere and generated a random key; broke updates in 0.5.1–0.5.3).
+      - name: Stable signing key (secret keystore, explicit signingConfig)
         run: |
-          mkdir -p ~/.android
-          echo "${{ secrets.DEBUG_KEYSTORE_B64 }}" | base64 -d > ~/.android/debug.keystore
+          echo "${{ secrets.DEBUG_KEYSTORE_B64 }}" | base64 -d > client/android/app/concord-debug.keystore
+          [ -s client/android/app/concord-debug.keystore ] || { echo "keystore secret is empty!"; exit 1; }
+          GRADLE=client/android/app/build.gradle
+          sed -i '/^android {/a\    signingConfigs {\n        debug {\n            storeFile file("concord-debug.keystore")\n            storePassword "android"\n            keyAlias "androiddebugkey"\n            keyPassword "android"\n        }\n    }' "$GRADLE"
+          grep -A8 "signingConfigs" "$GRADLE" | head -10
 
       - name: Bake app version into the Android package
         run: |
@@ -97,6 +103,14 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # Publish-gate: the APK must be signed with OUR key, otherwise installed
+      # phones can never update over it (signature mismatch). Fail loudly.
+      - name: Verify APK signature is the stable Concord key
+        run: |
+          keytool -printcert -jarfile client/android/app/build/outputs/apk/debug/app-debug.apk | grep -E "Owner|SHA256:" | head -3
+          keytool -printcert -jarfile client/android/app/build/outputs/apk/debug/app-debug.apk | grep -q "CN=Concord Debug" \
+            || { echo "::error::APK signed with the WRONG key — publishing would break updates"; exit 1; }
 
       - name: Stage APK + update manifest
         run: |

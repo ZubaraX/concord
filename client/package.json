@@ -1,6 +1,6 @@
 {
   "name": "@concord/client",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "description": "Concord desktop client",
   "author": "Concord",

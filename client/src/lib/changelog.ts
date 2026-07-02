@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.5.4",
+    date: "2026-07-02",
+    items: [
+      "🔧 Android: окончательно починена подпись APK (0.5.1–0.5.3 всё ещё подписывались случайным ключом — отсюда «конфликтует с другим пакетом»). Один раз: удалить приложение → поставить 0.5.4, дальше обновления в один тап. Теперь CI сам проверяет подпись перед публикацией",
+    ],
+  },
+  {
     version: "0.5.3",
     date: "2026-07-02",
     items: [
