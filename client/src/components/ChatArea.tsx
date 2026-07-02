@@ -31,7 +31,7 @@ interface ChannelInfo {
 }
 
 export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
-  const { currentChannelId, toggleMembers } = useUI();
+  const { currentChannelId, toggleMembers, immersive, setImmersive } = useUI();
   const { t } = useI18n();
   const voice = useVoice();
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -216,6 +216,14 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
     setShowPins(false);
   }, [currentChannelId]);
 
+  // Desktop focus mode: joining a voice stage hides the rail + channel list
+  // (the ☰ button in the header brings them back).
+  const stageCallActive = !!channel && channel.type === "VOICE" && voice.channelId === channel.id;
+  useEffect(() => {
+    setImmersive(stageCallActive);
+    return () => setImmersive(false);
+  }, [stageCallActive, setImmersive]);
+
   if (!currentChannelId || !channel) {
     return (
       <main className="flex flex-1 flex-col items-center justify-center bg-discord-bg text-discord-muted">
@@ -241,6 +249,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const inThisCall = voice.channelId === channel.id;
   const callMembers = voice.occupancy[channel.id] ?? [];
   const typing = Object.values(typingUsers);
+  const inStageCall = isVoice && inThisCall;
 
   return (
     <main
@@ -256,8 +265,15 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       )}
       <header className="flex h-12 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         <button
-          onClick={onOpenNav}
-          className="-ml-1 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white md:hidden"
+          onClick={() => {
+            // Desktop in a stage call: toggle the hidden channel sidebar;
+            // phones: open the drawer as usual.
+            if (window.innerWidth >= 768) setImmersive(!immersive);
+            else onOpenNav?.();
+          }}
+          className={`-ml-1 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${
+            immersive || inStageCall ? "" : "md:hidden"
+          }`}
           title="Channels"
         >
           <MenuIcon size={20} />
@@ -391,7 +407,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
             onScroll={(e) => {
               if ((e.target as HTMLDivElement).scrollTop < 120) loadOlder();
             }}
-            className="flex-1 overflow-y-auto py-4"
+            className="flex-1 overflow-y-auto overflow-x-hidden py-4"
           >
             {!hasMore && <Welcome name={channel.name} isDM={isDM} />}
             {hasMore && messages.length > 0 && (

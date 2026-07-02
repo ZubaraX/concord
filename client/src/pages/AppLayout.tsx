@@ -41,7 +41,7 @@ import { MenuIcon, UsersIcon, GearIcon } from "../components/Icons";
 const isDnd = () => useAuth.getState().user?.status === "DND";
 
 export default function AppLayout() {
-  const { currentGuildId, currentChannelId, setGuild, openDM, openFriends, openModal, modal, closeModal, profileUserId, closeProfile } = useUI();
+  const { currentGuildId, currentChannelId, setGuild, openDM, openFriends, openModal, modal, closeModal, profileUserId, closeProfile, immersive } = useUI();
   const { t } = useI18n();
   const qc = useQueryClient();
   const initialized = useRef(false);
@@ -249,12 +249,15 @@ export default function AppLayout() {
   return (
     <div className="flex h-full w-full flex-col">
     <div className="relative flex min-h-0 w-full flex-1 overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      {/* Server rail + channel sidebar: a slide-in drawer on phones, static on desktop. */}
+      {/* Server rail + channel sidebar: a slide-in drawer on phones, static on
+          desktop. In a voice-stage call (immersive) the desktop hides it too —
+          the ☰ button in the chat header brings it back. */}
       <div
         className={clsx(
           "flex h-full shrink-0 transition-transform duration-200 md:static md:z-auto md:translate-x-0",
           "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-2xl",
-          navOpen ? "translate-x-0" : "max-md:-translate-x-full"
+          navOpen ? "translate-x-0" : "max-md:-translate-x-full",
+          immersive && !navOpen && "md:hidden"
         )}
       >
         <ServerRail guilds={guilds} />

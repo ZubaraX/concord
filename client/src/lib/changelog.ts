@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.8.1",
+    date: "2026-07-02",
+    items: [
+      "🖥 ПК: при входе в голосовой канал список каналов и серверов прячется — сцене достаётся весь экран (кнопка ☰ возвращает его)",
+      "🔧 ПК: контент чата больше не вылезает за границы узкой панели (кнопки действий не улетают, горизонтальные ползунки исчезли)",
+    ],
+  },
+  {
     version: "0.8.0",
     date: "2026-07-02",
     items: [

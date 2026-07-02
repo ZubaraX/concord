@@ -224,7 +224,7 @@ function MessageItem({
             href={e.url}
             target="_blank"
             rel="noreferrer"
-            className="mt-1 flex max-w-md gap-3 rounded border-l-4 border-discord-accent bg-discord-card p-3 hover:bg-discord-hover"
+            className="mt-1 flex max-w-[min(28rem,100%)] gap-3 rounded border-l-4 border-discord-accent bg-discord-card p-3 hover:bg-discord-hover"
           >
             {e.image && <img src={e.image} alt="" className="h-16 w-16 shrink-0 rounded object-cover" loading="lazy" />}
             <div className="min-w-0">
@@ -318,7 +318,7 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
     return <video src={src} controls className="max-h-96 max-w-full rounded-lg" />;
   }
   if (isAudio) {
-    return <audio src={src} controls className="w-72" />;
+    return <audio src={src} controls className="w-72 max-w-full" />;
   }
   return (
     <a
@@ -326,7 +326,7 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
       target="_blank"
       rel="noreferrer"
       download
-      className="flex w-fit max-w-md items-center gap-3 rounded-lg bg-discord-card px-3 py-2.5 hover:bg-discord-hover"
+      className="flex w-fit max-w-[min(28rem,100%)] items-center gap-3 rounded-lg bg-discord-card px-3 py-2.5 hover:bg-discord-hover"
     >
       <span className="text-2xl">📄</span>
       <span className="min-w-0">

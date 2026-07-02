@@ -8,6 +8,7 @@ interface UIState {
   modal: ModalKind | null;
   profileUserId: string | null; // user whose profile popout is open
   membersOpen: boolean; // phones: member list as a slide-in drawer (static on lg+)
+  immersive: boolean; // desktop: hide rail+channels while in a voice stage call
   setGuild: (id: string | null) => void;
   setChannel: (id: string | null) => void;
   openDM: (channelId: string) => void; // home view, a DM conversation
@@ -18,6 +19,7 @@ interface UIState {
   closeProfile: () => void;
   toggleMembers: () => void;
   closeMembers: () => void;
+  setImmersive: (v: boolean) => void;
 }
 
 export const useUI = create<UIState>((set) => ({
@@ -26,6 +28,7 @@ export const useUI = create<UIState>((set) => ({
   modal: null,
   profileUserId: null,
   membersOpen: false,
+  immersive: false,
   setGuild: (id) => set({ currentGuildId: id, currentChannelId: null, membersOpen: false }),
   setChannel: (id) => set({ currentChannelId: id, membersOpen: false }),
   openDM: (channelId) => set({ currentGuildId: null, currentChannelId: channelId, membersOpen: false }),
@@ -36,4 +39,5 @@ export const useUI = create<UIState>((set) => ({
   closeProfile: () => set({ profileUserId: null }),
   toggleMembers: () => set((s) => ({ membersOpen: !s.membersOpen })),
   closeMembers: () => set({ membersOpen: false }),
+  setImmersive: (v) => set({ immersive: v }),
 }));
