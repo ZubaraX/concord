@@ -10,12 +10,14 @@ import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCa
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
 import { isAndroidApp } from "../lib/platform";
-import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon } from "./Icons";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon, MessageIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
 import BookmarksModal from "./BookmarksModal";
 import SearchModal from "./SearchModal";
+import VoiceStage, { CallTimer } from "./VoiceStage";
+import clsx from "clsx";
 
 interface ChannelInfo {
   id: string;
@@ -38,6 +40,9 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const [showPins, setShowPins] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  // Voice channels: text chat lives beside the stage (desktop) or behind a
+  // toggle (phones, stage-first).
+  const [showChat, setShowChat] = useState(() => window.innerWidth >= 768);
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -179,6 +184,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   }
 
   const isDM = !channel.guildId;
+  const isVoice = channel.type === "VOICE";
   const inThisCall = voice.channelId === channel.id;
   const callMembers = voice.occupancy[channel.id] ?? [];
   const typing = Object.values(typingUsers);
@@ -203,8 +209,9 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
         >
           <MenuIcon size={20} />
         </button>
-        <span className="shrink-0 text-xl text-discord-faint">{isDM ? "@" : "#"}</span>
+        <span className="shrink-0 text-xl text-discord-faint">{isDM ? "@" : isVoice ? "🔊" : "#"}</span>
         <span className="min-w-0 truncate font-semibold text-white">{channel.name}</span>
+        {inThisCall && <CallTimer className="shrink-0 text-xs text-discord-green" />}
         {channel.topic && (
           <span className="hidden min-w-0 items-center gap-2 sm:flex">
             <span className="h-5 w-px shrink-0 bg-discord-card" />
@@ -212,10 +219,21 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
           </span>
         )}
 
+        {/* Voice channel: toggle the side chat panel. */}
+        {isVoice && (
+          <button
+            onClick={() => setShowChat((v) => !v)}
+            className={`ml-auto shrink-0 rounded p-1.5 hover:bg-discord-hover ${showChat ? "text-white" : "text-discord-muted hover:text-white"}`}
+            title={t("voice.openChat")}
+          >
+            <MessageIcon size={18} />
+          </button>
+        )}
+
         {/* During a DM call on a phone every pixel goes to the call controls. */}
         <button
           onClick={() => setShowSearch(true)}
-          className={`ml-auto shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${isDM && inThisCall ? "max-sm:hidden" : ""}`}
+          className={`${isVoice ? "" : "ml-auto"} shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${isDM && inThisCall ? "max-sm:hidden" : ""}`}
           title={t("search.title")}
         >
           <SearchIcon size={18} />
@@ -297,36 +315,52 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto py-4">
-        <Welcome name={channel.name} isDM={isDM} />
-        {messages.map((m, i) => (
-          <div key={m.id} className="cc-fade-up">
-            {firstUnreadId === m.id && (
-              <div className="my-1 flex items-center gap-2 px-4">
-                <div className="h-px flex-1 bg-discord-danger/60" />
-                <span className="rounded bg-discord-danger px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">New</span>
-              </div>
-            )}
-            <MessageItem message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} />
+      <div className="flex min-h-0 flex-1">
+        {/* Voice channel → Discord-style stage; the text chat docks beside it. */}
+        {isVoice && (
+          <div className={clsx("flex min-w-0 flex-1", showChat && "max-md:hidden")}>
+            <VoiceStage channelId={channel.id} channelName={channel.name} guildId={channel.guildId} />
           </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+        )}
 
-      <div className="px-4 pb-6">
-        <Composer
-          channelId={currentChannelId}
-          channelName={channel.name}
-          attachments={attachments}
-          setAttachments={setAttachments}
-          uploading={uploading}
-          addFiles={addFiles}
-          replyingTo={replyingTo}
-          onClearReply={() => setReplyingTo(null)}
-          onSend={sendMessage}
-        />
-        <div className="h-5 px-1 pt-1 text-xs text-discord-muted">
-          {typing.length > 0 && `${typing.join(", ")} ${typing.length === 1 ? t("chat.typingOne") : t("chat.typingMany")}`}
+        <div
+          className={clsx(
+            "flex min-w-0 flex-col",
+            isVoice ? (showChat ? "w-full border-black/20 md:w-[380px] md:shrink-0 md:border-l" : "hidden") : "flex-1"
+          )}
+        >
+          <div className="flex-1 overflow-y-auto py-4">
+            <Welcome name={channel.name} isDM={isDM} />
+            {messages.map((m, i) => (
+              <div key={m.id} className="cc-fade-up">
+                {firstUnreadId === m.id && (
+                  <div className="my-1 flex items-center gap-2 px-4">
+                    <div className="h-px flex-1 bg-discord-danger/60" />
+                    <span className="rounded bg-discord-danger px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">New</span>
+                  </div>
+                )}
+                <MessageItem message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} />
+              </div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+
+          <div className="px-4 pb-6">
+            <Composer
+              channelId={currentChannelId}
+              channelName={channel.name}
+              attachments={attachments}
+              setAttachments={setAttachments}
+              uploading={uploading}
+              addFiles={addFiles}
+              replyingTo={replyingTo}
+              onClearReply={() => setReplyingTo(null)}
+              onSend={sendMessage}
+            />
+            <div className="h-5 px-1 pt-1 text-xs text-discord-muted">
+              {typing.length > 0 && `${typing.join(", ")} ${typing.length === 1 ? t("chat.typingOne") : t("chat.typingMany")}`}
+            </div>
+          </div>
         </div>
       </div>
 

@@ -15,6 +15,7 @@ import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIc
 import { useMutes } from "../store/mutes";
 import VoiceUserPopover from "./VoiceUserPopover";
 import ContextMenu from "./ContextMenu";
+import { CallTimer } from "./VoiceStage";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
@@ -128,7 +129,15 @@ export default function ChannelSidebar() {
                   active={c.type === "VOICE" ? voice.channelId === c.id : currentChannelId === c.id}
                   unread={c.type === "TEXT" ? unread[c.id] || 0 : 0}
                   muted={mutes.channels.includes(c.id)}
-                  onClick={() => (c.type === "VOICE" ? joinVoice(c.id) : c.type === "TEXT" && setChannel(c.id))}
+                  onClick={() => {
+                    if (c.type === "VOICE") {
+                      // Join the call AND open its stage in the main area.
+                      joinVoice(c.id);
+                      setChannel(c.id);
+                    } else if (c.type === "TEXT") {
+                      setChannel(c.id);
+                    }
+                  }}
                   onContextMenu={(e) => { e.preventDefault(); setChanMenu({ x: e.clientX, y: e.clientY, channelId: c.id }); }}
                 />
                 {c.type === "VOICE" &&
@@ -239,7 +248,9 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 truncate text-xs text-discord-muted"><SpeakerIcon size={12} /> {channelName}</div>
+          <div className="flex items-center gap-1 truncate text-xs text-discord-muted">
+            <SpeakerIcon size={12} /> {channelName} <CallTimer className="text-discord-faint" />
+          </div>
         </div>
         <button
           onClick={toggleDeafen}
