@@ -34,6 +34,8 @@ public class PushService extends Service {
   // Set by PushPlugin on app resume/pause; while visible the in-app UI
   // (toasts + sounds) already announces events, so we stay quiet.
   public static volatile boolean appInForeground = false;
+  // Rough unread counter for launcher badges; reset when the app opens.
+  public static volatile int unreadCount = 0;
 
   private volatile boolean running = false;
   private Thread worker;
@@ -160,6 +162,7 @@ public class PushService extends Service {
       String channelId = o.optString("channelId", "");
 
       String channel = "call".equals(type) ? CH_CALLS : CH_MESSAGES;
+      unreadCount++;
       NotificationCompat.Builder b =
           new NotificationCompat.Builder(this, channel)
               .setContentTitle(title)
@@ -167,6 +170,7 @@ public class PushService extends Service {
               .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
               .setSmallIcon(getApplicationInfo().icon)
               .setAutoCancel(true)
+              .setNumber(unreadCount) // launcher badge count (where supported)
               .setPriority(NotificationCompat.PRIORITY_HIGH)
               .setCategory(
                   "call".equals(type)

@@ -17,6 +17,7 @@ interface VoiceStore {
   netStats: { rtt: number; loss: number } | null; // worst peer RTT (ms) + loss %
   joinedAt: number | null; // when we joined the call (for the duration timer)
   stageOpen: boolean; // the big voice-stage view is visible (hides floating tiles)
+  speakerOn: boolean; // Android: loudspeaker (true) vs earpiece (false)
   screenOn: boolean;
   cameraOn: boolean;
   localScreen: MediaStream | null; // preview of our own shared screen
@@ -37,6 +38,7 @@ export const useVoice = create<VoiceStore>((set) => ({
   netStats: null,
   joinedAt: null,
   stageOpen: false,
+  speakerOn: true,
   screenOn: false,
   cameraOn: false,
   localScreen: null,

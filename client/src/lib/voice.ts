@@ -14,6 +14,9 @@ import { useSettings } from "../store/settings";
 import { RES_MAP } from "../store/settings";
 import { playSound } from "./sound";
 import { pickScreenSource } from "../store/screenPicker";
+import { isAndroidApp } from "./platform";
+import { startAndroidScreenStream, stopAndroidScreenStream } from "./androidScreen";
+import { setSpeakerphone } from "./push";
 
 type Kind = "audio" | "screen" | "camera";
 
@@ -390,7 +393,8 @@ export async function joinVoice(channelId: string) {
     alert("Microphone access was denied.");
     return;
   }
-  st().set({ channelId, connecting: false, muted: false, connState: "connecting", joinedAt: Date.now() });
+  st().set({ channelId, connecting: false, muted: false, connState: "connecting", joinedAt: Date.now(), speakerOn: true });
+  if (isAndroidApp()) setSpeakerphone(true); // calls default to the loudspeaker
   getSocket()?.emit(
     "voice:join",
     { channelId },
@@ -434,6 +438,13 @@ export function toggleMute() {
   playSound(muted ? "mute" : "unmute");
 }
 
+// Android: route call audio to the loudspeaker or the earpiece.
+export function toggleSpeaker() {
+  const speakerOn = !st().speakerOn;
+  st().set({ speakerOn });
+  setSpeakerphone(speakerOn);
+}
+
 // Deafen: silence every incoming audio element (AudioSink reacts to the store)
 // and force the mic off. Undeafen restores the previous mute state.
 export function toggleDeafen() {
@@ -460,25 +471,39 @@ export async function toggleScreen() {
     if (screenStream) removeStreamFromPeers(screenStream);
     screenStream?.getTracks().forEach((t) => t.stop());
     screenStream = null;
+    if (isAndroidApp()) stopAndroidScreenStream();
     st().set({ screenOn: false, localScreen: null });
     broadcastStreamKinds();
     return;
   }
-  // Let the user choose which screen/window to share (desktop). On web the
-  // browser shows its own picker.
-  const chosen = await pickScreenSource();
-  if (chosen === null) return; // cancelled
-  if (chosen !== "default") window.concord?.setDesktopSource?.(chosen);
 
-  const s = cfg();
-  const video: MediaTrackConstraints =
-    s.screenResolution === "source"
-      ? { frameRate: { ideal: s.screenFps } }
-      : { ...RES_MAP[s.screenResolution], frameRate: { ideal: s.screenFps } };
-  try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: s.screenAudio });
-  } catch {
-    return;
+  if (isAndroidApp()) {
+    // No getDisplayMedia in the WebView — native MediaProjection capture,
+    // frames painted onto a canvas whose captureStream() feeds WebRTC.
+    try {
+      screenStream = await startAndroidScreenStream(() => {
+        if (st().screenOn) toggleScreen();
+      });
+    } catch {
+      return; // user declined the system dialog (or old APK)
+    }
+  } else {
+    // Let the user choose which screen/window to share (desktop). On web the
+    // browser shows its own picker.
+    const chosen = await pickScreenSource();
+    if (chosen === null) return; // cancelled
+    if (chosen !== "default") window.concord?.setDesktopSource?.(chosen);
+
+    const s = cfg();
+    const video: MediaTrackConstraints =
+      s.screenResolution === "source"
+        ? { frameRate: { ideal: s.screenFps } }
+        : { ...RES_MAP[s.screenResolution], frameRate: { ideal: s.screenFps } };
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video, audio: s.screenAudio });
+    } catch {
+      return;
+    }
   }
   const vt = screenStream.getVideoTracks()[0];
   if (vt) {

@@ -6,11 +6,14 @@ import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
 import { useUnread } from "../store/unread";
 import { getLastRead, setLastRead } from "../lib/lastRead";
-import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCamera, flipCamera } from "../lib/voice";
+import { maybeCompressImage } from "../lib/imageCompress";
+import { sharedContentToFile } from "../lib/push";
+import { useShare } from "../store/share";
+import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCamera, flipCamera, toggleSpeaker } from "../lib/voice";
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
 import { isAndroidApp } from "../lib/platform";
-import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon, MessageIcon } from "./Icons";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon, MessageIcon, SpeakerIcon, XIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
@@ -44,14 +47,22 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   // toggle (phones, stage-first).
   const [showChat, setShowChat] = useState(() => window.innerWidth >= 768);
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
+  const pendingShare = useShare((s) => s.pending);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Older-history pagination: scroll to the top → fetch the previous page.
+  const [hasMore, setHasMore] = useState(true);
+  const loadingOlder = useRef(false);
+  const prepending = useRef(false); // suppress auto-scroll-to-bottom on prepend
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const arr = Array.from(files);
     if (!arr.length) return;
     setUploading(true);
     try {
-      const up = await Promise.all(arr.map((f) => uploadFile(f)));
+      // Photos are downscaled client-side first — huge savings on mobile data.
+      const compact = await Promise.all(arr.map(maybeCompressImage));
+      const up = await Promise.all(compact.map((f) => uploadFile(f)));
       setAttachments((prev) => [...prev, ...up]);
     } catch (e) {
       alert((e as Error).message);
@@ -73,8 +84,34 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
     enabled: !!currentChannelId,
   });
 
+  // Fetch the page before the oldest loaded message and prepend it, keeping
+  // the viewport anchored (scrollHeight delta trick).
+  const loadOlder = useCallback(async () => {
+    const el = scrollRef.current;
+    const oldest = messages[0];
+    if (!el || !oldest || loadingOlder.current || !hasMore || !currentChannelId) return;
+    loadingOlder.current = true;
+    try {
+      const older = await api<Msg[]>(`/api/channels/${currentChannelId}/messages?cursor=${oldest.id}&limit=50`);
+      if (older.length < 50) setHasMore(false);
+      if (older.length) {
+        const prevHeight = el.scrollHeight;
+        prepending.current = true;
+        setMessages((prev) => [...older.filter((m) => !prev.some((x) => x.id === m.id)), ...prev]);
+        requestAnimationFrame(() => {
+          el.scrollTop += el.scrollHeight - prevHeight;
+        });
+      }
+    } catch {
+      /* retried on next scroll */
+    } finally {
+      loadingOlder.current = false;
+    }
+  }, [messages, hasMore, currentChannelId]);
+
   useEffect(() => {
     if (!history) return;
+    setHasMore(history.length >= 50);
     setMessages(history);
     // "New messages" divider before the first message newer than last-read,
     // then mark the channel read.
@@ -165,6 +202,10 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   );
 
   useEffect(() => {
+    if (prepending.current) {
+      prepending.current = false; // history prepend — keep the viewport where it is
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
@@ -181,6 +222,18 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
         <p>Select a conversation or channel to start chatting.</p>
       </main>
     );
+  }
+
+  function applyShare() {
+    const s = useShare.getState().pending;
+    if (!s || !currentChannelId) return;
+    if (s.dataB64) {
+      const f = sharedContentToFile(s);
+      if (f) addFiles([f]);
+    } else if (s.text) {
+      sendMessage({ channelId: currentChannelId, content: s.text, attachments: [] });
+    }
+    useShare.getState().set(null);
   }
 
   const isDM = !channel.guildId;
@@ -297,9 +350,12 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                     <FlipCameraIcon size={16} />
                   </HeaderBtn>
                 )}
-                {!isAndroidApp() && (
-                  <HeaderBtn active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
-                    <ScreenIcon size={16} />
+                <HeaderBtn active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
+                  <ScreenIcon size={16} />
+                </HeaderBtn>
+                {isAndroidApp() && (
+                  <HeaderBtn active={!voice.speakerOn} onClick={toggleSpeaker} title={voice.speakerOn ? t("voice.speakerOn") : t("voice.speakerOff")}>
+                    <SpeakerIcon size={16} />
                   </HeaderBtn>
                 )}
                 <button
@@ -330,8 +386,17 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
             isVoice ? (showChat ? "w-full border-black/20 md:w-[380px] md:shrink-0 md:border-l" : "hidden") : "flex-1"
           )}
         >
-          <div className="flex-1 overflow-y-auto py-4">
-            <Welcome name={channel.name} isDM={isDM} />
+          <div
+            ref={scrollRef}
+            onScroll={(e) => {
+              if ((e.target as HTMLDivElement).scrollTop < 120) loadOlder();
+            }}
+            className="flex-1 overflow-y-auto py-4"
+          >
+            {!hasMore && <Welcome name={channel.name} isDM={isDM} />}
+            {hasMore && messages.length > 0 && (
+              <div className="py-2 text-center text-xs text-discord-faint">{t("chat.loadingOlder")}</div>
+            )}
             {messages.map((m, i) => (
               <div key={m.id} className="cc-fade-up">
                 {firstUnreadId === m.id && (
@@ -347,6 +412,23 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
           </div>
 
           <div className="px-4 pb-6">
+            {pendingShare && (
+              <div className="mb-2 flex items-center gap-2 rounded-lg bg-discord-card px-3 py-2 text-sm">
+                <span className="shrink-0 text-discord-muted">📤 {t("share.received")}:</span>
+                <span className="min-w-0 flex-1 truncate text-discord-text">
+                  {pendingShare.text ?? pendingShare.mimeType}
+                </span>
+                <button
+                  onClick={applyShare}
+                  className="shrink-0 rounded bg-discord-accent px-3 py-1 text-xs font-medium text-white hover:brightness-110"
+                >
+                  {pendingShare.dataB64 ? t("share.attachHere") : t("share.sendHere")}
+                </button>
+                <button onClick={() => useShare.getState().set(null)} className="shrink-0 p-1 text-discord-muted hover:text-white">
+                  <XIcon size={14} />
+                </button>
+              </div>
+            )}
             <Composer
               channelId={currentChannelId}
               channelName={channel.name}

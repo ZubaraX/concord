@@ -12,6 +12,7 @@ import {
   toggleScreen,
   toggleCamera,
   flipCamera,
+  toggleSpeaker,
   sendVoiceEmoji,
   getMicStream,
 } from "../lib/voice";
@@ -33,6 +34,7 @@ import {
   HeadphonesOffIcon,
   ExpandIcon,
   XIcon,
+  SpeakerIcon,
 } from "./Icons";
 // Not imported from ChannelSidebar — that would make a circular import
 // (ChannelSidebar pulls CallTimer from here).
@@ -211,9 +213,12 @@ export default function VoiceStage({
                 <FlipCameraIcon size={20} />
               </StageBtn>
             )}
-            {!isAndroidApp() && (
-              <StageBtn active={voice.screenOn} onClick={toggleScreen} label={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
-                <ScreenIcon size={20} />
+            <StageBtn active={voice.screenOn} onClick={toggleScreen} label={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
+              <ScreenIcon size={20} />
+            </StageBtn>
+            {isAndroidApp() && (
+              <StageBtn active={!voice.speakerOn} onClick={toggleSpeaker} label={voice.speakerOn ? t("voice.speakerOn") : t("voice.speakerOff")}>
+                <SpeakerIcon size={20} />
               </StageBtn>
             )}
             <StageBtn active={emojiOpen} onClick={() => setEmojiOpen((v) => !v)} label={t("voice.react")}>

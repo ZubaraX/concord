@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { api, uploadFile } from "../api/client";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n";
 import { useUI } from "../store/ui";
 import { searchEmoji } from "../lib/emojiNames";
-import { PaperclipIcon, SmileIcon, XIcon } from "./Icons";
+import { PaperclipIcon, SmileIcon, XIcon, MicIcon } from "./Icons";
 import type { UploadedFile } from "../api/client";
 import type { Guild, Message } from "../types";
 import EmojiPicker from "./EmojiPicker";
@@ -190,6 +190,56 @@ export default function Composer({
     }
   }
 
+  // ── voice messages (MediaRecorder → upload as audio attachment) ──────────
+  const [rec, setRec] = useState<{ recorder: MediaRecorder; startedAt: number } | null>(null);
+  const [, recTick] = useState(0);
+  const recChunks = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    if (!rec) return;
+    const id = setInterval(() => recTick((x) => x + 1), 500);
+    return () => clearInterval(id);
+  }, [rec]);
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      recChunks.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size) recChunks.current.push(e.data);
+      };
+      recorder.start(250);
+      setRec({ recorder, startedAt: Date.now() });
+    } catch {
+      alert("Нет доступа к микрофону");
+    }
+  }
+
+  function stopRecording(send: boolean) {
+    const r = rec;
+    if (!r) return;
+    setRec(null);
+    r.recorder.onstop = async () => {
+      r.recorder.stream.getTracks().forEach((tr) => tr.stop());
+      if (!send) return;
+      const blob = new Blob(recChunks.current, { type: r.recorder.mimeType || "audio/webm" });
+      if (blob.size < 1000) return; // accidental tap
+      const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type });
+      try {
+        const up = await uploadFile(file);
+        onSend({ channelId, content: "", attachments: [up], replyToId: replyingTo?.id });
+        onClearReply();
+      } catch {
+        alert("Не удалось отправить голосовое сообщение");
+      }
+    };
+    r.recorder.stop();
+  }
+
+  const recSeconds = rec ? Math.floor((Date.now() - rec.startedAt) / 1000) : 0;
+
   function insertEmoji(emoji: string) {
     const el = textarea.current;
     if (!el) {
@@ -229,7 +279,30 @@ export default function Composer({
         </div>
       )}
 
-      <div className="flex items-end gap-3 px-4 py-2.5">
+      {rec && (
+        <div className="flex items-center gap-3 px-4 py-3">
+          <span className="h-3 w-3 animate-pulse rounded-full bg-discord-danger" />
+          <span className="text-sm text-discord-text">
+            {t("composer.recording")} {Math.floor(recSeconds / 60)}:{String(recSeconds % 60).padStart(2, "0")}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => stopRecording(false)}
+              className="rounded px-3 py-1 text-sm text-discord-muted hover:bg-discord-hover hover:text-white"
+            >
+              {t("composer.recordCancel")}
+            </button>
+            <button
+              onClick={() => stopRecording(true)}
+              className="rounded-full bg-discord-green px-4 py-1 text-sm font-medium text-white hover:brightness-110"
+            >
+              {t("composer.recordSend")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className={`flex items-end gap-3 px-4 py-2.5 ${rec ? "hidden" : ""}`}>
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => e.target.files && addFiles(e.target.files)} />
         <button
           onClick={() => fileInput.current?.click()}
@@ -250,6 +323,13 @@ export default function Composer({
           placeholder={t("composer.message", { name: channelName })}
           className="max-h-48 flex-1 resize-none bg-transparent py-1 text-discord-text outline-none placeholder:text-discord-faint"
         />
+        <button
+          onClick={startRecording}
+          className="pb-1.5 leading-none text-discord-muted hover:text-discord-text"
+          title={t("composer.record")}
+        >
+          <MicIcon size={20} />
+        </button>
         <button
           onClick={() => setShowGif((v) => !v)}
           className="pb-1 text-sm font-bold leading-none text-discord-muted hover:text-discord-text"

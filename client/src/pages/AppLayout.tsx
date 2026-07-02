@@ -31,7 +31,8 @@ import TaskbarBadge from "../components/TaskbarBadge";
 import AndroidUpdate from "../components/AndroidUpdate";
 import { appVersion, changesSince, type ChangelogEntry } from "../lib/changelog";
 import { initVoice } from "../lib/voice";
-import { startPushService } from "../lib/push";
+import { startPushService, initShareListener } from "../lib/push";
+import { useShare } from "../store/share";
 import { useI18n } from "../lib/i18n";
 import { isMuted } from "../store/mutes";
 import { MenuIcon, UsersIcon, GearIcon } from "../components/Icons";
@@ -71,6 +72,7 @@ export default function AppLayout() {
     initVoice();
     requestNotifyPermission();
     startPushService(); // Android: background notifications (no-op elsewhere)
+    initShareListener((s) => useShare.getState().set(s)); // Share → Concord
     return () => disconnectSocket();
   }, []);
 
@@ -142,6 +144,7 @@ export default function AppLayout() {
         push({ title: `${who} mentioned you`, body, actionLabel: "Open", onAction: open });
         playSound("message");
         desktopNotify(`${who} mentioned you`, body);
+        navigator.vibrate?.([120, 60, 120]); // phones: buzz on mention
       }
     };
 
@@ -157,6 +160,7 @@ export default function AppLayout() {
       push({ title: who, body, actionLabel: "Open", onAction: () => openDM(p.channelId) });
       playPing();
       desktopNotify(who, body);
+      navigator.vibrate?.(120); // phones: buzz on DM
     };
 
     // Someone joined a DM voice channel I'm not in → incoming call modal.
