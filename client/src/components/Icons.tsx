@@ -62,6 +62,23 @@ export const CameraIcon = ({ className, size }: P) =>
     </>
   ));
 
+export const HeadphonesIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+    </>
+  ));
+
+export const HeadphonesOffIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </>
+  ));
+
 export const BookmarkIcon = ({ className, size }: P) =>
   svg(size, className, (
     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />

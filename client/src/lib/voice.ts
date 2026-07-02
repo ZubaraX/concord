@@ -110,7 +110,8 @@ async function buildMic() {
 function applyMicState() {
   if (!micRawTrack) return;
   const ptt = cfg().voiceMode === "ptt";
-  micRawTrack.enabled = !st().muted && (!ptt || pttDown);
+  // Deafen implies mute (you can't hear them — they shouldn't hear you).
+  micRawTrack.enabled = !st().muted && !st().deafened && (!ptt || pttDown);
 }
 export function setInputVolume(percent: number) {
   cfg().set({ inputVolume: percent }); // (gain only applies in the mic-test monitor)
@@ -312,10 +313,68 @@ export function initVoice() {
     if (cfg().voiceMode !== "ptt" || !st().channelId) return;
     if (e.code !== cfg().pttKey || e.repeat) return;
     pttDown = down;
+    st().set({ pttActive: down }); // drives the "transmitting" indicator
     applyMicState();
   };
   window.addEventListener("keydown", onKey(true));
   window.addEventListener("keyup", onKey(false));
+}
+
+// ── connection quality (ping / packet loss) ──────────────────────────────────
+// Sampled every 4s while in a call: worst selected-pair RTT across peers and
+// packet loss (delta-based, so it reflects the last few seconds, not all time).
+let statsTimer: ReturnType<typeof setInterval> | null = null;
+const lastRtp = new Map<string, { lost: number; recv: number }>();
+
+async function sampleStats() {
+  if (peers.size === 0) {
+    if (st().netStats) st().set({ netStats: null });
+    return;
+  }
+  let worstRtt = 0;
+  let dLost = 0;
+  let dRecv = 0;
+  for (const [socketId, p] of peers) {
+    try {
+      const stats = await p.pc.getStats();
+      let selectedPair: string | null = null;
+      stats.forEach((s) => {
+        if (s.type === "transport" && s.selectedCandidatePairId) selectedPair = s.selectedCandidatePairId;
+      });
+      let lost = 0;
+      let recv = 0;
+      stats.forEach((s) => {
+        if (
+          s.type === "candidate-pair" &&
+          (s.id === selectedPair || (selectedPair === null && s.nominated && s.state === "succeeded")) &&
+          typeof s.currentRoundTripTime === "number"
+        ) {
+          worstRtt = Math.max(worstRtt, s.currentRoundTripTime * 1000);
+        }
+        if (s.type === "inbound-rtp") {
+          lost += s.packetsLost ?? 0;
+          recv += s.packetsReceived ?? 0;
+        }
+      });
+      const prev = lastRtp.get(socketId) ?? { lost: 0, recv: 0 };
+      dLost += Math.max(0, lost - prev.lost);
+      dRecv += Math.max(0, recv - prev.recv);
+      lastRtp.set(socketId, { lost, recv });
+    } catch {
+      /* peer may be closing */
+    }
+  }
+  const loss = dLost + dRecv > 0 ? Math.round((dLost / (dLost + dRecv)) * 100) : 0;
+  st().set({ netStats: { rtt: Math.round(worstRtt), loss } });
+}
+
+function startStats() {
+  if (!statsTimer) statsTimer = setInterval(sampleStats, 4000);
+}
+function stopStats() {
+  if (statsTimer) clearInterval(statsTimer);
+  statsTimer = null;
+  lastRtp.clear();
 }
 
 // ── join / leave ────────────────────────────────────────────────────────────────
@@ -345,10 +404,12 @@ export async function joinVoice(channelId: string) {
       playSound("voiceJoin");
     }
   );
+  startStats();
 }
 
 export async function leaveVoice() {
   clearAloneTimer();
+  stopStats();
   const channelId = st().channelId;
   if (channelId) {
     getSocket()?.emit("voice:leave", { channelId });
@@ -363,7 +424,7 @@ export async function leaveVoice() {
   cameraStream?.getTracks().forEach((t) => t.stop());
   screenStream = null;
   cameraStream = null;
-  st().set({ channelId: null, remotes: [], screenOn: false, cameraOn: false, muted: false, localScreen: null, localCamera: null, effects: [], connState: "idle" });
+  st().set({ channelId: null, remotes: [], screenOn: false, cameraOn: false, muted: false, deafened: false, pttActive: false, netStats: null, localScreen: null, localCamera: null, effects: [], connState: "idle" });
 }
 
 export function toggleMute() {
@@ -371,6 +432,15 @@ export function toggleMute() {
   st().set({ muted });
   applyMicState();
   playSound(muted ? "mute" : "unmute");
+}
+
+// Deafen: silence every incoming audio element (AudioSink reacts to the store)
+// and force the mic off. Undeafen restores the previous mute state.
+export function toggleDeafen() {
+  const deafened = !st().deafened;
+  st().set({ deafened });
+  applyMicState();
+  playSound(deafened ? "mute" : "unmute");
 }
 
 // ── screen / camera ──────────────────────────────────────────────────────────────

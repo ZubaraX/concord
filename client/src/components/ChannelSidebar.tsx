@@ -5,11 +5,12 @@ import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
 import { useUnread } from "../store/unread";
-import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, flipCamera, sendVoiceEmoji } from "../lib/voice";
+import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCamera, flipCamera, sendVoiceEmoji } from "../lib/voice";
+import { useSettings } from "../store/settings";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
 import { isAndroidApp } from "../lib/platform";
-import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon } from "./Icons";
+import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon } from "./Icons";
 import VoiceUserPopover from "./VoiceUserPopover";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
@@ -156,16 +157,23 @@ export default function ChannelSidebar() {
   );
 }
 
+// PTT key codes read nicer without the KeyboardEvent.code prefixes.
+const prettyKey = (code: string) => code.replace(/^Key|^Digit/, "");
+
 function VoiceControlBar({ channelName }: { channelName: string }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const { t } = useI18n();
-  const { connState: conn, muted, screenOn, cameraOn } = useVoice();
+  const { connState: conn, muted, deafened, pttActive, netStats, screenOn, cameraOn } = useVoice();
+  const { voiceMode, pttKey } = useSettings();
   const status =
     conn === "failed"
       ? { color: "bg-discord-danger", text: "No media — needs TURN", textColor: "text-discord-danger" }
       : conn === "connecting"
       ? { color: "bg-yellow-500", text: t("voice.connecting"), textColor: "text-white" }
       : { color: "bg-discord-green", text: t("voice.connected"), textColor: "text-white" };
+  // Ping color: green under 80ms, yellow under 200ms, red beyond (or any loss).
+  const pingColor =
+    !netStats ? "" : netStats.loss > 5 || netStats.rtt >= 200 ? "text-discord-danger" : netStats.rtt >= 80 ? "text-yellow-500" : "text-discord-green";
   return (
     <div className="relative border-t border-black/30 bg-discord-deep px-2 py-2">
       <div className="flex items-center gap-2 px-1">
@@ -176,9 +184,26 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
           <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", status.color)} />
         </span>
         <div className="min-w-0 flex-1 leading-tight">
-          <div className={clsx("truncate text-sm font-semibold", status.textColor)}>{status.text}</div>
+          <div className="flex items-baseline gap-2">
+            <span className={clsx("truncate text-sm font-semibold", status.textColor)}>{status.text}</span>
+            {netStats && conn === "connected" && (
+              <span className={clsx("shrink-0 text-[11px] tabular-nums", pingColor)} title={`Потери: ${netStats.loss}%`}>
+                {netStats.rtt} ms{netStats.loss > 0 ? ` · ${netStats.loss}%` : ""}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1 truncate text-xs text-discord-muted"><SpeakerIcon size={12} /> {channelName}</div>
         </div>
+        <button
+          onClick={toggleDeafen}
+          title={deafened ? t("voice.undeafen") : t("voice.deafen")}
+          className={clsx(
+            "flex h-8 w-8 items-center justify-center rounded-full transition",
+            deafened ? "bg-discord-danger text-white" : "bg-discord-card text-discord-text hover:bg-discord-hover"
+          )}
+        >
+          {deafened ? <HeadphonesOffIcon size={16} /> : <HeadphonesIcon size={16} />}
+        </button>
         <button
           onClick={leaveVoice}
           title={t("voice.disconnect")}
@@ -211,6 +236,18 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
           <SmileIcon size={18} />
         </CallBtn>
       </div>
+
+      {voiceMode === "ptt" && (
+        <div
+          className={clsx(
+            "mt-1.5 flex items-center justify-center gap-1.5 rounded-md py-1 text-[11px] font-medium transition",
+            pttActive ? "bg-discord-green/20 text-discord-green" : "bg-black/20 text-discord-muted"
+          )}
+        >
+          <MicIcon size={12} />
+          {pttActive ? "Передача…" : `PTT — ${prettyKey(pttKey)}`}
+        </div>
+      )}
 
       {emojiOpen && (
         <div className="absolute -top-12 left-2 right-2 flex justify-around rounded-lg bg-discord-rail p-1.5 shadow-xl">

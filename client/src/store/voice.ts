@@ -12,6 +12,9 @@ interface VoiceStore {
   channelId: string | null; // the voice channel we're connected to
   connecting: boolean;
   muted: boolean;
+  deafened: boolean; // silence ALL incoming audio (also forces mic off)
+  pttActive: boolean; // push-to-talk key currently held
+  netStats: { rtt: number; loss: number } | null; // worst peer RTT (ms) + loss %
   screenOn: boolean;
   cameraOn: boolean;
   localScreen: MediaStream | null; // preview of our own shared screen
@@ -27,6 +30,9 @@ export const useVoice = create<VoiceStore>((set) => ({
   channelId: null,
   connecting: false,
   muted: false,
+  deafened: false,
+  pttActive: false,
+  netStats: null,
   screenOn: false,
   cameraOn: false,
   localScreen: null,
