@@ -1,0 +1,44 @@
+name: Desktop (Windows)
+
+# Builds the Electron desktop app and publishes the installer + latest.yml to
+# the "v{version}" GitHub Release — that's what electron-updater checks, so
+# installed desktops self-update. Runs when the client version is bumped (the
+# same commit that ships an Android build), or on demand.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "client/package.json"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build renderer (server URL baked in)
+        working-directory: client
+        run: npm run build
+        env:
+          VITE_API_URL: https://138-16-224-172.sslip.io
+
+      - name: Bundle Electron main/preload
+        working-directory: client
+        run: npm run build:electron
+
+      - name: Build installer + publish to GitHub Release
+        working-directory: client
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
