@@ -36,7 +36,9 @@ jobs:
         working-directory: client
         run: npm run build
         env:
-          VITE_API_URL: http://138.16.224.172
+          # TLS via nginx/Let's Encrypt on the box; sslip.io maps the name to
+          # 138.16.224.172 with no registration. :80 still serves old builds.
+          VITE_API_URL: https://138-16-224-172.sslip.io
 
       - name: Add Android platform
         working-directory: client

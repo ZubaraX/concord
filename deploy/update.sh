@@ -55,8 +55,9 @@ NGINX
     cat >>/etc/nginx/sites-available/concord <<NGINX
 
 server {
+    # NB: no http2 — the standalone "http2 on;" directive needs nginx >= 1.25
+    # and the box runs older; plain TLS is all we need for API + WebSocket.
     listen 443 ssl;
-    http2 on;
     server_name ${DOMAIN};
     client_max_body_size 0;
 
