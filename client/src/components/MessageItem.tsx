@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../store/auth";
 import { useUI } from "../store/ui";
+import { useBookmarks } from "../store/bookmarks";
 import { useLightbox } from "../store/lightbox";
 import { serverPath } from "../lib/serverUrl";
 import type { Attachment, LinkEmbed, Message } from "../types";
@@ -61,11 +62,17 @@ function MessageItem({
     api(`/api/messages/${message.id}/pin`, { method: pinned ? "PUT" : "DELETE" }).catch(() => {});
   }
 
+  const bookmarked = useBookmarks((s) => s.bookmarks.some((b) => b.id === message.id));
   const menuItems: MenuItem[] = [
     { label: "View Profile", icon: "👤", onClick: () => openProfile(message.author.id) },
     { label: "Add Reaction", icon: "😀", onClick: () => setPicker(true) },
     { label: "Reply", icon: "↩️", onClick: () => onReply(message) },
     { label: "Copy Text", icon: "📋", onClick: () => navigator.clipboard?.writeText(message.content) },
+    {
+      label: bookmarked ? "Remove Bookmark" : "Bookmark",
+      icon: "🔖",
+      onClick: () => useBookmarks.getState().toggle(message, useUI.getState().currentGuildId),
+    },
     { label: message.pinned ? "Unpin" : "Pin", icon: "📌", onClick: () => setPin(!message.pinned) },
     ...(mine
       ? [

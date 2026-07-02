@@ -4,6 +4,7 @@ import { prisma } from "../lib/db.js";
 import { config } from "../config.js";
 import { getAccessibleChannel } from "./access.js";
 import { getIOorNull, channelRoom, guildRoom, userRoom } from "../realtime/io.js";
+import { pushToUser } from "../lib/push.js";
 
 const authorSelect = {
   id: true,
@@ -117,6 +118,8 @@ export async function broadcastNewMessage(message: CreatedMessage) {
     where: { id: message.channelId },
     select: { guildId: true, dmParticipants: { select: { id: true } } },
   });
+  const authorName = message.author.displayName ?? message.author.username;
+  const preview = message.content?.slice(0, 160) || "📎 Вложение";
   if (channel?.guildId) {
     // Resolve @mentions (and @everyone/@here) against this guild's members so
     // mentioned users get a ping even when they're not viewing the channel.
@@ -126,13 +129,25 @@ export async function broadcastNewMessage(message: CreatedMessage) {
       channelId: message.channelId,
       guildId: channel.guildId,
       authorId: message.authorId,
-      authorName: message.author.displayName ?? message.author.username,
+      authorName,
       content: (message.content ?? "").slice(0, 160),
       mentions,
     });
+    for (const uid of mentions) {
+      pushToUser(uid, {
+        type: "mention",
+        title: `${authorName} упомянул(а) вас`,
+        body: preview,
+        channelId: message.channelId,
+        guildId: channel.guildId,
+      });
+    }
   } else if (channel) {
     for (const p of channel.dmParticipants) {
-      if (p.id !== message.authorId) io.to(userRoom(p.id)).emit("notify:dm", { channelId: message.channelId, message });
+      if (p.id !== message.authorId) {
+        io.to(userRoom(p.id)).emit("notify:dm", { channelId: message.channelId, message });
+        pushToUser(p.id, { type: "dm", title: authorName, body: preview, channelId: message.channelId });
+      }
     }
   }
 

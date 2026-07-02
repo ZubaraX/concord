@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { User } from "../types";
 import { api, tokens } from "../api/client";
+import { stopPushService } from "../lib/push";
 
 const USER_KEY = "concord.user";
 const cachedUser = (): User | null => {
@@ -59,6 +60,7 @@ export const useAuth = create<AuthState>((set) => ({
       method: "POST",
       body: JSON.stringify({ refreshToken: tokens.refresh }),
     }).catch(() => {});
+    stopPushService(); // Android: kill the background notification service
     tokens.clear();
     saveUser(null);
     set({ user: null });

@@ -7,6 +7,7 @@ import { config } from "../config.js";
 import { prisma } from "../lib/db.js";
 import { addPresence, removePresence } from "../lib/presence.js";
 import { createMessage, broadcastNewMessage, MessageError } from "../services/messages.js";
+import { pushToUser } from "../lib/push.js";
 import { setIO, channelRoom, guildRoom, userRoom } from "./io.js";
 
 interface SocketData {
@@ -147,6 +148,25 @@ export function attachGateway(app: FastifyInstance) {
         socket.to(voiceRoom(channelId)).emit("voice:peerJoined", { socketId: socket.id, userId });
         ack?.({ ok: true, peers });
         broadcastVoiceState(channelId);
+
+        // DM call started → push "incoming call" to participants not in it.
+        if (!channel.guildId) {
+          const inCall = new Set(map.values());
+          const dm = await prisma.channel.findUnique({
+            where: { id: channelId },
+            select: { dmParticipants: { select: { id: true } } },
+          });
+          for (const p of dm?.dmParticipants ?? []) {
+            if (!inCall.has(p.id)) {
+              pushToUser(p.id, {
+                type: "call",
+                title: socket.data.username,
+                body: "Входящий звонок 📞",
+                channelId,
+              });
+            }
+          }
+        }
       }
     );
 

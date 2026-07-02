@@ -31,6 +31,7 @@ import TaskbarBadge from "../components/TaskbarBadge";
 import AndroidUpdate from "../components/AndroidUpdate";
 import { appVersion, changesSince, type ChangelogEntry } from "../lib/changelog";
 import { initVoice } from "../lib/voice";
+import { startPushService } from "../lib/push";
 
 export default function AppLayout() {
   const { currentGuildId, currentChannelId, setGuild, openDM, modal, closeModal, profileUserId, closeProfile } = useUI();
@@ -46,6 +47,7 @@ export default function AppLayout() {
     connectSocket();
     initVoice();
     requestNotifyPermission();
+    startPushService(); // Android: background notifications (no-op elsewhere)
     return () => disconnectSocket();
   }, []);
 

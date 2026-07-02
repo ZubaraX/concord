@@ -1,0 +1,35 @@
+name: Deploy server
+
+# Updates the VPS over SSH from a GitHub runner. The provider intermittently
+# drops packets from residential IPs (so deploying from the dev machine is
+# unreliable) — runner IPs are not affected. Credentials live in repo secrets.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "deploy/**"
+      - ".github/workflows/deploy.yml"
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update server over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 20m
+          script: |
+            set -e
+            cd /opt/concord
+            git fetch origin
+            git reset --hard origin/main
+            bash deploy/update.sh

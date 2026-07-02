@@ -53,11 +53,18 @@ jobs:
           --splashBackgroundColor '#313338' --splashBackgroundColorDark '#1e1f22'
           --logoSplashScale 0.4
 
-      - name: Allow mic/camera permissions in the manifest
+      # The push notification service is plain Java kept in client/android-extras
+      # (the android/ project is generated fresh by `cap add` on every build).
+      - name: Install push service sources
+        run: cp client/android-extras/*.java client/android/app/src/main/java/com/concord/app/
+
+      - name: Allow mic/camera/notification permissions + push service in the manifest
         run: |
           MANIFEST=client/android/app/src/main/AndroidManifest.xml
-          sed -i '/android.permission.INTERNET/a\    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' "$MANIFEST"
+          sed -i '/android.permission.INTERNET/a\    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />' "$MANIFEST"
+          sed -i 's#</application>#    <service android:name=".PushService" android:exported="false" android:foregroundServiceType="dataSync" />\n        <receiver android:name=".BootReceiver" android:exported="true">\n            <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>\n        </receiver>\n    </application>#' "$MANIFEST"
           echo "--- permissions ---"; grep uses-permission "$MANIFEST"
+          echo "--- service ---"; grep -A3 "PushService\|BootReceiver" "$MANIFEST"
 
       - name: Sync web assets into the Android project
         working-directory: client

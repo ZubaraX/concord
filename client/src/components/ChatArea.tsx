@@ -10,10 +10,11 @@ import { joinVoice, leaveVoice, toggleMute, toggleScreen, toggleCamera, flipCame
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
 import { isAndroidApp } from "../lib/platform";
-import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon } from "./Icons";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
+import BookmarksModal from "./BookmarksModal";
 
 interface ChannelInfo {
   id: string;
@@ -34,6 +35,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const [replyingTo, setReplyingTo] = useState<Msg | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showPins, setShowPins] = useState(false);
+  const [showBookmarks, setShowBookmarks] = useState(false);
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -216,6 +218,14 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
           <PinIcon size={18} />
         </button>
 
+        <button
+          onClick={() => setShowBookmarks(true)}
+          className="rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white"
+          title="Bookmarks"
+        >
+          <BookmarkIcon size={18} />
+        </button>
+
         {/* Phones: the member list is a drawer — this opens it. Static on lg+. */}
         {!isDM && (
           <button
@@ -307,6 +317,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       </div>
 
       {showPins && <PinsModal channelId={channel.id} onClose={() => setShowPins(false)} />}
+      {showBookmarks && <BookmarksModal onClose={() => setShowBookmarks(false)} />}
     </main>
   );
 }
