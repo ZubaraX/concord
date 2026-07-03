@@ -1,10 +1,12 @@
 import React from "react";
 
+export type EmojiMap = Record<string, string>; // name -> image url
+
 // Minimal, safe Discord-flavored markdown (no dangerouslySetInnerHTML).
 // Block level: ```fenced code``` (with light syntax highlight + lang label),
 // > blockquotes, # headers, - / 1. lists. Inline: `code`, **bold**, *italic*,
-// __underline__, ~~strike~~, ||spoiler||, autolinks.
-export function renderMarkdown(text: string): React.ReactNode {
+// __underline__, ~~strike~~, ||spoiler||, autolinks, :custom_emoji:.
+export function renderMarkdown(text: string, customEmojis?: EmojiMap): React.ReactNode {
   const parts = text.split(/(```[\s\S]*?```)/g);
   return parts.map((part, i) => {
     const fence = part.match(/^```(\w+)?\n?([\s\S]*?)```$/);
@@ -23,12 +25,12 @@ export function renderMarkdown(text: string): React.ReactNode {
         </pre>
       );
     }
-    return <React.Fragment key={i}>{renderBlocks(part)}</React.Fragment>;
+    return <React.Fragment key={i}>{renderBlocks(part, customEmojis)}</React.Fragment>;
   });
 }
 
 // Group plain text into block elements line-by-line.
-function renderBlocks(text: string): React.ReactNode[] {
+function renderBlocks(text: string, customEmojis?: EmojiMap): React.ReactNode[] {
   const lines = text.split("\n");
   const out: React.ReactNode[] = [];
   let i = 0;
@@ -46,7 +48,7 @@ function renderBlocks(text: string): React.ReactNode[] {
       out.push(
         <blockquote key={key++} className="my-0.5 border-l-4 border-discord-faint/60 pl-2 text-discord-text">
           {quoted.map((q, j) => (
-            <div key={j}>{renderInline(q)}</div>
+            <div key={j}>{renderInline(q, customEmojis)}</div>
           ))}
         </blockquote>
       );
@@ -59,7 +61,7 @@ function renderBlocks(text: string): React.ReactNode[] {
       const size = h[1].length === 1 ? "text-xl" : h[1].length === 2 ? "text-lg" : "text-base";
       out.push(
         <div key={key++} className={`mt-1 font-bold text-white ${size}`}>
-          {renderInline(h[2])}
+          {renderInline(h[2], customEmojis)}
         </div>
       );
       i++;
@@ -79,7 +81,7 @@ function renderBlocks(text: string): React.ReactNode[] {
       out.push(
         <Tag key={key++} className={`my-0.5 ml-5 ${ordered ? "list-decimal" : "list-disc"}`}>
           {items.map((it, j) => (
-            <li key={j}>{renderInline(it.text)}</li>
+            <li key={j}>{renderInline(it.text, customEmojis)}</li>
           ))}
         </Tag>
       );
@@ -87,15 +89,15 @@ function renderBlocks(text: string): React.ReactNode[] {
     }
 
     // Plain line (preserve blank lines as spacing).
-    out.push(<div key={key++}>{line ? renderInline(line) : " "}</div>);
+    out.push(<div key={key++}>{line ? renderInline(line, customEmojis) : " "}</div>);
     i++;
   }
   return out;
 }
 
-function renderInline(text: string): React.ReactNode[] {
+function renderInline(text: string, customEmojis?: EmojiMap): React.ReactNode[] {
   const pattern =
-    /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(~~[^~]+~~)|(\|\|[^|]+\|\|)|(https?:\/\/[^\s]+)/g;
+    /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(~~[^~]+~~)|(\|\|[^|]+\|\|)|(https?:\/\/[^\s]+)|(:[a-z0-9_]+:)/g;
   const out: React.ReactNode[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
@@ -111,6 +113,16 @@ function renderInline(text: string): React.ReactNode[] {
     else if (tok.startsWith("||")) out.push(<Spoiler key={key}>{tok.slice(2, -2)}</Spoiler>);
     else if (tok.startsWith("*")) out.push(<em key={key}>{tok.slice(1, -1)}</em>);
     else if (tok.startsWith("http")) out.push(<a key={key} href={tok} target="_blank" rel="noreferrer" className="text-discord-link hover:underline">{tok}</a>);
+    else if (tok.startsWith(":")) {
+      const url = customEmojis?.[tok.slice(1, -1)];
+      out.push(
+        url ? (
+          <img key={key} src={url} alt={tok} title={tok} className="inline-block h-5 w-5 -translate-y-0.5 object-contain align-middle" />
+        ) : (
+          tok
+        )
+      );
+    }
     key++;
     last = m.index + tok.length;
   }

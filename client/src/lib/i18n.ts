@@ -280,6 +280,44 @@ const en = {
   "common.unpin": "Unpin",
   "common.download": "Download",
   "common.openInBrowser": "Open in browser",
+
+  // Roles & permissions
+  "roles.title": "Roles",
+  "roles.manage": "Manage Roles",
+  "roles.manageFor": "Roles for this member",
+  "roles.none": "No roles yet — create one first",
+  "roles.create": "New Role",
+  "roles.newRole": "new role",
+  "roles.moveUp": "Move up",
+  "roles.moveDown": "Move down",
+  "roles.delete": "Delete",
+  "roles.color": "Color",
+  "roles.permissions": "Permissions",
+  "roles.perm.administrator": "Administrator",
+  "roles.perm.manageChannels": "Manage Channels",
+  "roles.perm.manageRoles": "Manage Roles",
+  "roles.perm.manageEmojis": "Manage Emojis",
+
+  // Custom emoji
+  "emoji.title": "Custom Emoji",
+  "emoji.namePlaceholder": "emoji_name",
+  "emoji.upload": "Upload",
+  "emoji.none": "No custom emoji yet",
+  "emoji.needName": "Give the emoji a name first",
+
+  // Polls
+  "poll.create": "Create Poll",
+  "poll.needTwo": "A question and at least 2 options are required",
+  "poll.questionPlaceholder": "Ask a question…",
+  "poll.optionPlaceholder": "Option {n}",
+  "poll.addOption": "Add option",
+
+  // Scheduled messages
+  "schedule.title": "Schedule Message",
+  "schedule.empty": "Nothing to schedule — write a message first",
+  "schedule.inMinutes": "In {n} minutes",
+  "schedule.inHours": "In {n} hours",
+  "schedule.set": "Schedule",
 } as const;
 
 const ru: Record<keyof typeof en, string> = {
@@ -541,6 +579,40 @@ const ru: Record<keyof typeof en, string> = {
   "common.unpin": "Открепить",
   "common.download": "Скачать",
   "common.openInBrowser": "Открыть в браузере",
+
+  "roles.title": "Роли",
+  "roles.manage": "Управление ролями",
+  "roles.manageFor": "Роли этого участника",
+  "roles.none": "Пока нет ролей — сначала создайте",
+  "roles.create": "Новая роль",
+  "roles.newRole": "новая роль",
+  "roles.moveUp": "Выше",
+  "roles.moveDown": "Ниже",
+  "roles.delete": "Удалить",
+  "roles.color": "Цвет",
+  "roles.permissions": "Права",
+  "roles.perm.administrator": "Администратор",
+  "roles.perm.manageChannels": "Управление каналами",
+  "roles.perm.manageRoles": "Управление ролями",
+  "roles.perm.manageEmojis": "Управление эмодзи",
+
+  "emoji.title": "Свои эмодзи",
+  "emoji.namePlaceholder": "имя_эмодзи",
+  "emoji.upload": "Загрузить",
+  "emoji.none": "Пока нет своих эмодзи",
+  "emoji.needName": "Сначала укажите имя эмодзи",
+
+  "poll.create": "Создать опрос",
+  "poll.needTwo": "Нужен вопрос и минимум 2 варианта",
+  "poll.questionPlaceholder": "Задайте вопрос…",
+  "poll.optionPlaceholder": "Вариант {n}",
+  "poll.addOption": "Добавить вариант",
+
+  "schedule.title": "Отложенное сообщение",
+  "schedule.empty": "Нечего откладывать — сначала напишите сообщение",
+  "schedule.inMinutes": "Через {n} мин.",
+  "schedule.inHours": "Через {n} ч.",
+  "schedule.set": "Запланировать",
 };
 
 const dicts: Record<Lang, Record<string, string>> = { en, ru };

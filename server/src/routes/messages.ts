@@ -1,10 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { prisma } from "../lib/db.js";
 import { authenticate } from "../lib/auth.js";
 import { createMessage, listMessages, broadcastNewMessage, messageInclude, MessageError } from "../services/messages.js";
 import { getAccessibleChannel } from "../services/access.js";
 import { getIO, channelRoom } from "../realtime/io.js";
+
+interface PollData {
+  question: string;
+  options: { id: string; label: string }[];
+  votes: Record<string, string[]>; // optionId -> userIds
+}
 
 export async function messageRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
@@ -204,5 +211,61 @@ export async function messageRoutes(app: FastifyInstance) {
       orderBy: { createdAt: "desc" },
     });
     return reply.send(pins);
+  });
+
+  // ── Polls ─────────────────────────────────────────────────────────────
+  // A poll rides along as a normal (empty-content) message with `pollJson`
+  // populated — it gets full message-pipeline treatment (broadcast, push,
+  // history, search) for free.
+  app.post("/channels/:channelId/poll", async (req, reply) => {
+    const { channelId } = req.params as { channelId: string };
+    const body = z
+      .object({ question: z.string().min(1).max(300), options: z.array(z.string().min(1).max(80)).min(2).max(10) })
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
+
+    try {
+      const poll: PollData = {
+        question: body.data.question,
+        options: body.data.options.map((label) => ({ id: nanoid(6), label })),
+        votes: {},
+      };
+      const message = await createMessage({ channelId, authorId: req.userId, content: "", pollJson: JSON.stringify(poll) });
+      await broadcastNewMessage(message);
+      return reply.code(201).send(message);
+    } catch (err) {
+      if (err instanceof MessageError) return reply.code(err.status).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  // Single-choice voting: picking a new option clears any previous vote.
+  app.put("/messages/:messageId/poll/vote", async (req, reply) => {
+    const { messageId } = req.params as { messageId: string };
+    const { optionId } = z.object({ optionId: z.string() }).parse(req.body);
+
+    const message = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!message?.pollJson) return reply.code(404).send({ error: "Not a poll" });
+    const channelId = await reactableChannel(req.userId, messageId);
+    if (!channelId) return reply.code(403).send({ error: "No access" });
+
+    const poll: PollData = JSON.parse(message.pollJson);
+    if (!poll.options.some((o) => o.id === optionId)) return reply.code(400).send({ error: "Unknown option" });
+
+    const alreadyVoted = poll.votes[optionId]?.includes(req.userId);
+    for (const id of Object.keys(poll.votes)) {
+      poll.votes[id] = poll.votes[id].filter((u) => u !== req.userId);
+    }
+    if (!alreadyVoted) {
+      poll.votes[optionId] = [...(poll.votes[optionId] ?? []), req.userId];
+    }
+
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { pollJson: JSON.stringify(poll) },
+      include: messageInclude,
+    });
+    getIO().to(channelRoom(channelId)).emit("message:edit", updated);
+    return reply.send(updated);
   });
 }

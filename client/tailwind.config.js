@@ -38,5 +38,14 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Touch devices simulate `:hover` on tap and never fire the matching
+    // "leave" — every hover: / group-hover: highlight would otherwise get
+    // stuck "on" after the first tap. Scoping both variants to real
+    // hover-capable pointers (mouse/trackpad) fixes that app-wide.
+    function ({ addVariant }) {
+      addVariant("hover", "@media (hover: hover) and (pointer: fine) { &:hover }");
+      addVariant("group-hover", "@media (hover: hover) and (pointer: fine) { .group:hover & }");
+    },
+  ],
 };

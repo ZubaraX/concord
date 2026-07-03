@@ -86,8 +86,21 @@ model Guild {
   members     GuildMember[]
   roles       Role[]
   invites     Invite[]
+  emojis      GuildEmoji[]
 
   @@index([ownerId])
+}
+
+model GuildEmoji {
+  id        String   @id @default(cuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name      String // used as :name: in messages — letters/digits/underscore only
+  url       String
+  createdAt DateTime @default(now())
+
+  @@unique([guildId, name])
+  @@index([guildId])
 }
 
 model Invite {
@@ -175,12 +188,29 @@ model Message {
   editedAt  DateTime?
   createdAt DateTime  @default(now())
   embedsJson String?  // JSON-encoded link-preview embeds (fetched server-side)
+  pollJson   String?  // JSON: { question, options: [{id,label}], votes: {optionId:[userId,...]}, multi: bool }
 
   attachments Attachment[]
   reactions   Reaction[]
 
   @@index([channelId, createdAt])
   @@index([authorId])
+}
+
+// A message the author queued to send later. On send it becomes a real
+// Message (createMessage/broadcastNewMessage) and this row is deleted — see
+// lib/scheduler.ts for the polling loop that fires these.
+model ScheduledMessage {
+  id             String   @id @default(cuid())
+  channelId      String
+  authorId       String
+  content        String
+  attachmentsJson String? // JSON array of {url,filename,size,mimeType,width?,height?}
+  sendAt         DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([sendAt])
+  @@index([channelId])
 }
 
 model Reaction {

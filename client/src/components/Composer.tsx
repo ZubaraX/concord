@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n";
 import { useUI } from "../store/ui";
 import { searchEmoji } from "../lib/emojiNames";
-import { PaperclipIcon, SmileIcon, XIcon, MicIcon } from "./Icons";
+import { PaperclipIcon, SmileIcon, XIcon, MicIcon, BarChartIcon, ClockIcon } from "./Icons";
 import type { UploadedFile } from "../api/client";
-import type { Guild, Message } from "../types";
+import type { Guild, Message, ScheduledMessage } from "../types";
 import EmojiPicker from "./EmojiPicker";
 import GifPicker from "./GifPicker";
 import Avatar from "./Avatar";
+import ContextMenu from "./ContextMenu";
+import PollComposeModal from "./PollComposeModal";
+import ScheduleComposeModal from "./ScheduleComposeModal";
 
 // One row in the @mention / :emoji: autocomplete popup.
 interface AcItem {
@@ -55,9 +58,25 @@ export default function Composer({
   const [value, setValue] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [attachMenu, setAttachMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showPoll, setShowPoll] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
   const lastTyping = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const attachBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Pending "send later" messages, shown as dismissible chips above the input.
+  const { data: scheduled = [] } = useQuery<ScheduledMessage[]>({
+    queryKey: ["scheduled", channelId],
+    queryFn: () => api<ScheduledMessage[]>(`/api/channels/${channelId}/scheduled`),
+    refetchInterval: 30_000,
+  });
+  const qc = useQueryClient();
+  async function cancelScheduled(id: string) {
+    await api(`/api/scheduled/${id}`, { method: "DELETE" }).catch(() => {});
+    qc.invalidateQueries({ queryKey: ["scheduled", channelId] });
+  }
 
   // ── @mention / :emoji: autocomplete ─────────────────────────────────────
   const { currentGuildId } = useUI();
@@ -268,6 +287,19 @@ export default function Composer({
         </div>
       )}
 
+      {scheduled.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-b border-black/20 p-2">
+          {scheduled.map((s) => (
+            <div key={s.id} className="flex items-center gap-1.5 rounded-full bg-discord-deep px-3 py-1 text-xs text-discord-muted">
+              <ClockIcon size={12} />
+              <span className="max-w-[160px] truncate">{s.content || t("share.attachHere")}</span>
+              <span className="text-discord-faint">· {new Date(s.sendAt).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+              <button onClick={() => cancelScheduled(s.id)} className="hover:text-discord-danger"><XIcon size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 border-b border-black/20 p-3">
           {attachments.map((a, i) => (
@@ -306,7 +338,13 @@ export default function Composer({
       <div className={`flex items-end gap-1 px-2 py-2 sm:gap-2 sm:px-3 ${rec ? "hidden" : ""}`}>
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => e.target.files && addFiles(e.target.files)} />
         <button
-          onClick={() => fileInput.current?.click()}
+          ref={attachBtnRef}
+          onClick={() => {
+            // The composer sits at the bottom of the screen — open the menu
+            // upward from the button, not downward off-screen.
+            const r = attachBtnRef.current?.getBoundingClientRect();
+            setAttachMenu(r ? { x: r.left, y: r.top - 132 } : { x: 0, y: 0 });
+          }}
           disabled={uploading}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text disabled:opacity-50"
           title={t("composer.uploadFile")}
@@ -345,9 +383,38 @@ export default function Composer({
         >
           <SmileIcon size={22} />
         </button>
-        {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
+        {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} guildId={currentGuildId} />}
         {showGif && <GifPicker onPick={sendGif} onClose={() => setShowGif(false)} />}
       </div>
+
+      {attachMenu && (
+        <ContextMenu
+          x={attachMenu.x}
+          y={attachMenu.y}
+          onClose={() => setAttachMenu(null)}
+          items={[
+            { label: t("composer.uploadFile"), icon: <PaperclipIcon size={15} />, onClick: () => fileInput.current?.click() },
+            { label: t("poll.create"), icon: <BarChartIcon size={15} />, onClick: () => setShowPoll(true) },
+            { label: t("schedule.title"), icon: <ClockIcon size={15} />, onClick: () => setShowSchedule(true) },
+          ]}
+        />
+      )}
+      {showPoll && <PollComposeModal channelId={channelId} onClose={() => setShowPoll(false)} />}
+      {showSchedule && (
+        <ScheduleComposeModal
+          channelId={channelId}
+          content={value}
+          attachments={attachments}
+          onDone={() => {
+            setShowSchedule(false);
+            setValue("");
+            setAttachments(() => []);
+            onClearReply();
+            qc.invalidateQueries({ queryKey: ["scheduled", channelId] });
+          }}
+          onClose={() => setShowSchedule(false)}
+        />
+      )}
 
       {ac && (
         <div className="cc-pop absolute bottom-full left-0 z-50 mb-1 w-full max-w-sm overflow-hidden rounded-lg bg-discord-rail py-1 shadow-xl ring-1 ring-black/40">

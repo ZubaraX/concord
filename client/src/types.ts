@@ -53,6 +53,13 @@ export interface GuildMember {
   roles: Role[];
 }
 
+export interface GuildEmoji {
+  id: string;
+  guildId: string;
+  name: string;
+  url: string;
+}
+
 export interface Guild {
   id: string;
   name: string;
@@ -63,6 +70,13 @@ export interface Guild {
   channels: Channel[];
   roles?: Role[];
   members?: GuildMember[];
+  emojis?: GuildEmoji[];
+}
+
+export interface PollData {
+  question: string;
+  options: { id: string; label: string }[];
+  votes: Record<string, string[]>; // optionId -> userIds
 }
 
 export interface Message {
@@ -77,6 +91,14 @@ export interface Message {
   attachments: Attachment[];
   reactions?: { emoji: string; userId: string }[];
   embedsJson?: string | null;
+  pollJson?: string | null;
+}
+
+export interface ScheduledMessage {
+  id: string;
+  channelId: string;
+  content: string;
+  sendAt: string;
 }
 
 export interface LinkEmbed {

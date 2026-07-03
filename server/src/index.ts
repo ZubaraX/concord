@@ -24,7 +24,9 @@ import { friendRoutes } from "./routes/friends.js";
 import { dmRoutes } from "./routes/dms.js";
 import { userRoutes } from "./routes/users.js";
 import { gifRoutes } from "./routes/gifs.js";
+import { scheduledRoutes } from "./routes/scheduled.js";
 import { registerPushRoutes } from "./lib/push.js";
+import { startScheduler } from "./lib/scheduler.js";
 import { attachGateway } from "./realtime/gateway.js";
 
 async function main() {
@@ -118,6 +120,7 @@ async function main() {
   await app.register(dmRoutes, { prefix: "/api/dms" });
   await app.register(userRoutes, { prefix: "/api/users" });
   await app.register(gifRoutes, { prefix: "/api/gifs" });
+  await app.register(scheduledRoutes, { prefix: "/api" });
   registerPushRoutes(app);
 
   // SQLite tuning: WAL gives concurrent reads during writes; busy_timeout
@@ -134,6 +137,7 @@ async function main() {
   // Bind HTTP, then attach Socket.io to the same underlying server.
   await app.listen({ port: config.SERVER_PORT, host: "0.0.0.0" });
   attachGateway(app);
+  startScheduler();
 
   app.log.info(`Concord API + gateway on :${config.SERVER_PORT}`);
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { api } from "../api/client";
 import { useUI } from "../store/ui";
@@ -11,11 +11,14 @@ import { useSpeaking, type SpeakStream } from "../lib/speaking";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
 import { isAndroidApp } from "../lib/platform";
-import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon } from "./Icons";
+import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon } from "./Icons";
 import { useMutes } from "../store/mutes";
+import { memberHasPermission, Permissions } from "../lib/permissions";
 import VoiceUserPopover from "./VoiceUserPopover";
 import ContextMenu from "./ContextMenu";
 import { CallTimer } from "./VoiceStage";
+import RolesModal from "./RolesModal";
+import EmojiManageModal from "./EmojiManageModal";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
@@ -35,6 +38,10 @@ export default function ChannelSidebar() {
   const [createCtx, setCreateCtx] = useState<{ type: "TEXT" | "VOICE"; parentId?: string } | null>(null);
   const [volPop, setVolPop] = useState<VolPopover>(null);
   const [chanMenu, setChanMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
+  const [showRoles, setShowRoles] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const mutes = useMutes();
 
   const { data: guild } = useQuery<Guild>({
@@ -45,6 +52,9 @@ export default function ChannelSidebar() {
 
   const channels = guild?.channels ?? [];
   const grouped = useMemo(() => groupChannels(channels), [channels]);
+  const canManageRoles = memberHasPermission(guild, myId, Permissions.MANAGE_ROLES);
+  const canManageEmojis = memberHasPermission(guild, myId, Permissions.MANAGE_EMOJIS);
+  const canManageChannels = memberHasPermission(guild, myId, Permissions.MANAGE_CHANNELS);
 
   // Who's talking right now (remote streams + own mic) → glowing indicator.
   const speakStreams = useMemo<SpeakStream[]>(() => {
@@ -73,6 +83,31 @@ export default function ChannelSidebar() {
 
   const openCreate = (type: "TEXT" | "VOICE", parentId?: string) => setCreateCtx({ type, parentId });
 
+  const qc = useQueryClient();
+  // Drag a channel row onto another to reorder (and optionally move it into
+  // that channel's category). Positions are one shared sequence across the
+  // whole guild, so a move renumbers everything to keep it consistent.
+  async function dropChannel(targetId: string) {
+    const draggedId = dragId;
+    setDragId(null);
+    setDragOverId(null);
+    if (!draggedId || draggedId === targetId || !currentGuildId) return;
+    const dragged = channels.find((c) => c.id === draggedId);
+    const target = channels.find((c) => c.id === targetId);
+    if (!dragged || !target || dragged.type === "CATEGORY") return;
+
+    const flat = [...channels].sort((a, b) => a.position - b.position).filter((c) => c.id !== draggedId);
+    const targetIdx = flat.findIndex((c) => c.id === targetId);
+    flat.splice(targetIdx + 1, 0, { ...dragged, parentId: target.parentId });
+
+    const items = flat.map((c, i) => ({ id: c.id, position: i, parentId: c.id === draggedId ? target.parentId : c.parentId }));
+    qc.setQueryData<Guild>(["guild", currentGuildId], (prev) =>
+      prev ? { ...prev, channels: prev.channels.map((c) => items.find((it) => it.id === c.id) ? { ...c, ...items.find((it) => it.id === c.id)! } : c) } : prev
+    );
+    await api("/api/channels/reorder", { method: "POST", body: JSON.stringify({ items }) }).catch(() => {});
+    qc.invalidateQueries({ queryKey: ["guild", currentGuildId] });
+  }
+
   if (!currentGuildId) {
     return <HomeSidebar activeChannelId={currentChannelId} onFriends={openFriends} onDM={openDM} />;
   }
@@ -91,6 +126,24 @@ export default function ChannelSidebar() {
         >
           {mutes.guilds.includes(currentGuildId) ? <BellOffIcon size={16} /> : <BellIcon size={16} />}
         </button>
+        {canManageRoles && (
+          <button
+            onClick={() => setShowRoles(true)}
+            title={t("roles.title")}
+            className="shrink-0 rounded p-1.5 text-discord-muted transition hover:bg-discord-hover hover:text-white"
+          >
+            <ShieldIcon size={16} />
+          </button>
+        )}
+        {canManageEmojis && (
+          <button
+            onClick={() => setShowEmojis(true)}
+            title={t("emoji.title")}
+            className="shrink-0 rounded p-1.5 text-discord-muted transition hover:bg-discord-hover hover:text-white"
+          >
+            <SmileIcon size={16} />
+          </button>
+        )}
         <button
           onClick={() => openModal("invite")}
           title={t("nav.invitePeople")}
@@ -108,27 +161,38 @@ export default function ChannelSidebar() {
                 <span className="text-xs font-semibold uppercase tracking-wide text-discord-muted">
                   {group.category.name}
                 </span>
-                <button
-                  onClick={() =>
-                    openCreate(
-                      group.category!.name.toLowerCase().includes("voice") ? "VOICE" : "TEXT",
-                      group.category!.id
-                    )
-                  }
-                  className="text-discord-muted opacity-0 transition group-hover:opacity-100 hover:text-white"
-                  title={t("channel.createChannel")}
-                >
-                  +
-                </button>
+                {canManageChannels && (
+                  <button
+                    onClick={() =>
+                      openCreate(
+                        group.category!.name.toLowerCase().includes("voice") ? "VOICE" : "TEXT",
+                        group.category!.id
+                      )
+                    }
+                    className="text-discord-muted opacity-0 transition group-hover:opacity-100 hover:text-white"
+                    title={t("channel.createChannel")}
+                  >
+                    +
+                  </button>
+                )}
               </div>
             )}
             {group.channels.map((c) => (
-              <div key={c.id}>
+              <div
+                key={c.id}
+                draggable={canManageChannels}
+                onDragStart={() => setDragId(c.id)}
+                onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                onDragOver={(e) => { if (canManageChannels && dragId) { e.preventDefault(); setDragOverId(c.id); } }}
+                onDrop={(e) => { e.preventDefault(); dropChannel(c.id); }}
+                className={clsx(dragOverId === c.id && dragId && dragId !== c.id && "rounded bg-discord-hover/60 ring-1 ring-discord-accent/50")}
+              >
                 <ChannelRow
                   channel={c}
                   active={c.type === "VOICE" ? voice.channelId === c.id : currentChannelId === c.id}
                   unread={c.type === "TEXT" ? unread[c.id] || 0 : 0}
                   muted={mutes.channels.includes(c.id)}
+                  draggable={canManageChannels}
                   onClick={() => {
                     if (c.type === "VOICE") {
                       // Join the call AND open its stage in the main area.
@@ -171,12 +235,14 @@ export default function ChannelSidebar() {
           </div>
         ))}
 
-        <button
-          onClick={() => openCreate("TEXT")}
-          className="mt-2 w-full rounded px-2 py-1 text-left text-sm text-discord-muted hover:bg-discord-hover hover:text-white"
-        >
-          + {t("channel.createChannel")}
-        </button>
+        {canManageChannels && (
+          <button
+            onClick={() => openCreate("TEXT")}
+            className="mt-2 w-full rounded px-2 py-1 text-left text-sm text-discord-muted hover:bg-discord-hover hover:text-white"
+          >
+            + {t("channel.createChannel")}
+          </button>
+        )}
       </div>
 
       {createCtx && currentGuildId && (
@@ -187,6 +253,8 @@ export default function ChannelSidebar() {
           onClose={() => setCreateCtx(null)}
         />
       )}
+      {showRoles && currentGuildId && <RolesModal guildId={currentGuildId} onClose={() => setShowRoles(false)} />}
+      {showEmojis && currentGuildId && <EmojiManageModal guildId={currentGuildId} onClose={() => setShowEmojis(false)} />}
 
       {voice.channelId && (
         <VoiceControlBar channelName={channels.find((c) => c.id === voice.channelId)?.name ?? "Voice"} />
@@ -360,6 +428,7 @@ function ChannelRow({
   active,
   unread = 0,
   muted,
+  draggable,
   onClick,
   onContextMenu,
 }: {
@@ -367,6 +436,7 @@ function ChannelRow({
   active: boolean;
   unread?: number;
   muted?: boolean;
+  draggable?: boolean;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
@@ -387,6 +457,7 @@ function ChannelRow({
       )}
     >
       {hasUnread && <span className="absolute -left-1 h-2 w-2 rounded-full bg-white" />}
+      {draggable && <GripIcon size={12} className="shrink-0 cursor-grab text-discord-faint opacity-0 group-hover:opacity-100" />}
       <span className="w-4 text-center text-discord-faint">{icon}</span>
       <span className="truncate">{channel.name}</span>
       {muted && <BellOffIcon size={12} className="ml-auto shrink-0 text-discord-faint" />}

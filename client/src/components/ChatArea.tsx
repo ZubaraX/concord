@@ -20,6 +20,7 @@ import PinsModal from "./PinsModal";
 import BookmarksModal from "./BookmarksModal";
 import SearchModal from "./SearchModal";
 import VoiceStage, { CallTimer } from "./VoiceStage";
+import ContextMenu from "./ContextMenu";
 import clsx from "clsx";
 
 interface ChannelInfo {
@@ -43,6 +44,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const [showPins, setShowPins] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [callMoreMenu, setCallMoreMenu] = useState<{ x: number; y: number } | null>(null);
   // Voice channels: text chat lives beside the stage (desktop) or behind a
   // toggle (phones, stage-first).
   const [showChat, setShowChat] = useState(() => window.innerWidth >= 768);
@@ -50,6 +52,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const pendingShare = useShare((s) => s.pending);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const callMoreBtnRef = useRef<HTMLButtonElement>(null);
   // Older-history pagination: scroll to the top → fetch the previous page.
   const [hasMore, setHasMore] = useState(true);
   const loadingOlder = useRef(false);
@@ -355,25 +358,39 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                 <HeaderBtn active={voice.muted} onClick={toggleMute} title={voice.muted ? t("voice.unmute") : t("voice.mute")}>
                   {voice.muted ? <MicOffIcon size={16} /> : <MicIcon size={16} />}
                 </HeaderBtn>
-                <HeaderBtn className="max-sm:hidden" active={voice.deafened} onClick={toggleDeafen} title={voice.deafened ? t("voice.undeafen") : t("voice.deafen")}>
-                  {voice.deafened ? <HeadphonesOffIcon size={16} /> : <HeadphonesIcon size={16} />}
-                </HeaderBtn>
                 <HeaderBtn active={voice.cameraOn} onClick={toggleCamera} title={voice.cameraOn ? t("voice.cameraOff") : t("voice.camera")}>
                   <CameraIcon size={16} />
                 </HeaderBtn>
+                {/* Desktop: room for every toggle inline. Phones: the rest
+                    collapses into a "⋯" menu — a fixed 3-button header never
+                    overflows, regardless of which Android extras are active. */}
+                <HeaderBtn className="hidden sm:flex" active={voice.deafened} onClick={toggleDeafen} title={voice.deafened ? t("voice.undeafen") : t("voice.deafen")}>
+                  {voice.deafened ? <HeadphonesOffIcon size={16} /> : <HeadphonesIcon size={16} />}
+                </HeaderBtn>
                 {isAndroidApp() && voice.cameraOn && (
-                  <HeaderBtn onClick={flipCamera} title={t("voice.flipCamera")}>
+                  <HeaderBtn className="hidden sm:flex" onClick={flipCamera} title={t("voice.flipCamera")}>
                     <FlipCameraIcon size={16} />
                   </HeaderBtn>
                 )}
-                <HeaderBtn className="max-sm:hidden" active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
+                <HeaderBtn className="hidden sm:flex" active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
                   <ScreenIcon size={16} />
                 </HeaderBtn>
                 {isAndroidApp() && (
-                  <HeaderBtn active={!voice.speakerOn} onClick={toggleSpeaker} title={voice.speakerOn ? t("voice.speakerOn") : t("voice.speakerOff")}>
+                  <HeaderBtn className="hidden sm:flex" active={!voice.speakerOn} onClick={toggleSpeaker} title={voice.speakerOn ? t("voice.speakerOn") : t("voice.speakerOff")}>
                     <SpeakerIcon size={16} />
                   </HeaderBtn>
                 )}
+                <button
+                  ref={callMoreBtnRef}
+                  onClick={() => {
+                    const r = callMoreBtnRef.current?.getBoundingClientRect();
+                    setCallMoreMenu(r ? { x: r.right, y: r.bottom + 4 } : { x: 0, y: 0 });
+                  }}
+                  title={t("common.more")}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-discord-card text-discord-text hover:bg-discord-hover sm:hidden"
+                >
+                  <span className="text-lg leading-none">⋯</span>
+                </button>
                 <button
                   onClick={leaveVoice}
                   title={t("voice.leave")}
@@ -421,7 +438,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                     <span className="rounded bg-discord-danger px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">New</span>
                   </div>
                 )}
-                <MessageItem message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} />
+                <MessageItem message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} guildId={channel.guildId} />
               </div>
             ))}
             <div ref={bottomRef} />
@@ -466,6 +483,37 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       {showPins && <PinsModal channelId={channel.id} onClose={() => setShowPins(false)} />}
       {showBookmarks && <BookmarksModal onClose={() => setShowBookmarks(false)} />}
       {showSearch && <SearchModal guildId={channel.guildId} channelId={channel.id} onClose={() => setShowSearch(false)} />}
+      {callMoreMenu && (
+        <ContextMenu
+          x={callMoreMenu.x}
+          y={callMoreMenu.y}
+          onClose={() => setCallMoreMenu(null)}
+          items={[
+            {
+              label: voice.deafened ? t("voice.undeafen") : t("voice.deafen"),
+              icon: voice.deafened ? <HeadphonesOffIcon size={15} /> : <HeadphonesIcon size={15} />,
+              onClick: toggleDeafen,
+            },
+            {
+              label: voice.screenOn ? t("voice.stopShare") : t("voice.share"),
+              icon: <ScreenIcon size={15} />,
+              onClick: toggleScreen,
+            },
+            ...(isAndroidApp()
+              ? [
+                  {
+                    label: voice.speakerOn ? t("voice.speakerOn") : t("voice.speakerOff"),
+                    icon: <SpeakerIcon size={15} />,
+                    onClick: toggleSpeaker,
+                  },
+                ]
+              : []),
+            ...(isAndroidApp() && voice.cameraOn
+              ? [{ label: t("voice.flipCamera"), icon: <FlipCameraIcon size={15} />, onClick: flipCamera }]
+              : []),
+          ]}
+        />
+      )}
     </main>
   );
 }

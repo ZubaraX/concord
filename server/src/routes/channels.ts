@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/db.js";
 import { authenticate } from "../lib/auth.js";
 import { emitToGuild } from "../services/guilds.js";
-import { getAccessibleChannel } from "../services/access.js";
+import { getAccessibleChannel, hasGuildPermission } from "../services/access.js";
 
 const dmUserSelect = {
   id: true,
@@ -23,12 +23,6 @@ const createBody = z.object({
   // No caps: bitrate can go up to lossless; userLimit 0 = unlimited.
   bitrate: z.number().int().min(8000).max(512000).optional(),
 });
-
-async function assertMember(userId: string, guildId: string) {
-  return prisma.guildMember.findUnique({
-    where: { guildId_userId: { guildId, userId } },
-  });
-}
 
 export async function channelRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
@@ -62,8 +56,8 @@ export async function channelRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     const { guildId, ...data } = parsed.data;
 
-    if (!(await assertMember(req.userId, guildId))) {
-      return reply.code(403).send({ error: "Not a member" });
+    if (!(await hasGuildPermission(req.userId, guildId, "MANAGE_CHANNELS"))) {
+      return reply.code(403).send({ error: "Missing MANAGE_CHANNELS permission" });
     }
 
     const count = await prisma.channel.count({ where: { guildId } });
@@ -78,8 +72,8 @@ export async function channelRoutes(app: FastifyInstance) {
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel?.guildId) return reply.code(404).send({ error: "Not found" });
-    if (!(await assertMember(req.userId, channel.guildId))) {
-      return reply.code(403).send({ error: "Not a member" });
+    if (!(await hasGuildPermission(req.userId, channel.guildId, "MANAGE_CHANNELS"))) {
+      return reply.code(403).send({ error: "Missing MANAGE_CHANNELS permission" });
     }
 
     const body = z
@@ -100,11 +94,40 @@ export async function channelRoutes(app: FastifyInstance) {
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel?.guildId) return reply.code(404).send({ error: "Not found" });
-    if (!(await assertMember(req.userId, channel.guildId))) {
-      return reply.code(403).send({ error: "Not a member" });
+    if (!(await hasGuildPermission(req.userId, channel.guildId, "MANAGE_CHANNELS"))) {
+      return reply.code(403).send({ error: "Missing MANAGE_CHANNELS permission" });
     }
     await prisma.channel.delete({ where: { id: channelId } });
     emitToGuild(channel.guildId, "guild:channelsUpdate", { guildId: channel.guildId });
     return reply.code(204).send();
+  });
+
+  // Drag-n-drop reorder: the client sends the full new order (id + position,
+  // optionally a new parentId when dragged into another category) and we
+  // apply it in one transaction so the list never renders half-moved.
+  app.post("/reorder", async (req, reply) => {
+    const body = z
+      .object({
+        items: z.array(z.object({ id: z.string(), position: z.number().int(), parentId: z.string().nullable().optional() })).min(1),
+      })
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
+
+    const first = await prisma.channel.findUnique({ where: { id: body.data.items[0].id } });
+    if (!first?.guildId) return reply.code(404).send({ error: "Not found" });
+    if (!(await hasGuildPermission(req.userId, first.guildId, "MANAGE_CHANNELS"))) {
+      return reply.code(403).send({ error: "Missing MANAGE_CHANNELS permission" });
+    }
+
+    await prisma.$transaction(
+      body.data.items.map((it) =>
+        prisma.channel.update({
+          where: { id: it.id },
+          data: { position: it.position, ...(it.parentId !== undefined ? { parentId: it.parentId } : {}) },
+        })
+      )
+    );
+    emitToGuild(first.guildId, "guild:channelsUpdate", { guildId: first.guildId });
+    return reply.send({ ok: true });
   });
 }

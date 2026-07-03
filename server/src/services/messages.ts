@@ -42,11 +42,12 @@ export async function createMessage(opts: {
   content: string;
   replyToId?: string;
   attachments?: AttachmentInput[];
+  pollJson?: string; // a poll "message" rides with empty content, see routes/messages.ts
 }) {
   const content = opts.content?.trim() ?? "";
   const attachments = opts.attachments ?? [];
-  // A message must have text or at least one attachment.
-  if (!content && attachments.length === 0) throw new MessageError(400, "Message is empty");
+  // A message must have text, an attachment, or be a poll.
+  if (!content && attachments.length === 0 && !opts.pollJson) throw new MessageError(400, "Message is empty");
   if (content.length > config.MAX_MESSAGE_LENGTH) {
     throw new MessageError(413, `Message exceeds ${config.MAX_MESSAGE_LENGTH} chars`);
   }
@@ -60,6 +61,7 @@ export async function createMessage(opts: {
       authorId: opts.authorId,
       content,
       replyToId: opts.replyToId,
+      pollJson: opts.pollJson,
       attachments: attachments.length
         ? {
             create: attachments.map((a) => ({

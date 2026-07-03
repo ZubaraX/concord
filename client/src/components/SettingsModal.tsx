@@ -78,7 +78,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title={t("settings.title")} onClose={onClose} wide>
-      <div className="mb-5 flex gap-2 border-b border-black/20 pb-3">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-black/20 pb-3">
         <Tab active={tab === "profile"} onClick={() => setTab("profile")}>{t("settings.tab.profile")}</Tab>
         <Tab active={tab === "voice"} onClick={() => setTab("voice")}>{t("settings.tab.voice")}</Tab>
         <Tab active={tab === "app"} onClick={() => setTab("app")}>{t("settings.tab.app")}</Tab>
@@ -253,7 +253,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   return (
     <button
       onClick={onClick}
-      className={`rounded px-3 py-1.5 text-sm font-medium ${active ? "bg-discord-card text-white" : "text-discord-muted hover:text-white"}`}
+      className={`shrink-0 whitespace-nowrap rounded px-3 py-1.5 text-sm font-medium ${active ? "bg-discord-card text-white" : "text-discord-muted hover:text-white"}`}
     >
       {children}
     </button>

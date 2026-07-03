@@ -172,6 +172,51 @@ export const PlusIcon = ({ className, size }: P) =>
     </>
   ));
 
+export const ShieldIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z" />
+  ));
+
+export const TrashIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </>
+  ));
+
+export const ArrowUpIcon = ({ className, size }: P) =>
+  svg(size, className, <polyline points="18 15 12 9 6 15" />);
+
+export const ArrowDownIcon = ({ className, size }: P) =>
+  svg(size, className, <polyline points="6 9 12 15 18 9" />);
+
+export const ClockIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </>
+  ));
+
+export const BarChartIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <line x1="12" y1="20" x2="12" y2="10" />
+      <line x1="18" y1="20" x2="18" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="16" />
+    </>
+  ));
+
+export const GripIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" />
+      <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
+      <circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" />
+    </>
+  ));
+
 export const PaperclipIcon = ({ className, size }: P) =>
   svg(size, className, (
     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />

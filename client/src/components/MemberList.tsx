@@ -9,9 +9,11 @@ import { joinVoice } from "../lib/voice";
 import { useNotify } from "../store/notify";
 import { useI18n } from "../lib/i18n";
 import type { Guild, GuildMember, PresenceStatus, User } from "../types";
+import { memberHasPermission, Permissions } from "../lib/permissions";
 import Avatar from "./Avatar";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
-import { UserIcon, MessageIcon, PhoneIcon, UserPlusIcon, CopyIcon } from "./Icons";
+import MemberRolesPopover from "./MemberRolesPopover";
+import { UserIcon, MessageIcon, PhoneIcon, UserPlusIcon, CopyIcon, ShieldIcon } from "./Icons";
 
 export default function MemberList() {
   const { currentGuildId, openDM, openProfile, membersOpen, closeMembers } = useUI();
@@ -20,6 +22,7 @@ export default function MemberList() {
   const qc = useQueryClient();
   const [presence, setPresence] = useState<Record<string, PresenceStatus>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; user: User } | null>(null);
+  const [rolesPop, setRolesPop] = useState<{ x: number; y: number; userId: string } | null>(null);
 
   const { data: guild } = useQuery<Guild>({
     queryKey: ["guild", currentGuildId],
@@ -53,6 +56,8 @@ export default function MemberList() {
     }
   }
 
+  const canManageRoles = memberHasPermission(guild, me?.id, Permissions.MANAGE_ROLES);
+
   function menuItems(u: User): MenuItem[] {
     return [
       { label: t("profile.viewProfile"), icon: <UserIcon size={16} />, onClick: () => openProfile(u.id) },
@@ -66,6 +71,15 @@ export default function MemberList() {
             .then(() => useNotify.getState().push({ title: "Friend request sent", body: `${u.username}#${u.discriminator}` }))
             .catch((e) => useNotify.getState().push({ title: "Couldn't add friend", body: (e as Error).message })),
       },
+      ...(canManageRoles
+        ? [
+            {
+              label: t("roles.manage"),
+              icon: <ShieldIcon size={16} />,
+              onClick: () => setRolesPop({ x: menu?.x ?? 0, y: menu?.y ?? 0, userId: u.id }),
+            },
+          ]
+        : []),
       { label: t("common.copy") + " ID", icon: <CopyIcon size={16} />, onClick: () => navigator.clipboard?.writeText(u.id) },
     ];
   }
@@ -92,6 +106,15 @@ export default function MemberList() {
           <Section title={`${t("members.offline")} — ${offline.length}`} members={offline} status={withStatus} onMenu={rowMenu} dim />
         </div>
         {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.user)} onClose={() => setMenu(null)} />}
+        {rolesPop && currentGuildId && (
+          <MemberRolesPopover
+            guildId={currentGuildId}
+            userId={rolesPop.userId}
+            x={rolesPop.x}
+            y={rolesPop.y}
+            onClose={() => setRolesPop(null)}
+          />
+        )}
       </aside>
     </>
   );

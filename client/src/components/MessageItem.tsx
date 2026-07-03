@@ -1,15 +1,17 @@
 import { memo, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../store/auth";
 import { useUI } from "../store/ui";
 import { useBookmarks } from "../store/bookmarks";
 import { useLightbox } from "../store/lightbox";
 import { serverPath } from "../lib/serverUrl";
-import type { Attachment, LinkEmbed, Message } from "../types";
+import type { Attachment, Guild, LinkEmbed, Message } from "../types";
 import Avatar from "./Avatar";
-import { renderMarkdown } from "../lib/markdown";
+import { renderMarkdown, type EmojiMap } from "../lib/markdown";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import InviteCard from "./InviteCard";
+import PollView from "./PollView";
 
 // Scroll to a message (if it's currently loaded) and flash-highlight it.
 export function jumpToMessage(id: string) {
@@ -24,10 +26,12 @@ function MessageItem({
   message,
   grouped,
   onReply,
+  guildId,
 }: {
   message: Message;
   grouped: boolean;
   onReply: (m: Message) => void;
+  guildId?: string | null;
 }) {
   const { user } = useAuth();
   const { openProfile } = useUI();
@@ -38,9 +42,34 @@ function MessageItem({
   const [draft, setDraft] = useState(message.content);
   const mine = user?.id === message.author.id;
   const time = new Date(message.createdAt);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  // Reuses the guild query already cached by ChannelSidebar/MemberList — no
+  // extra fetch just to resolve :custom_emoji: tokens.
+  const { data: guild } = useQuery<Guild>({ queryKey: ["guild", guildId], enabled: false });
+  const emojiMap = useMemo<EmojiMap>(() => {
+    const map: EmojiMap = {};
+    for (const e of guild?.emojis ?? []) map[e.name] = serverPath(e.url);
+    return map;
+  }, [guild?.emojis]);
+
+  // Only real mice/trackpads trigger hover — touch taps synthesize a
+  // "pointerenter" with no matching "leave", which would otherwise leave the
+  // action toolbar stuck open after a tap/swipe.
+  const setHoverIfMouse = (v: boolean) => (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse") setHover(v);
+  };
+
+  // Anchor the menu near the same corner regardless of where inside a (maybe
+  // large) message you right-clicked — otherwise it feels like it "jumps
+  // around" depending on whether you clicked the text, an image, etc.
+  function openMenuAnchored() {
+    const r = rowRef.current?.getBoundingClientRect();
+    setMenu(r ? { x: r.right - 8, y: r.top + 4 } : { x: 0, y: 0 });
+  }
 
   // Parse markdown once per content change, not on every parent re-render.
-  const body = useMemo(() => renderMarkdown(message.content), [message.content]);
+  const body = useMemo(() => renderMarkdown(message.content, emojiMap), [message.content, emojiMap]);
 
   // Invite links become one-click join cards (no code pasting).
   const inviteCodes = useMemo(() => {
@@ -146,12 +175,13 @@ function MessageItem({
 
   return (
     <div
+      ref={rowRef}
       id={`msg-${message.id}`}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onPointerEnter={setHoverIfMouse(true)}
+      onPointerLeave={setHoverIfMouse(false)}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
-      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
+      onContextMenu={(e) => { e.preventDefault(); openMenuAnchored(); }}
       className={`group relative flex scroll-mt-6 gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
     >
       <div className="w-10 shrink-0">
@@ -221,6 +251,8 @@ function MessageItem({
           <InviteCard key={c} code={c} />
         ))}
 
+        {message.pollJson && <PollView message={message} />}
+
         {message.attachments?.length > 0 && (
           <div className="mt-1 flex flex-col gap-2">
             {message.attachments.map((a) => (
@@ -266,14 +298,14 @@ function MessageItem({
         )}
       </div>
 
-      {hover && !editing && (
+      {hover && !editing && !menu && (
         <div className="absolute right-3 top-0 flex items-center gap-1 rounded bg-discord-rail shadow ring-1 ring-black/30">
           <button onClick={() => setPicker((p) => !p)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Add reaction">😀</button>
           <button onClick={() => onReply(message)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Reply">↩️</button>
           {mine && (
             <button onClick={() => { setDraft(message.content); setEditing(true); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Edit">✏️</button>
           )}
-          <button onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="More">⋯</button>
+          <button onClick={openMenuAnchored} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="More">⋯</button>
         </div>
       )}
 
@@ -367,6 +399,7 @@ export default memo(MessageItem, (a, b) => {
     a.message.editedAt === b.message.editedAt &&
     a.message.pinned === b.message.pinned &&
     a.message.embedsJson === b.message.embedsJson &&
+    a.message.pollJson === b.message.pollJson &&
     a.grouped === b.grouped &&
     reactionSig(a.message) === reactionSig(b.message)
   );

@@ -120,6 +120,7 @@ export default function AppLayout() {
     socket.on("guild:joined", onJoined);
     socket.on("guild:memberAdd", invalidateGuild);
     socket.on("guild:channelsUpdate", invalidateGuild);
+    socket.on("guild:rolesUpdate", invalidateGuild);
     socket.on("user:update", invalidateGuild);
     socket.on("friend:request", invalidateFriends);
     socket.on("friend:accept", invalidateFriends);
@@ -199,6 +200,7 @@ export default function AppLayout() {
       socket.off("guild:joined", onJoined);
       socket.off("guild:memberAdd", invalidateGuild);
       socket.off("guild:channelsUpdate", invalidateGuild);
+      socket.off("guild:rolesUpdate", invalidateGuild);
       socket.off("user:update", invalidateGuild);
       socket.off("friend:request", invalidateFriends);
       socket.off("friend:accept", invalidateFriends);
