@@ -178,9 +178,9 @@ export default function VoiceStage({
                 ) : (
                   <Avatar user={userOf(uid)} size={72} />
                 )}
-                <span className="absolute bottom-1.5 left-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
-                  {isSelf && voice.muted && <MicOffIcon size={11} className="text-discord-danger" />}
-                  {nameOf(uid)}
+                <span className="absolute bottom-1.5 left-2 right-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
+                  {isSelf && voice.muted && <MicOffIcon size={11} className="shrink-0 text-discord-danger" />}
+                  <span className="truncate">{nameOf(uid)}</span>
                 </span>
               </div>
             );

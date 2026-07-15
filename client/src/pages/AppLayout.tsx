@@ -307,12 +307,14 @@ export default function AppLayout() {
       <AndroidUpdate />
     </div>
 
-    {/* Phones: bottom tab bar (Servers / Friends / Settings). Hidden while
-        typing so the keyboard-shrunk viewport goes to the chat. */}
+    {/* Phones: bottom tab bar (Servers / Friends / Settings). Hidden while a
+        conversation is open so the composer sits flush at the very bottom
+        (the ☰ button / swipe still reach the drawer), and while typing so the
+        keyboard-shrunk viewport goes to the chat. */}
     <nav
       className={clsx(
         "flex shrink-0 border-t border-black/40 bg-discord-rail pb-[env(safe-area-inset-bottom)] md:hidden",
-        typingFocus && "hidden"
+        (typingFocus || currentChannelId) && "hidden"
       )}
     >
       <NavTab icon={<MenuIcon size={20} />} label={t("nav.servers")} onClick={() => setNavOpen(true)} />

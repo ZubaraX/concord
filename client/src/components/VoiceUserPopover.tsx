@@ -61,15 +61,16 @@ export default function VoiceUserPopover({
   const name = user?.displayName ?? user?.username ?? "…";
 
   useEffect(() => {
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: Event) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    const id = setTimeout(() => window.addEventListener("mousedown", onDown), 0);
+    // pointerdown covers both mouse and touch (mousedown never fires on tap).
+    const id = setTimeout(() => window.addEventListener("pointerdown", onDown), 0);
     window.addEventListener("keydown", onKey);
     return () => {
       clearTimeout(id);
-      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("pointerdown", onDown);
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);

@@ -278,12 +278,12 @@ export default function Composer({
   return (
     <div className="relative rounded-lg bg-discord-input">
       {replyingTo && (
-        <div className="flex items-center justify-between border-b border-black/20 px-4 py-1.5 text-xs text-discord-muted">
-          <span className="truncate">
+        <div className="flex items-center justify-between gap-2 border-b border-black/20 px-4 py-1.5 text-xs text-discord-muted">
+          <span className="min-w-0 truncate">
             {t("composer.replyingTo", { name: "" })}{" "}
             <strong className="text-discord-text">{replyingTo.author.displayName ?? replyingTo.author.username}</strong>
           </span>
-          <button onClick={onClearReply} className="hover:text-white"><XIcon size={14} /></button>
+          <button onClick={onClearReply} className="shrink-0 hover:text-white"><XIcon size={14} /></button>
         </div>
       )}
 

@@ -15,7 +15,9 @@ interface Pending {
 }
 
 export default function FriendsPage({ onOpenNav }: { onOpenNav?: () => void }) {
-  const [tab, setTab] = useState<Tab>("online");
+  // Open on "All" so every friend is visible immediately (online-only hid
+  // offline friends and read as an empty list when nobody was online).
+  const [tab, setTab] = useState<Tab>("all");
   const qc = useQueryClient();
   const { openDM } = useUI();
   const { t } = useI18n();
@@ -204,7 +206,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 
 function IconBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} title={title} className="flex h-9 w-9 items-center justify-center rounded-full bg-discord-rail text-discord-muted hover:text-white">
+    <button onClick={onClick} title={title} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-discord-rail text-discord-muted hover:text-white">
       {children}
     </button>
   );

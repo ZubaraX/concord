@@ -22,6 +22,33 @@ export function jumpToMessage(id: string) {
   setTimeout(() => el.classList.remove("cc-flash"), 1600);
 }
 
+// Copy text with a fallback for WebViews where navigator.clipboard is missing
+// or blocked (some Android builds). Prefers the user's current selection so
+// "Copy" respects a partial highlight, falling back to the whole message.
+export function copyMessageText(fallback: string) {
+  const selected = window.getSelection?.()?.toString();
+  const text = selected && selected.trim() ? selected : fallback;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+  } else {
+    legacyCopy(text);
+  }
+}
+function legacyCopy(text: string) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand("copy");
+  } catch {
+    /* nothing more we can do */
+  }
+  document.body.removeChild(ta);
+}
+
 function MessageItem({
   message,
   grouped,
@@ -103,7 +130,7 @@ function MessageItem({
     { label: "View Profile", icon: "👤", onClick: () => openProfile(message.author.id) },
     { label: "Add Reaction", icon: "😀", onClick: () => setPicker(true) },
     { label: "Reply", icon: "↩️", onClick: () => onReply(message) },
-    { label: "Copy Text", icon: "📋", onClick: () => navigator.clipboard?.writeText(message.content) },
+    { label: "Copy Text", icon: "📋", onClick: () => copyMessageText(message.content) },
     {
       label: bookmarked ? "Remove Bookmark" : "Bookmark",
       icon: "🔖",
@@ -132,24 +159,36 @@ function MessageItem({
 
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number; emoji: string; dx: number; dy: number }[]>([]);
 
-  // Phones: swipe a message to the left → reply to it (long-press stays the
-  // context menu). Successful swipes stop propagation so the global
-  // drawer-gestures in AppLayout don't also fire.
-  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Phones: drag a message to the left → reply. The row follows your finger
+  // (visual feedback) and a reply arrow fades in; releasing past the threshold
+  // fires the reply. Only engages on a deliberate horizontal drag so vertical
+  // scrolling and text selection still work.
+  const REPLY_THRESHOLD = 64;
+  const [swipeX, setSwipeX] = useState(0);
+  const swipeRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
-    swipeRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    swipeRef.current = { x: t.clientX, y: t.clientY, active: false };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const s = swipeRef.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (!s.active && (dx > -12 || Math.abs(dy) > Math.abs(dx))) return; // not a left-drag
+    s.active = true;
+    setSwipeX(Math.max(dx, -96)); // dx is negative; cap the pull
   };
   const onTouchEnd = (e: React.TouchEvent) => {
     const s = swipeRef.current;
     swipeRef.current = null;
-    if (!s) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - s.x;
-    const dy = t.clientY - s.y;
-    if (Date.now() - s.t > 500 || dx > -60 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
-    e.stopPropagation();
-    onReply(message);
+    const reached = swipeX <= -REPLY_THRESHOLD;
+    setSwipeX(0);
+    if (s?.active) {
+      e.stopPropagation(); // don't also trigger AppLayout's drawer gesture
+      if (reached) onReply(message);
+    }
   };
 
   function toggleReaction(emoji: string, at?: { x: number; y: number }) {
@@ -180,10 +219,21 @@ function MessageItem({
       onPointerEnter={setHoverIfMouse(true)}
       onPointerLeave={setHoverIfMouse(false)}
       onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onContextMenu={(e) => { e.preventDefault(); openMenuAnchored(); }}
+      style={{ transform: swipeX ? `translateX(${swipeX}px)` : undefined, transition: swipeX ? "none" : "transform 0.2s ease" }}
       className={`group relative flex scroll-mt-6 gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
     >
+      {/* Swipe-to-reply arrow, revealed as you pull the row left. */}
+      {swipeX < 0 && (
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2"
+          style={{ transform: `translateX(${-swipeX}px)`, opacity: Math.min(1, -swipeX / REPLY_THRESHOLD) }}
+        >
+          <span className={`text-lg ${swipeX <= -REPLY_THRESHOLD ? "text-discord-accent" : "text-discord-muted"}`}>↩️</span>
+        </div>
+      )}
       <div className="w-10 shrink-0">
         {!grouped ? (
           <button onClick={() => openProfile(message.author.id)} title="View profile" className="rounded-full">
@@ -240,7 +290,7 @@ function MessageItem({
           />
         ) : (
           message.content && (
-            <div className="whitespace-pre-wrap break-words text-discord-text">
+            <div className="select-text whitespace-pre-wrap break-words text-discord-text [-webkit-user-select:text]">
               {body}
               {message.editedAt && <span className="ml-1 text-[10px] text-discord-faint">(edited)</span>}
             </div>

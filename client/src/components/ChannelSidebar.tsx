@@ -211,7 +211,7 @@ export default function ChannelSidebar() {
                     return (
                       <button
                         key={uid}
-                        onClick={clickable ? (e) => setVolPop({ userId: uid, x: e.clientX, y: e.clientY }) : undefined}
+                        onClick={clickable ? (e) => { const r = e.currentTarget.getBoundingClientRect(); setVolPop({ userId: uid, x: r.right + 6, y: r.top }); } : undefined}
                         title={clickable ? t("voice.adjustVolume") : undefined}
                         className={clsx(
                           "ml-9 flex w-[calc(100%-2.25rem)] items-center gap-1.5 rounded px-1 py-0.5 text-left text-sm text-discord-muted",
@@ -548,7 +548,7 @@ function HomeSidebar({
               {others.map((uid) => (
                 <button
                   key={uid}
-                  onClick={(e) => setVolPop({ userId: uid, x: e.clientX, y: e.clientY })}
+                  onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setVolPop({ userId: uid, x: r.right + 6, y: r.top }); }}
                   title={t("voice.adjustVolume")}
                   className="ml-9 mt-0.5 flex w-[calc(100%-2.25rem)] cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-left text-sm text-discord-muted hover:bg-discord-hover hover:text-discord-text"
                 >

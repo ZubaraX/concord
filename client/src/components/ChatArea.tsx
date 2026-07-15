@@ -274,7 +274,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
             if (window.innerWidth >= 768) setImmersive(!immersive);
             else onOpenNav?.();
           }}
-          className={`-ml-1 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${
+          className={`-ml-1 shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${
             immersive || inStageCall ? "" : "md:hidden"
           }`}
           title="Channels"
@@ -332,7 +332,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
         {!isDM && (
           <button
             onClick={toggleMembers}
-            className="rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white lg:hidden"
+            className="shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white lg:hidden"
             title={t("members.title")}
           >
             <UsersIcon size={18} />
@@ -444,7 +444,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
             <div ref={bottomRef} />
           </div>
 
-          <div className="px-4 pb-6">
+          <div className="px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6">
             {pendingShare && (
               <div className="mb-2 flex items-center gap-2 rounded-lg bg-discord-card px-3 py-2 text-sm">
                 <span className="shrink-0 text-discord-muted">📤 {t("share.received")}:</span>
