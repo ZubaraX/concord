@@ -59,13 +59,15 @@ export default function RolesModal({ guildId, onClose }: { guildId: string; onCl
 
   return (
     <Modal title={`🛡 ${t("roles.title")}`} onClose={onClose} wide>
-      <div className="flex gap-4">
-        <div className="w-40 shrink-0 space-y-1">
+      <div className="flex flex-col gap-4 sm:flex-row">
+        {/* Role list: a vertical column on desktop, a horizontal scroll strip
+            on phones so it never blows out the modal width. */}
+        <div className="flex shrink-0 gap-1 overflow-x-auto pb-1 sm:w-40 sm:flex-col sm:overflow-visible sm:pb-0">
           {roles.map((r) => (
             <button
               key={r.id}
               onClick={() => setSelectedId(r.id)}
-              className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${
+              className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm sm:w-full ${
                 selected?.id === r.id ? "bg-discord-card text-white" : "text-discord-muted hover:bg-discord-hover"
               }`}
             >
@@ -75,7 +77,7 @@ export default function RolesModal({ guildId, onClose }: { guildId: string; onCl
           ))}
           <button
             onClick={createRole}
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-discord-muted hover:bg-discord-hover hover:text-white"
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded px-2 py-1.5 text-left text-sm text-discord-muted hover:bg-discord-hover hover:text-white sm:w-full"
           >
             <PlusIcon size={14} /> {t("roles.create")}
           </button>

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "../store/auth";
 import { useSettings } from "../store/settings";
 import { useI18n, LANGUAGES, type Lang } from "../lib/i18n";
 import { appVersion, recentChanges } from "../lib/changelog";
 import WhatsNewModal from "./WhatsNewModal";
-import { getServerUrl, setServerUrl, serverPinned } from "../lib/serverUrl";
+import { getServerUrl, setServerUrl, serverPinned, serverPath } from "../lib/serverUrl";
+import { uploadFile } from "../api/client";
+import { maybeCompressImage } from "../lib/imageCompress";
 import type { PresenceStatus } from "../types";
 import Modal from "./Modal";
 import Avatar from "./Avatar";
@@ -46,8 +48,25 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [uploading, setUploading] = useState<"avatar" | "banner" | null>(null);
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const bannerInput = useRef<HTMLInputElement>(null);
 
   if (!user) return null;
+
+  async function pickImage(kind: "avatar" | "banner", file: File) {
+    setUploading(kind);
+    setMsg(null);
+    try {
+      const up = await uploadFile(await maybeCompressImage(file));
+      if (kind === "avatar") setAvatarUrl(up.url);
+      else setBannerUrl(up.url);
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setUploading(null);
+    }
+  }
 
   async function saveProfile() {
     setBusy(true);
@@ -96,7 +115,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             className="relative mb-8 h-24 rounded-lg"
             style={{
               background: bannerUrl
-                ? `center/cover no-repeat url(${bannerUrl})`
+                ? `center/cover no-repeat url(${serverPath(bannerUrl)})`
                 : accentColor,
             }}
           >
@@ -115,8 +134,29 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
           <Field label={t("settings.displayName")} value={displayName} onChange={setDisplayName} />
           <Field label={t("settings.pronouns")} value={pronouns} onChange={setPronouns} placeholder={t("settings.pronounsPlaceholder")} />
-          <Field label={t("settings.avatarUrl")} value={avatarUrl} onChange={setAvatarUrl} placeholder="https://…/avatar.png" />
-          <Field label={t("settings.bannerUrl")} value={bannerUrl} onChange={setBannerUrl} placeholder="https://…/banner.png" />
+
+          {/* Avatar + banner: upload a photo (no more pasting URLs). */}
+          <div className="flex flex-wrap gap-2">
+            <input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && pickImage("avatar", e.target.files[0])} />
+            <input ref={bannerInput} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && pickImage("banner", e.target.files[0])} />
+            <button onClick={() => avatarInput.current?.click()} disabled={!!uploading} className="rounded bg-discord-card px-3 py-2 text-sm text-discord-text hover:bg-discord-hover disabled:opacity-60">
+              {uploading === "avatar" ? "…" : `🖼 ${t("settings.uploadAvatar")}`}
+            </button>
+            {avatarUrl && (
+              <button onClick={() => setAvatarUrl("")} className="rounded bg-discord-card px-3 py-2 text-sm text-discord-muted hover:text-discord-danger">
+                {t("settings.removeAvatar")}
+              </button>
+            )}
+            <button onClick={() => bannerInput.current?.click()} disabled={!!uploading} className="rounded bg-discord-card px-3 py-2 text-sm text-discord-text hover:bg-discord-hover disabled:opacity-60">
+              {uploading === "banner" ? "…" : `🏞 ${t("settings.uploadBanner")}`}
+            </button>
+            {bannerUrl && (
+              <button onClick={() => setBannerUrl("")} className="rounded bg-discord-card px-3 py-2 text-sm text-discord-muted hover:text-discord-danger">
+                {t("settings.removeBanner")}
+              </button>
+            )}
+          </div>
+
           <Field label={t("settings.customStatus")} value={customStatus} onChange={setCustomStatus} placeholder={t("settings.customStatusPlaceholder")} />
 
           <div>

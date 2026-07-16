@@ -57,6 +57,8 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const [hasMore, setHasMore] = useState(true);
   const loadingOlder = useRef(false);
   const prepending = useRef(false); // suppress auto-scroll-to-bottom on prepend
+  // On channel open: null → scroll to bottom; a message id → jump to it (first unread).
+  const pendingInitialScroll = useRef<string | null | undefined>(undefined);
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const arr = Array.from(files);
@@ -73,6 +75,21 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       setUploading(false);
     }
   }, []);
+
+  // Drag-and-drop upload is a desktop-only affordance (the Android WebView
+  // fires spurious drag events on scroll/long-press, so it's disabled there).
+  const onDesktopDragOver = useCallback((e: React.DragEvent) => {
+    if (isAndroidApp()) return;
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return; // ignore text/selection drags
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+  const onDesktopDrop = useCallback((e: React.DragEvent) => {
+    if (isAndroidApp()) return;
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  }, [addFiles]);
 
   // Channel info by id — works for both guild channels and DMs.
   const { data: channel } = useQuery<ChannelInfo>({
@@ -121,7 +138,11 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
     if (currentChannelId) {
       const lastRead = getLastRead(currentChannelId);
       const firstNew = history.find((m) => new Date(m.createdAt).getTime() > lastRead);
-      setFirstUnreadId(firstNew && history.length && lastRead ? firstNew.id : null);
+      const firstNewId = firstNew && history.length && lastRead ? firstNew.id : null;
+      setFirstUnreadId(firstNewId);
+      // On open: jump to the first unread message if there is one, else to the
+      // very bottom (handled by the scroll effect via this ref).
+      pendingInitialScroll.current = firstNewId;
       setLastRead(currentChannelId);
       useUnread.getState().clear(currentChannelId);
     }
@@ -209,6 +230,18 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       prepending.current = false; // history prepend — keep the viewport where it is
       return;
     }
+    // Just-opened channel: jump to the first unread (or bottom) instantly,
+    // no smooth animation.
+    if (pendingInitialScroll.current !== undefined) {
+      const target = pendingInitialScroll.current;
+      pendingInitialScroll.current = undefined;
+      requestAnimationFrame(() => {
+        const el = target ? document.getElementById(`msg-${target}`) : null;
+        if (el) el.scrollIntoView({ block: "start" });
+        else bottomRef.current?.scrollIntoView();
+      });
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
@@ -256,10 +289,10 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
 
   return (
     <main
-      className="relative flex flex-1 flex-col bg-discord-bg"
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-discord-bg"
+      onDragOver={onDesktopDragOver}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
-      onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
+      onDrop={onDesktopDrop}
     >
       {dragOver && (
         <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-xl border-4 border-dashed border-discord-accent bg-discord-accent/10 text-lg font-semibold text-white">

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { serverPath } from "../lib/serverUrl";
 import type { PresenceStatus, User } from "../types";
 
 const statusColor: Record<PresenceStatus, string> = {
@@ -21,7 +22,9 @@ export default function Avatar({
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       {user.avatarUrl ? (
-        <img src={user.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+        // serverPath resolves uploaded avatars (relative /uploads/…) and passes
+        // full URLs through unchanged.
+        <img src={serverPath(user.avatarUrl)} alt="" className="h-full w-full rounded-full object-cover" />
       ) : (
         <div
           className="flex h-full w-full items-center justify-center rounded-full bg-discord-accent font-semibold text-white"

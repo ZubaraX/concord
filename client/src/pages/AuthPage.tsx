@@ -11,8 +11,8 @@ export default function AuthPage() {
   const { t } = useI18n();
   const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("demo@concord.dev");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [server, setServer] = useState(getServerUrl());
   const [error, setError] = useState<string | null>(null);
@@ -159,11 +159,6 @@ export default function AuthPage() {
           )}
         </div>
 
-        {mode === "login" && (
-          <p className="mt-3 text-xs text-discord-faint">
-            Demo seed: <code>demo@concord.dev</code> / <code>password123</code>
-          </p>
-        )}
       </div>
     </div>
   );

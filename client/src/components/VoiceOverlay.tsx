@@ -56,7 +56,7 @@ export default function VoiceOverlay() {
             <VideoTile stream={localScreen} label="Your screen" muted onExpand={setExpanded} />
           )}
           {cameraOn && localCamera && (
-            <VideoTile stream={localCamera} label="You" muted onExpand={setExpanded} />
+            <VideoTile stream={localCamera} label="You" muted mirror onExpand={setExpanded} />
           )}
           {screenTiles.map((r) => (
             <VideoTile key={`s-${r.socketId}`} stream={r.screen!} label="Screen share" muted onExpand={setExpanded} />
@@ -94,11 +94,13 @@ function VideoTile({
   stream,
   label,
   muted,
+  mirror,
   onExpand,
 }: {
   stream: MediaStream;
   label: string;
   muted?: boolean;
+  mirror?: boolean;
   onExpand: (e: { stream: MediaStream; label: string }) => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -110,7 +112,7 @@ function VideoTile({
   }, [stream, muted]);
   return (
     <div className="pointer-events-auto group relative overflow-hidden rounded-lg border border-black/40 bg-black shadow-xl">
-      <video ref={ref} autoPlay playsInline className="h-48 w-80 max-w-[76vw] object-contain" />
+      <video ref={ref} autoPlay playsInline className="h-48 w-80 max-w-[76vw] object-contain" style={mirror ? { transform: "scaleX(-1)" } : undefined} />
       <button
         onClick={() => onExpand({ stream, label })}
         className="cc-touch-show absolute right-1 top-1 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100"

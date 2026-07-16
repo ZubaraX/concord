@@ -62,7 +62,7 @@ export function CallTimer({ className }: { className?: string }) {
   return <span className={clsx("tabular-nums", className)}>{text}</span>;
 }
 
-function VideoEl({ stream, className }: { stream: MediaStream; className?: string }) {
+function VideoEl({ stream, className, mirror }: { stream: MediaStream; className?: string; mirror?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (ref.current) {
@@ -70,7 +70,9 @@ function VideoEl({ stream, className }: { stream: MediaStream; className?: strin
       ref.current.muted = true; // audio plays via the global sinks
     }
   }, [stream]);
-  return <video ref={ref} autoPlay playsInline muted className={className} />;
+  // Mirror only your OWN camera preview (natural "mirror" self-view). The sent
+  // stream and what others see stay un-mirrored.
+  return <video ref={ref} autoPlay playsInline muted className={className} style={mirror ? { transform: "scaleX(-1)" } : undefined} />;
 }
 
 export default function VoiceStage({
@@ -173,7 +175,7 @@ export default function VoiceStage({
               >
                 {camera ? (
                   <button onClick={() => setExpanded({ stream: camera, label: nameOf(uid) })} className="h-full w-full">
-                    <VideoEl stream={camera} className="h-full w-full object-cover" />
+                    <VideoEl stream={camera} className="h-full w-full object-cover" mirror={isSelf} />
                   </button>
                 ) : (
                   <Avatar user={userOf(uid)} size={72} />

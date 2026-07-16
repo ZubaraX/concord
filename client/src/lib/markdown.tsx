@@ -112,7 +112,7 @@ function renderInline(text: string, customEmojis?: EmojiMap): React.ReactNode[] 
     else if (tok.startsWith("~~")) out.push(<s key={key}>{tok.slice(2, -2)}</s>);
     else if (tok.startsWith("||")) out.push(<Spoiler key={key}>{tok.slice(2, -2)}</Spoiler>);
     else if (tok.startsWith("*")) out.push(<em key={key}>{tok.slice(1, -1)}</em>);
-    else if (tok.startsWith("http")) out.push(<a key={key} href={tok} target="_blank" rel="noreferrer" className="text-discord-link hover:underline">{tok}</a>);
+    else if (tok.startsWith("http")) out.push(<a key={key} href={tok} target="_blank" rel="noreferrer" className="text-discord-link hover:underline [overflow-wrap:anywhere]">{tok}</a>);
     else if (tok.startsWith(":")) {
       const url = customEmojis?.[tok.slice(1, -1)];
       out.push(

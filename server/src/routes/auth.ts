@@ -153,8 +153,9 @@ export async function authRoutes(app: FastifyInstance) {
     const body = z
       .object({
         displayName: z.string().min(1).max(64).optional(),
-        avatarUrl: z.string().url().nullable().optional(),
-        bannerUrl: z.string().url().nullable().optional(),
+        // Accepts a full URL (pasted) or an uploaded relative path (/uploads/…).
+        avatarUrl: z.string().max(500).nullable().optional(),
+        bannerUrl: z.string().max(500).nullable().optional(),
         accentColor: z.string().max(16).nullable().optional(),
         bio: z.string().max(4000).nullable().optional(),
         customStatus: z.string().max(128).nullable().optional(),

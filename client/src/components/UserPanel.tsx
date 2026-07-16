@@ -30,6 +30,9 @@ export default function UserPanel() {
 
   const setStatus = (status: PresenceStatus) => {
     setStatusOpen(false);
+    // Remember the choice so it's restored on the next app launch (otherwise
+    // the disconnect-on-close flips everyone to OFFLINE/invisible).
+    localStorage.setItem("concord.presence", status);
     updateProfile({ status }).catch(() => {});
   };
 

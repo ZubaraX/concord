@@ -113,6 +113,10 @@ function MessageItem({
     }
   }, [message.embedsJson]);
 
+  // First link in the message → a one-tap "Copy Link" action (mobile can't
+  // easily select a URL by hand inside the message).
+  const firstLink = useMemo(() => message.content?.match(/https?:\/\/[^\s]+/)?.[0] ?? null, [message.content]);
+
   function saveEdit() {
     const content = draft.trim();
     setEditing(false);
@@ -131,6 +135,7 @@ function MessageItem({
     { label: "Add Reaction", icon: "😀", onClick: () => setPicker(true) },
     { label: "Reply", icon: "↩️", onClick: () => onReply(message) },
     { label: "Copy Text", icon: "📋", onClick: () => copyMessageText(message.content) },
+    ...(firstLink ? [{ label: "Copy Link", icon: "🔗", onClick: () => copyMessageText(firstLink) }] : []),
     {
       label: bookmarked ? "Remove Bookmark" : "Bookmark",
       icon: "🔖",
@@ -221,7 +226,13 @@ function MessageItem({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      onContextMenu={(e) => { e.preventDefault(); openMenuAnchored(); }}
+      onContextMenu={(e) => {
+        // Long-pressing a link → let the WebView's own menu handle it (Copy
+        // link address / open), instead of hijacking with the action menu.
+        if ((e.target as HTMLElement).closest("a")) return;
+        e.preventDefault();
+        openMenuAnchored();
+      }}
       style={{ transform: swipeX ? `translateX(${swipeX}px)` : undefined, transition: swipeX ? "none" : "transform 0.2s ease" }}
       className={`group relative flex scroll-mt-6 gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
     >
@@ -290,7 +301,7 @@ function MessageItem({
           />
         ) : (
           message.content && (
-            <div className="select-text whitespace-pre-wrap break-words text-discord-text [-webkit-user-select:text]">
+            <div className="select-text whitespace-pre-wrap text-discord-text [-webkit-user-select:text] [overflow-wrap:anywhere]">
               {body}
               {message.editedAt && <span className="ml-1 text-[10px] text-discord-faint">(edited)</span>}
             </div>

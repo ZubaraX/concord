@@ -34,8 +34,11 @@ public class ScreenCapService extends Service {
   private static final String TAG = "ConcordScreen";
   private static final String CHANNEL = "screen-cap";
   private static final int NOTIF_ID = 3;
-  private static final int MAX_DIM = 900; // long side of the streamed frame
-  private static final long MIN_FRAME_MS = 125; // ~8 fps
+  // Tuned for smoothness over crispness: each frame is a base64 JPEG shipped
+  // across the Capacitor bridge + decoded in the WebView, so lower resolution
+  // and frame rate are what actually keep it fluid on mid-range phones.
+  private static final int MAX_DIM = 640; // long side of the streamed frame
+  private static final long MIN_FRAME_MS = 200; // ~5 fps
 
   private MediaProjection projection;
   private VirtualDisplay display;
@@ -118,7 +121,7 @@ public class ScreenCapService extends Service {
             Bitmap cropped = rowPadding == 0 ? bmp : Bitmap.createBitmap(bmp, 0, 0, w, h);
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            cropped.compress(Bitmap.CompressFormat.JPEG, 55, out);
+            cropped.compress(Bitmap.CompressFormat.JPEG, 42, out);
             if (cropped != bmp) cropped.recycle();
             bmp.recycle();
             ScreenCapPlugin.sendFrame(Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP));

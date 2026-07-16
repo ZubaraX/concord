@@ -68,10 +68,19 @@ export default function AppLayout() {
   }, []);
 
   useEffect(() => {
-    connectSocket();
+    const socket = connectSocket();
     initVoice();
     requestNotifyPermission();
     startPushService(); // Android: background notifications (no-op elsewhere)
+    // Re-assert the user's last chosen status on every (re)connect — the
+    // server flips everyone to OFFLINE on disconnect, so without this a chosen
+    // "Online"/"DND"/"Invisible" would read as invisible on the next launch.
+    const restorePresence = () => {
+      const saved = localStorage.getItem("concord.presence");
+      if (saved) useAuth.getState().updateProfile({ status: saved as never }).catch(() => {});
+    };
+    socket.on("connect", restorePresence);
+    if (socket.connected) restorePresence();
     initShareListener((s) => useShare.getState().set(s)); // Share → Concord
     // Invite link tapped outside the app → join the server right away.
     initInviteListener(async (code) => {
@@ -84,7 +93,10 @@ export default function AppLayout() {
         useNotify.getState().push({ title: "Приглашение", body: (e as Error).message });
       }
     });
-    return () => disconnectSocket();
+    return () => {
+      socket.off("connect", restorePresence);
+      disconnectSocket();
+    };
   }, []);
 
   // After an auto-update, the new build starts with a higher version than what

@@ -11,7 +11,7 @@ import { useSpeaking, type SpeakStream } from "../lib/speaking";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
 import { isAndroidApp } from "../lib/platform";
-import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon } from "./Icons";
+import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon, ChevronDownIcon, UserPlusIcon } from "./Icons";
 import { useMutes } from "../store/mutes";
 import { memberHasPermission, Permissions } from "../lib/permissions";
 import VoiceUserPopover from "./VoiceUserPopover";
@@ -40,6 +40,7 @@ export default function ChannelSidebar() {
   const [chanMenu, setChanMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
   const [showRoles, setShowRoles] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [guildMenu, setGuildMenu] = useState<{ x: number; y: number } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const mutes = useMutes();
@@ -114,44 +115,20 @@ export default function ChannelSidebar() {
 
   return (
     <aside className="flex w-60 flex-col bg-discord-sidebar">
-      <div className="flex h-12 items-center gap-1 border-b border-black/20 px-4 font-semibold shadow-sm">
-        <span className="min-w-0 flex-1 truncate">{guild?.name ?? "…"}</span>
-        <button
-          onClick={() => mutes.toggleGuild(currentGuildId)}
-          title={mutes.guilds.includes(currentGuildId) ? t("mute.serverOff") : t("mute.server")}
-          className={clsx(
-            "shrink-0 rounded p-1.5 transition hover:bg-discord-hover",
-            mutes.guilds.includes(currentGuildId) ? "text-discord-danger" : "text-discord-muted hover:text-white"
-          )}
-        >
-          {mutes.guilds.includes(currentGuildId) ? <BellOffIcon size={16} /> : <BellIcon size={16} />}
-        </button>
-        {canManageRoles && (
-          <button
-            onClick={() => setShowRoles(true)}
-            title={t("roles.title")}
-            className="shrink-0 rounded p-1.5 text-discord-muted transition hover:bg-discord-hover hover:text-white"
-          >
-            <ShieldIcon size={16} />
-          </button>
-        )}
-        {canManageEmojis && (
-          <button
-            onClick={() => setShowEmojis(true)}
-            title={t("emoji.title")}
-            className="shrink-0 rounded p-1.5 text-discord-muted transition hover:bg-discord-hover hover:text-white"
-          >
-            <SmileIcon size={16} />
-          </button>
-        )}
-        <button
-          onClick={() => openModal("invite")}
-          title={t("nav.invitePeople")}
-          className="shrink-0 rounded px-1.5 py-1 text-sm text-discord-muted transition hover:bg-discord-hover hover:text-white"
-        >
-          {t("nav.invite")}
-        </button>
-      </div>
+      {/* Server name doubles as a dropdown trigger — keeps the header clean
+          (invite / roles / emoji / mute all live in the menu instead of
+          crowding and overlapping the name). */}
+      <button
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setGuildMenu({ x: r.left, y: r.bottom + 2 });
+        }}
+        className="flex h-12 shrink-0 items-center gap-1 border-b border-black/20 px-4 font-semibold shadow-sm hover:bg-discord-hover"
+      >
+        <span className="min-w-0 flex-1 truncate text-left">{guild?.name ?? "…"}</span>
+        {mutes.guilds.includes(currentGuildId) && <BellOffIcon size={14} className="shrink-0 text-discord-danger" />}
+        <ChevronDownIcon size={18} className="shrink-0 text-discord-muted" />
+      </button>
 
       <div className="flex-1 overflow-y-auto px-2 py-3">
         {grouped.map((group) => (
@@ -273,6 +250,23 @@ export default function ChannelSidebar() {
               label: mutes.channels.includes(chanMenu.channelId) ? t("mute.channelOff") : t("mute.channel"),
               icon: mutes.channels.includes(chanMenu.channelId) ? <BellIcon size={15} /> : <BellOffIcon size={15} />,
               onClick: () => mutes.toggleChannel(chanMenu.channelId),
+            },
+          ]}
+        />
+      )}
+      {guildMenu && (
+        <ContextMenu
+          x={guildMenu.x}
+          y={guildMenu.y}
+          onClose={() => setGuildMenu(null)}
+          items={[
+            { label: t("nav.invitePeople"), icon: <UserPlusIcon size={15} />, onClick: () => openModal("invite") },
+            ...(canManageRoles ? [{ label: t("roles.title"), icon: <ShieldIcon size={15} />, onClick: () => setShowRoles(true) }] : []),
+            ...(canManageEmojis ? [{ label: t("emoji.title"), icon: <SmileIcon size={15} />, onClick: () => setShowEmojis(true) }] : []),
+            {
+              label: mutes.guilds.includes(currentGuildId) ? t("mute.serverOff") : t("mute.server"),
+              icon: mutes.guilds.includes(currentGuildId) ? <BellIcon size={15} /> : <BellOffIcon size={15} />,
+              onClick: () => mutes.toggleGuild(currentGuildId),
             },
           ]}
         />

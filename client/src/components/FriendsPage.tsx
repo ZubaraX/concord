@@ -129,7 +129,7 @@ function AddFriend({ onDone }: { onDone: () => void }) {
   return (
     <div className="max-w-lg">
       <h3 className="text-base font-semibold text-white">{t("friends.addFriend")}</h3>
-      <p className="mt-1 text-sm text-discord-muted">{t("friends.addPlaceholder")} — <code>demo#0001</code></p>
+      <p className="mt-1 text-sm text-discord-muted">{t("friends.addPlaceholder")}</p>
       <div className="mt-3 flex gap-2">
         <input
           autoFocus

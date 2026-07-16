@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { serverPath } from "../lib/serverUrl";
 import { useUI } from "../store/ui";
 import { useAuth } from "../store/auth";
 import { joinVoice } from "../lib/voice";
@@ -44,7 +45,7 @@ export default function UserProfileModal({ userId, onClose }: { userId: string; 
         <div className="text-sm text-discord-muted">Loading…</div>
       ) : (
         <div>
-          <div className="-mx-5 -mt-5 h-24 rounded-t-lg" style={{ background: u.bannerUrl ? `url(${u.bannerUrl}) center/cover` : accent }} />
+          <div className="-mx-5 -mt-5 h-24 rounded-t-lg" style={{ background: u.bannerUrl ? `url(${serverPath(u.bannerUrl)}) center/cover` : accent }} />
           <div className="-mt-10 mb-3 flex items-end gap-3">
             <div className="rounded-full ring-4 ring-discord-bg">
               <Avatar user={u} size={80} status={u.status} />

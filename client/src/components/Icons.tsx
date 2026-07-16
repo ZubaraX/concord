@@ -191,6 +191,9 @@ export const ArrowUpIcon = ({ className, size }: P) =>
 export const ArrowDownIcon = ({ className, size }: P) =>
   svg(size, className, <polyline points="6 9 12 15 18 9" />);
 
+export const ChevronDownIcon = ({ className, size }: P) =>
+  svg(size, className, <polyline points="6 9 12 15 18 9" />);
+
 export const ClockIcon = ({ className, size }: P) =>
   svg(size, className, (
     <>
