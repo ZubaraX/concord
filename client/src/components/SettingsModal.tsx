@@ -12,6 +12,7 @@ import Modal from "./Modal";
 import Avatar from "./Avatar";
 import VoiceSettings from "./VoiceSettings";
 import SecuritySettings from "./SecuritySettings";
+import ImageCropModal from "./ImageCropModal";
 
 const STATUSES: PresenceStatus[] = ["ONLINE", "IDLE", "DND", "OFFLINE"];
 
@@ -49,12 +50,16 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [uploading, setUploading] = useState<"avatar" | "banner" | null>(null);
+  // A picked file waiting to be positioned in the cropper before upload.
+  const [cropFile, setCropFile] = useState<{ kind: "avatar" | "banner"; file: File } | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
   const bannerInput = useRef<HTMLInputElement>(null);
 
   if (!user) return null;
 
-  async function pickImage(kind: "avatar" | "banner", file: File) {
+  // Picking a file opens the cropper; the cropper hands back a positioned image
+  // which we then upload.
+  async function uploadCropped(kind: "avatar" | "banner", file: File) {
     setUploading(kind);
     setMsg(null);
     try {
@@ -137,8 +142,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
           {/* Avatar + banner: upload a photo (no more pasting URLs). */}
           <div className="flex flex-wrap gap-2">
-            <input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && pickImage("avatar", e.target.files[0])} />
-            <input ref={bannerInput} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && pickImage("banner", e.target.files[0])} />
+            <input ref={avatarInput} type="file" accept="image/*" hidden onChange={(e) => { if (e.target.files?.[0]) setCropFile({ kind: "avatar", file: e.target.files[0] }); e.target.value = ""; }} />
+            <input ref={bannerInput} type="file" accept="image/*" hidden onChange={(e) => { if (e.target.files?.[0]) setCropFile({ kind: "banner", file: e.target.files[0] }); e.target.value = ""; }} />
             <button onClick={() => avatarInput.current?.click()} disabled={!!uploading} className="rounded bg-discord-card px-3 py-2 text-sm text-discord-text hover:bg-discord-hover disabled:opacity-60">
               {uploading === "avatar" ? "…" : `🖼 ${t("settings.uploadAvatar")}`}
             </button>
@@ -285,6 +290,18 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
       )}
       {showWhatsNew && <WhatsNewModal entries={recentChanges()} onClose={() => setShowWhatsNew(false)} />}
+      {cropFile && (
+        <ImageCropModal
+          file={cropFile.file}
+          shape={cropFile.kind === "avatar" ? "circle" : "wide"}
+          onCancel={() => setCropFile(null)}
+          onCropped={(f) => {
+            const kind = cropFile.kind;
+            setCropFile(null);
+            uploadCropped(kind, f);
+          }}
+        />
+      )}
     </Modal>
   );
 }

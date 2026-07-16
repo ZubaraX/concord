@@ -175,7 +175,7 @@ export default function VoiceStage({
               >
                 {camera ? (
                   <button onClick={() => setExpanded({ stream: camera, label: nameOf(uid) })} className="h-full w-full">
-                    <VideoEl stream={camera} className="h-full w-full object-cover" mirror={isSelf} />
+                    <VideoEl stream={camera} className="h-full w-full object-cover" mirror={isSelf && voice.cameraFacing === "user"} />
                   </button>
                 ) : (
                   <Avatar user={userOf(uid)} size={72} />

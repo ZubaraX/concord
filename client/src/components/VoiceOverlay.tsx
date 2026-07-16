@@ -10,7 +10,7 @@ import { ExpandIcon, XIcon } from "./Icons";
 // hide-screen controls now live on the participant rows in the channel sidebar
 // (VoiceUserPopover), so there's no floating panel here anymore.
 export default function VoiceOverlay() {
-  const { remotes, localScreen, localCamera, screenOn, cameraOn, effects, channelId, stageOpen } = useVoice();
+  const { remotes, localScreen, localCamera, screenOn, cameraOn, cameraFacing, effects, channelId, stageOpen } = useVoice();
   const [expanded, setExpanded] = useState<{ stream: MediaStream; label: string } | null>(null);
   const hidden = useScreenView((s) => s.hidden);
 
@@ -56,7 +56,7 @@ export default function VoiceOverlay() {
             <VideoTile stream={localScreen} label="Your screen" muted onExpand={setExpanded} />
           )}
           {cameraOn && localCamera && (
-            <VideoTile stream={localCamera} label="You" muted mirror onExpand={setExpanded} />
+            <VideoTile stream={localCamera} label="You" muted mirror={cameraFacing === "user"} onExpand={setExpanded} />
           )}
           {screenTiles.map((r) => (
             <VideoTile key={`s-${r.socketId}`} stream={r.screen!} label="Screen share" muted onExpand={setExpanded} />

@@ -359,7 +359,7 @@ export default function Composer({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0)}
-          placeholder={t("composer.message", { name: channelName })}
+          placeholder=""
           className="max-h-48 min-w-0 flex-1 resize-none bg-transparent py-2 text-discord-text outline-none placeholder:text-discord-faint"
         />
         <button

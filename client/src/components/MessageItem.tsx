@@ -87,12 +87,11 @@ function MessageItem({
     if (e.pointerType === "mouse") setHover(v);
   };
 
-  // Anchor the menu near the same corner regardless of where inside a (maybe
-  // large) message you right-clicked — otherwise it feels like it "jumps
-  // around" depending on whether you clicked the text, an image, etc.
-  function openMenuAnchored() {
-    const r = rowRef.current?.getBoundingClientRect();
-    setMenu(r ? { x: r.right - 8, y: r.top + 4 } : { x: 0, y: 0 });
+  // Open the action menu anchored to a trigger element (the "⋯" button), just
+  // below it — predictable, unlike anchoring to a tall message's corner.
+  function openMenuAt(el: HTMLElement) {
+    const r = el.getBoundingClientRect();
+    setMenu({ x: r.left, y: r.bottom + 4 });
   }
 
   // Parse markdown once per content change, not on every parent re-render.
@@ -231,7 +230,7 @@ function MessageItem({
         // link address / open), instead of hijacking with the action menu.
         if ((e.target as HTMLElement).closest("a")) return;
         e.preventDefault();
-        openMenuAnchored();
+        setMenu({ x: e.clientX, y: e.clientY }); // at the cursor (desktop) / bottom sheet (mobile)
       }}
       style={{ transform: swipeX ? `translateX(${swipeX}px)` : undefined, transition: swipeX ? "none" : "transform 0.2s ease" }}
       className={`group relative flex scroll-mt-6 gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
@@ -366,7 +365,7 @@ function MessageItem({
           {mine && (
             <button onClick={() => { setDraft(message.content); setEditing(true); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Edit">✏️</button>
           )}
-          <button onClick={openMenuAnchored} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="More">⋯</button>
+          <button onClick={(e) => openMenuAt(e.currentTarget)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="More">⋯</button>
         </div>
       )}
 

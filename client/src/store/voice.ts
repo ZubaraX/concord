@@ -20,6 +20,7 @@ interface VoiceStore {
   speakerOn: boolean; // Android: loudspeaker (true) vs earpiece (false)
   screenOn: boolean;
   cameraOn: boolean;
+  cameraFacing: "user" | "environment"; // front vs back — only the front self-view is mirrored
   localScreen: MediaStream | null; // preview of our own shared screen
   localCamera: MediaStream | null; // preview of our own webcam
   occupancy: Record<string, string[]>; // channelId -> userIds (for the sidebar)
@@ -41,6 +42,7 @@ export const useVoice = create<VoiceStore>((set) => ({
   speakerOn: true,
   screenOn: false,
   cameraOn: false,
+  cameraFacing: "user",
   localScreen: null,
   localCamera: null,
   occupancy: {},

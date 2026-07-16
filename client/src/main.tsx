@@ -4,6 +4,7 @@ import { HashRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 import Overlay from "./components/Overlay";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
@@ -24,11 +25,13 @@ if (isOverlay) {
   });
   root.render(
     <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <HashRouter>
-          <App />
-        </HashRouter>
-      </QueryClientProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <HashRouter>
+            <App />
+          </HashRouter>
+        </QueryClientProvider>
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }

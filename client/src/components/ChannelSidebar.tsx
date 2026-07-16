@@ -11,7 +11,8 @@ import { useSpeaking, type SpeakStream } from "../lib/speaking";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
 import { isAndroidApp } from "../lib/platform";
-import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon, ChevronDownIcon, UserPlusIcon } from "./Icons";
+import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon, ChevronDownIcon, UserPlusIcon, TrashIcon, PlusIcon } from "./Icons";
+import Modal from "./Modal";
 import { useMutes } from "../store/mutes";
 import { memberHasPermission, Permissions } from "../lib/permissions";
 import VoiceUserPopover from "./VoiceUserPopover";
@@ -38,6 +39,7 @@ export default function ChannelSidebar() {
   const [createCtx, setCreateCtx] = useState<{ type: "TEXT" | "VOICE"; parentId?: string } | null>(null);
   const [volPop, setVolPop] = useState<VolPopover>(null);
   const [chanMenu, setChanMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
+  const [renameCtx, setRenameCtx] = useState<{ id: string; name: string } | null>(null);
   const [showRoles, setShowRoles] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
   const [guildMenu, setGuildMenu] = useState<{ x: number; y: number } | null>(null);
@@ -76,13 +78,23 @@ export default function ChannelSidebar() {
   }, [guild?.members]);
 
   useEffect(() => {
-    if (currentGuildId && !currentChannelId) {
+    if (!currentGuildId || channels.length === 0) return;
+    // Auto-select the first text channel on entry, and recover if the channel
+    // we're viewing was deleted (else the chat area is stuck on a 404).
+    const currentExists = currentChannelId && channels.some((c) => c.id === currentChannelId);
+    if (!currentExists) {
       const firstText = channels.find((c) => c.type === "TEXT");
       if (firstText) setChannel(firstText.id);
     }
   }, [currentGuildId, currentChannelId, channels, setChannel]);
 
   const openCreate = (type: "TEXT" | "VOICE", parentId?: string) => setCreateCtx({ type, parentId });
+
+  async function deleteChannel(id: string) {
+    if (!window.confirm(t("channel.deleteConfirm"))) return;
+    await api(`/api/channels/${id}`, { method: "DELETE" }).catch((e) => alert((e as Error).message));
+    // The channel:update socket event refetches the guild for everyone.
+  }
 
   const qc = useQueryClient();
   // Drag a channel row onto another to reorder (and optionally move it into
@@ -251,9 +263,23 @@ export default function ChannelSidebar() {
               icon: mutes.channels.includes(chanMenu.channelId) ? <BellIcon size={15} /> : <BellOffIcon size={15} />,
               onClick: () => mutes.toggleChannel(chanMenu.channelId),
             },
+            ...(canManageChannels
+              ? [
+                  {
+                    label: t("channel.rename"),
+                    icon: <PlusIcon size={15} />,
+                    onClick: () => {
+                      const ch = channels.find((c) => c.id === chanMenu.channelId);
+                      if (ch) setRenameCtx({ id: ch.id, name: ch.name });
+                    },
+                  },
+                  { label: t("channel.delete"), icon: <TrashIcon size={15} />, danger: true, onClick: () => deleteChannel(chanMenu.channelId) },
+                ]
+              : []),
           ]}
         />
       )}
+      {renameCtx && <RenameChannelModal ctx={renameCtx} onClose={() => setRenameCtx(null)} />}
       {guildMenu && (
         <ContextMenu
           x={guildMenu.x}
@@ -272,6 +298,35 @@ export default function ChannelSidebar() {
         />
       )}
     </aside>
+  );
+}
+
+function RenameChannelModal({ ctx, onClose }: { ctx: { id: string; name: string }; onClose: () => void }) {
+  const { t } = useI18n();
+  const [name, setName] = useState(ctx.name);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    const clean = name.trim();
+    if (!clean || clean === ctx.name) return onClose();
+    setBusy(true);
+    await api(`/api/channels/${ctx.id}`, { method: "PATCH", body: JSON.stringify({ name: clean }) }).catch((e) => alert((e as Error).message));
+    onClose();
+  }
+  return (
+    <Modal title={t("channel.rename")} onClose={onClose}>
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && save()}
+        placeholder={t("channel.newName")}
+        maxLength={100}
+        className="w-full rounded bg-discord-deep px-3 py-2 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+      />
+      <button onClick={save} disabled={busy} className="mt-3 rounded bg-discord-accent px-5 py-2 text-sm font-medium text-white hover:bg-discord-accentDark disabled:opacity-60">
+        {t("common.save")}
+      </button>
+    </Modal>
   );
 }
 

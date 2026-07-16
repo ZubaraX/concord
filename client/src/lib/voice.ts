@@ -543,7 +543,7 @@ export async function toggleCamera() {
     return;
   }
   cameraStream.getVideoTracks()[0]?.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
-  st().set({ cameraOn: true, localCamera: cameraStream });
+  st().set({ cameraOn: true, localCamera: cameraStream, cameraFacing });
   broadcastStreamKinds();
   peers.forEach((p) => addStreamToPeer(p.pc, cameraStream!));
 }
@@ -569,6 +569,7 @@ export async function flipCamera() {
     }
   }
   cameraFacing = next;
+  st().set({ cameraFacing: next });
   const newTrack = raw.getVideoTracks()[0];
   const oldTrack = cameraStream.getVideoTracks()[0];
   if (oldTrack) cameraStream.removeTrack(oldTrack);
