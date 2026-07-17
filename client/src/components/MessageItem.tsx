@@ -12,6 +12,8 @@ import { renderMarkdown, type EmojiMap } from "../lib/markdown";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import InviteCard from "./InviteCard";
 import PollView from "./PollView";
+import EmojiPicker from "./EmojiPicker";
+import ForwardModal from "./ForwardModal";
 
 // Scroll to a message (if it's currently loaded) and flash-highlight it.
 export function jumpToMessage(id: string) {
@@ -61,11 +63,12 @@ function MessageItem({
   guildId?: string | null;
 }) {
   const { user } = useAuth();
-  const { openProfile } = useUI();
+  const { openProfile, setChannel } = useUI();
   const [hover, setHover] = useState(false);
   const [picker, setPicker] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
+  const [forwarding, setForwarding] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const mine = user?.id === message.author.id;
   const time = new Date(message.createdAt);
@@ -79,6 +82,10 @@ function MessageItem({
     for (const e of guild?.emojis ?? []) map[e.name] = serverPath(e.url);
     return map;
   }, [guild?.emojis]);
+  const channelList = useMemo(
+    () => (guild?.channels ?? []).filter((c) => c.type === "TEXT").map((c) => ({ id: c.id, name: c.name })),
+    [guild?.channels]
+  );
 
   // Only real mice/trackpads trigger hover — touch taps synthesize a
   // "pointerenter" with no matching "leave", which would otherwise leave the
@@ -95,7 +102,16 @@ function MessageItem({
   }
 
   // Parse markdown once per content change, not on every parent re-render.
-  const body = useMemo(() => renderMarkdown(message.content, emojiMap), [message.content, emojiMap]);
+  const body = useMemo(
+    () =>
+      renderMarkdown(message.content, {
+        customEmojis: emojiMap,
+        channels: channelList,
+        myUsername: user?.username,
+        onChannelClick: setChannel,
+      }),
+    [message.content, emojiMap, channelList, user?.username, setChannel]
+  );
 
   // Invite links become one-click join cards (no code pasting).
   const inviteCodes = useMemo(() => {
@@ -133,6 +149,7 @@ function MessageItem({
     { label: "View Profile", icon: "👤", onClick: () => openProfile(message.author.id) },
     { label: "Add Reaction", icon: "😀", onClick: () => setPicker(true) },
     { label: "Reply", icon: "↩️", onClick: () => onReply(message) },
+    { label: "Forward", icon: "↪️", onClick: () => setForwarding(true) },
     { label: "Copy Text", icon: "📋", onClick: () => copyMessageText(message.content) },
     ...(firstLink ? [{ label: "Copy Link", icon: "🔗", onClick: () => copyMessageText(firstLink) }] : []),
     {
@@ -379,17 +396,12 @@ function MessageItem({
       )}
 
       {picker && (
-        <div className="absolute right-3 top-7 z-10 flex gap-1 rounded-lg bg-discord-rail p-1.5 shadow-xl">
-          {QUICK_EMOJIS.map((e) => (
-            <button
-              key={e}
-              onClick={(ev) => toggleReaction(e, { x: ev.clientX, y: ev.clientY })}
-              className="rounded p-1 text-lg hover:bg-discord-hover"
-            >
-              {e}
-            </button>
-          ))}
-        </div>
+        // Full emoji picker for reactions (unicode grid + search). No guildId →
+        // custom :emoji: are excluded, since a reaction stores the raw string.
+        <EmojiPicker
+          onPick={(e) => { setPicker(false); toggleReaction(e); }}
+          onClose={() => setPicker(false)}
+        />
       )}
 
       {bursts.map((p) => (
@@ -403,6 +415,7 @@ function MessageItem({
       ))}
 
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
+      {forwarding && <ForwardModal message={message} onClose={() => setForwarding(false)} />}
     </div>
   );
 }

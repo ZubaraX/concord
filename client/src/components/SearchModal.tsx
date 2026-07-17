@@ -29,7 +29,9 @@ export default function SearchModal({
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     const query = q.trim();
-    if (query.length < 2) {
+    // Allow a query that's short but carries a filter (from: / has:link / has:file).
+    const hasFilter = /(^|\s)(from:\S+|has:(link|file|image|attachment))/i.test(query);
+    if (query.length < 2 && !hasFilter) {
       setResults([]);
       return;
     }

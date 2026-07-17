@@ -21,8 +21,24 @@ export async function messageRoutes(app: FastifyInstance) {
   // variants of the query — good enough without a full FTS index.
   app.get("/search", async (req, reply) => {
     const { q, guildId, channelId } = req.query as { q?: string; guildId?: string; channelId?: string };
-    const query = (q ?? "").trim();
-    if (query.length < 2) return reply.code(400).send({ error: "Query too short (min 2 chars)" });
+    const raw = (q ?? "").trim();
+
+    // Parse filter tokens: from:username, has:link, has:file. The rest is text.
+    let fromUser: string | null = null;
+    let hasLink = false;
+    let hasFile = false;
+    const textParts: string[] = [];
+    for (const tok of raw.split(/\s+/)) {
+      const from = /^from:(.+)$/i.exec(tok);
+      if (from) { fromUser = from[1].replace(/^@/, ""); continue; }
+      if (/^has:link$/i.test(tok)) { hasLink = true; continue; }
+      if (/^has:(file|image|attachment)$/i.test(tok)) { hasFile = true; continue; }
+      if (tok) textParts.push(tok);
+    }
+    const query = textParts.join(" ");
+    if (query.length < 2 && !fromUser && !hasLink && !hasFile) {
+      return reply.code(400).send({ error: "Query too short (min 2 chars) or add a filter" });
+    }
 
     if (channelId) {
       if (!(await getAccessibleChannel(req.userId, channelId))) {
@@ -37,12 +53,21 @@ export async function messageRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "guildId or channelId required" });
     }
 
-    const capitalized = query.charAt(0).toUpperCase() + query.slice(1).toLowerCase();
-    const variants = [...new Set([query, query.toLowerCase(), query.toUpperCase(), capitalized])];
+    // Case-variant contains() because SQLite LIKE is case-sensitive for Cyrillic.
+    const AND: Record<string, unknown>[] = [];
+    if (query.length >= 2) {
+      const cap = query.charAt(0).toUpperCase() + query.slice(1).toLowerCase();
+      const variants = [...new Set([query, query.toLowerCase(), query.toUpperCase(), cap])];
+      AND.push({ OR: variants.map((v) => ({ content: { contains: v } })) });
+    }
+    if (fromUser) AND.push({ author: { username: { contains: fromUser } } });
+    if (hasLink) AND.push({ content: { contains: "http" } });
+    if (hasFile) AND.push({ attachments: { some: {} } });
+
     const messages = await prisma.message.findMany({
       where: {
         ...(channelId ? { channelId } : { channel: { guildId } }),
-        OR: variants.map((v) => ({ content: { contains: v } })),
+        AND,
       },
       include: messageInclude,
       orderBy: { createdAt: "desc" },
@@ -211,6 +236,52 @@ export async function messageRoutes(app: FastifyInstance) {
       orderBy: { createdAt: "desc" },
     });
     return reply.send(pins);
+  });
+
+  // ── Read state (syncs unread across devices) ────────────────────────────
+  // All my last-read markers, for computing unread on load.
+  app.get("/read-states", async (req) => {
+    const states = await prisma.readState.findMany({ where: { userId: req.userId } });
+    return states.map((s) => ({ channelId: s.channelId, lastReadAt: s.lastReadAt }));
+  });
+
+  // Mark a channel read up to now.
+  app.put("/channels/:channelId/read", async (req, reply) => {
+    const { channelId } = req.params as { channelId: string };
+    const at = new Date();
+    await prisma.readState.upsert({
+      where: { userId_channelId: { userId: req.userId, channelId } },
+      create: { userId: req.userId, channelId, lastReadAt: at },
+      update: { lastReadAt: at },
+    });
+    return reply.send({ ok: true, lastReadAt: at });
+  });
+
+  // Mark every accessible channel read (guild channels I'm a member of + my DMs).
+  app.post("/read-all", async (req) => {
+    const memberships = await prisma.guildMember.findMany({
+      where: { userId: req.userId },
+      select: { guild: { select: { channels: { select: { id: true } } } } },
+    });
+    const dmChannels = await prisma.channel.findMany({
+      where: { type: "DM", dmParticipants: { some: { id: req.userId } } },
+      select: { id: true },
+    });
+    const ids = [
+      ...memberships.flatMap((m) => m.guild.channels.map((c) => c.id)),
+      ...dmChannels.map((c) => c.id),
+    ];
+    const at = new Date();
+    await prisma.$transaction(
+      ids.map((channelId) =>
+        prisma.readState.upsert({
+          where: { userId_channelId: { userId: req.userId, channelId } },
+          create: { userId: req.userId, channelId, lastReadAt: at },
+          update: { lastReadAt: at },
+        })
+      )
+    );
+    return { ok: true, count: ids.length };
   });
 
   // ── Polls ─────────────────────────────────────────────────────────────

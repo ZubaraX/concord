@@ -11,7 +11,8 @@ import { useSpeaking, type SpeakStream } from "../lib/speaking";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
 import { isAndroidApp } from "../lib/platform";
-import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon, ChevronDownIcon, UserPlusIcon, TrashIcon, PlusIcon } from "./Icons";
+import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon, ChevronDownIcon, UserPlusIcon, TrashIcon, PlusIcon, CheckIcon } from "./Icons";
+import { markAllRead } from "../lib/lastRead";
 import Modal from "./Modal";
 import { useMutes } from "../store/mutes";
 import { memberHasPermission, Permissions } from "../lib/permissions";
@@ -287,6 +288,7 @@ export default function ChannelSidebar() {
           onClose={() => setGuildMenu(null)}
           items={[
             { label: t("nav.invitePeople"), icon: <UserPlusIcon size={15} />, onClick: () => openModal("invite") },
+            { label: t("chat.markAllRead"), icon: <CheckIcon size={15} />, onClick: () => { markAllRead(); useUnread.getState().clearAll(); } },
             ...(canManageRoles ? [{ label: t("roles.title"), icon: <ShieldIcon size={15} />, onClick: () => setShowRoles(true) }] : []),
             ...(canManageEmojis ? [{ label: t("emoji.title"), icon: <SmileIcon size={15} />, onClick: () => setShowEmojis(true) }] : []),
             {

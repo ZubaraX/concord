@@ -200,6 +200,18 @@ model Message {
 // A message the author queued to send later. On send it becomes a real
 // Message (createMessage/broadcastNewMessage) and this row is deleted — see
 // lib/scheduler.ts for the polling loop that fires these.
+// Per-user, per-channel last-read marker so unread state syncs across devices
+// (phone + desktop) instead of living only in each client's localStorage.
+model ReadState {
+  id         String   @id @default(cuid())
+  userId     String
+  channelId  String
+  lastReadAt DateTime @default(now())
+
+  @@unique([userId, channelId])
+  @@index([userId])
+}
+
 model ScheduledMessage {
   id             String   @id @default(cuid())
   channelId      String

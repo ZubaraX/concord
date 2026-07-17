@@ -35,6 +35,7 @@ import { startPushService, initShareListener, initInviteListener } from "../lib/
 import { useShare } from "../store/share";
 import { useI18n } from "../lib/i18n";
 import { isMuted } from "../store/mutes";
+import { loadReadStates } from "../lib/lastRead";
 import { MenuIcon, UsersIcon, GearIcon } from "../components/Icons";
 
 // Do-Not-Disturb: keep unread counters, but no sounds/toasts/popups.
@@ -81,6 +82,7 @@ export default function AppLayout() {
     };
     socket.on("connect", restorePresence);
     if (socket.connected) restorePresence();
+    loadReadStates(); // pull server-synced unread markers (cross-device)
     initShareListener((s) => useShare.getState().set(s)); // Share → Concord
     // Invite link tapped outside the app → join the server right away.
     initInviteListener(async (code) => {

@@ -13,7 +13,7 @@ import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCa
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
 import { isAndroidApp } from "../lib/platform";
-import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon, MessageIcon, SpeakerIcon, XIcon } from "./Icons";
+import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon, MessageIcon, SpeakerIcon, XIcon, ArrowDownIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
 import PinsModal from "./PinsModal";
@@ -45,6 +45,8 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [callMoreMenu, setCallMoreMenu] = useState<{ x: number; y: number } | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true); // live copy for the scroll effect (no stale closure)
   // Voice channels: text chat lives beside the stage (desktop) or behind a
   // toggle (phones, stage-first).
   const [showChat, setShowChat] = useState(() => window.innerWidth >= 768);
@@ -244,9 +246,13 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       requestAnimationFrame(jump);
       setTimeout(jump, 80);
       setTimeout(jump, 250);
+      atBottomRef.current = true;
+      setAtBottom(true);
       return;
     }
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Live new message: only follow to the bottom if the reader is already
+    // near it — don't yank someone reading older history downward.
+    if (atBottomRef.current) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     // currentChannelId in deps guarantees the initial jump fires even if the
     // new channel happens to have the same message count as the previous one.
   }, [currentChannelId, messages.length]);
@@ -454,16 +460,24 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
 
         <div
           className={clsx(
-            "flex min-w-0 flex-col",
+            // min-h-0 is essential: without it this flex column won't let the
+            // scroll area below shrink, so the newest messages get clipped by
+            // the parent's overflow-hidden and you can't scroll to the bottom.
+            "relative flex min-h-0 min-w-0 flex-col",
             isVoice ? (showChat ? "w-full border-black/20 md:w-[380px] md:shrink-0 md:border-l" : "hidden") : "flex-1"
           )}
         >
           <div
             ref={scrollRef}
             onScroll={(e) => {
-              if ((e.target as HTMLDivElement).scrollTop < 120) loadOlder();
+              const el = e.target as HTMLDivElement;
+              if (el.scrollTop < 120) loadOlder();
+              // Show the "jump to bottom" button once you've scrolled up a bit.
+              const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+              atBottomRef.current = near;
+              setAtBottom(near);
             }}
-            className="flex-1 overflow-y-auto overflow-x-hidden py-4"
+            className="relative flex-1 overflow-y-auto overflow-x-hidden py-4"
           >
             {!hasMore && <Welcome name={channel.name} isDM={isDM} />}
             {hasMore && messages.length > 0 && (
@@ -482,6 +496,16 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
             ))}
             <div ref={bottomRef} />
           </div>
+
+          {/* Jump to the newest messages when scrolled up. */}
+          {!atBottom && (
+            <button
+              onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
+              className="absolute inset-x-0 bottom-24 z-10 mx-auto flex w-fit items-center gap-1.5 rounded-full bg-discord-accent px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-discord-accentDark"
+            >
+              <ArrowDownIcon size={14} /> {t("chat.jumpToBottom")}
+            </button>
+          )}
 
           <div className="px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6">
             {pendingShare && (

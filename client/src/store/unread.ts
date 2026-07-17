@@ -5,6 +5,7 @@ interface UnreadStore {
   counts: Record<string, number>;
   bump: (channelId: string) => void;
   clear: (channelId: string) => void;
+  clearAll: () => void;
 }
 
 export const useUnread = create<UnreadStore>((set) => ({
@@ -17,4 +18,5 @@ export const useUnread = create<UnreadStore>((set) => ({
       delete c[channelId];
       return { counts: c };
     }),
+  clearAll: () => set({ counts: {} }),
 }));

@@ -2,11 +2,19 @@ import React from "react";
 
 export type EmojiMap = Record<string, string>; // name -> image url
 
+export interface RenderContext {
+  customEmojis?: EmojiMap;
+  channels?: { id: string; name: string }[]; // guild channels, for #channel links
+  myUsername?: string; // to highlight @mentions of me
+  onChannelClick?: (id: string) => void;
+}
+
 // Minimal, safe Discord-flavored markdown (no dangerouslySetInnerHTML).
 // Block level: ```fenced code``` (with light syntax highlight + lang label),
 // > blockquotes, # headers, - / 1. lists. Inline: `code`, **bold**, *italic*,
-// __underline__, ~~strike~~, ||spoiler||, autolinks, :custom_emoji:.
-export function renderMarkdown(text: string, customEmojis?: EmojiMap): React.ReactNode {
+// __underline__, ~~strike~~, ||spoiler||, autolinks, :custom_emoji:, @mentions,
+// #channel links.
+export function renderMarkdown(text: string, ctx: RenderContext = {}): React.ReactNode {
   const parts = text.split(/(```[\s\S]*?```)/g);
   return parts.map((part, i) => {
     const fence = part.match(/^```(\w+)?\n?([\s\S]*?)```$/);
@@ -25,12 +33,12 @@ export function renderMarkdown(text: string, customEmojis?: EmojiMap): React.Rea
         </pre>
       );
     }
-    return <React.Fragment key={i}>{renderBlocks(part, customEmojis)}</React.Fragment>;
+    return <React.Fragment key={i}>{renderBlocks(part, ctx)}</React.Fragment>;
   });
 }
 
 // Group plain text into block elements line-by-line.
-function renderBlocks(text: string, customEmojis?: EmojiMap): React.ReactNode[] {
+function renderBlocks(text: string, ctx: RenderContext): React.ReactNode[] {
   const lines = text.split("\n");
   const out: React.ReactNode[] = [];
   let i = 0;
@@ -48,7 +56,7 @@ function renderBlocks(text: string, customEmojis?: EmojiMap): React.ReactNode[] 
       out.push(
         <blockquote key={key++} className="my-0.5 border-l-4 border-discord-faint/60 pl-2 text-discord-text">
           {quoted.map((q, j) => (
-            <div key={j}>{renderInline(q, customEmojis)}</div>
+            <div key={j}>{renderInline(q, ctx)}</div>
           ))}
         </blockquote>
       );
@@ -61,7 +69,7 @@ function renderBlocks(text: string, customEmojis?: EmojiMap): React.ReactNode[] 
       const size = h[1].length === 1 ? "text-xl" : h[1].length === 2 ? "text-lg" : "text-base";
       out.push(
         <div key={key++} className={`mt-1 font-bold text-white ${size}`}>
-          {renderInline(h[2], customEmojis)}
+          {renderInline(h[2], ctx)}
         </div>
       );
       i++;
@@ -81,7 +89,7 @@ function renderBlocks(text: string, customEmojis?: EmojiMap): React.ReactNode[] 
       out.push(
         <Tag key={key++} className={`my-0.5 ml-5 ${ordered ? "list-decimal" : "list-disc"}`}>
           {items.map((it, j) => (
-            <li key={j}>{renderInline(it.text, customEmojis)}</li>
+            <li key={j}>{renderInline(it.text, ctx)}</li>
           ))}
         </Tag>
       );
@@ -89,15 +97,16 @@ function renderBlocks(text: string, customEmojis?: EmojiMap): React.ReactNode[] 
     }
 
     // Plain line (preserve blank lines as spacing).
-    out.push(<div key={key++}>{line ? renderInline(line, customEmojis) : " "}</div>);
+    out.push(<div key={key++}>{line ? renderInline(line, ctx) : " "}</div>);
     i++;
   }
   return out;
 }
 
-function renderInline(text: string, customEmojis?: EmojiMap): React.ReactNode[] {
+function renderInline(text: string, ctx: RenderContext): React.ReactNode[] {
+  const { customEmojis, channels, myUsername, onChannelClick } = ctx;
   const pattern =
-    /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(~~[^~]+~~)|(\|\|[^|]+\|\|)|(https?:\/\/[^\s]+)|(:[a-z0-9_]+:)/g;
+    /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(~~[^~]+~~)|(\|\|[^|]+\|\|)|(https?:\/\/[^\s]+)|(:[a-z0-9_]+:)|(@[\p{L}\p{N}_.]+)|(#[\p{L}\p{N}_-]+)/gu;
   const out: React.ReactNode[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
@@ -118,6 +127,31 @@ function renderInline(text: string, customEmojis?: EmojiMap): React.ReactNode[] 
       out.push(
         url ? (
           <img key={key} src={url} alt={tok} title={tok} className="inline-block h-5 w-5 -translate-y-0.5 object-contain align-middle" />
+        ) : (
+          tok
+        )
+      );
+    } else if (tok.startsWith("@")) {
+      const mine = myUsername && tok.slice(1).toLowerCase() === myUsername.toLowerCase();
+      out.push(
+        <span
+          key={key}
+          className={`rounded px-1 font-medium ${mine ? "bg-discord-accent/40 text-white" : "bg-discord-accent/20 text-discord-link"}`}
+        >
+          {tok}
+        </span>
+      );
+    } else if (tok.startsWith("#")) {
+      const ch = channels?.find((c) => c.name.toLowerCase() === tok.slice(1).toLowerCase());
+      out.push(
+        ch && onChannelClick ? (
+          <button
+            key={key}
+            onClick={() => onChannelClick(ch.id)}
+            className="rounded bg-discord-accent/20 px-1 font-medium text-discord-link hover:underline"
+          >
+            {tok}
+          </button>
         ) : (
           tok
         )
