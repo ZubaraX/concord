@@ -230,20 +230,26 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       prepending.current = false; // history prepend — keep the viewport where it is
       return;
     }
-    // Just-opened channel: jump to the first unread (or bottom) instantly,
-    // no smooth animation.
+    // Just-opened channel: jump to the first unread (or bottom). Retried across
+    // a couple of frames + a short timeout so it survives late layout shifts
+    // (avatars/images loading after the first paint).
     if (pendingInitialScroll.current !== undefined) {
       const target = pendingInitialScroll.current;
       pendingInitialScroll.current = undefined;
-      requestAnimationFrame(() => {
+      const jump = () => {
         const el = target ? document.getElementById(`msg-${target}`) : null;
         if (el) el.scrollIntoView({ block: "start" });
         else bottomRef.current?.scrollIntoView();
-      });
+      };
+      requestAnimationFrame(jump);
+      setTimeout(jump, 80);
+      setTimeout(jump, 250);
       return;
     }
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    // currentChannelId in deps guarantees the initial jump fires even if the
+    // new channel happens to have the same message count as the previous one.
+  }, [currentChannelId, messages.length]);
 
   // Reset composer state when switching channels.
   useEffect(() => {

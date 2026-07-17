@@ -187,18 +187,19 @@ export default function AppLayout() {
       navigator.vibrate?.(120); // phones: buzz on DM
     };
 
-    // Someone joined a DM voice channel I'm not in → incoming call modal.
-    const onVoiceState = (p: { channelId: string; userIds: string[] }) => {
-      const dm = dmName(p.channelId);
-      if (!dm) return; // guild voice, ignore
+    // Dedicated DM incoming-call signal (carries the caller's name, so it works
+    // even when this DM was never in our cache — e.g. we've only been in guilds).
+    const onCall = (p: { channelId: string; name?: string; ringing: boolean }) => {
       const inThisCall = useVoice.getState().channelId === p.channelId;
-      if (p.userIds.length > 0 && !inThisCall) {
+      if (p.ringing && !inThisCall) {
         if (ringingChannels.current.has(p.channelId)) return;
         if (isDnd() || isMuted(p.channelId)) return; // no ringing on DND/muted
         ringingChannels.current.add(p.channelId);
-        setIncoming({ channelId: p.channelId, name: dm.name });
-        desktopNotify("Incoming call", `${dm.name} is calling you`);
-      } else if (p.userIds.length === 0) {
+        setIncoming({ channelId: p.channelId, name: p.name ?? "Звонок" });
+        desktopNotify("Входящий звонок", `${p.name ?? ""} звонит вам`);
+        playPing();
+        navigator.vibrate?.([200, 100, 200]);
+      } else if (!p.ringing) {
         ringingChannels.current.delete(p.channelId);
         setIncoming((cur) => (cur?.channelId === p.channelId ? null : cur));
       }
@@ -206,7 +207,7 @@ export default function AppLayout() {
 
     socket.on("notify:dm", onDmMessage);
     socket.on("channel:activity", onActivity);
-    socket.on("voice:state", onVoiceState);
+    socket.on("notify:call", onCall);
 
     return () => {
       socket.off("guild:joined", onJoined);
@@ -220,7 +221,7 @@ export default function AppLayout() {
       socket.off("dm:new", invalidateDms);
       socket.off("notify:dm", onDmMessage);
       socket.off("channel:activity", onActivity);
-      socket.off("voice:state", onVoiceState);
+      socket.off("notify:call", onCall);
     };
   }, [qc, currentGuildId, setGuild, openDM]);
 

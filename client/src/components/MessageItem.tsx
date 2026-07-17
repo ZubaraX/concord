@@ -291,12 +291,20 @@ function MessageItem({
           <textarea
             autoFocus
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            ref={(el) => {
+              // Auto-size to the content (grows as you type, up to a cap).
+              if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 320) + "px"; }
+            }}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = Math.min(e.target.scrollHeight, 320) + "px";
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
               if (e.key === "Escape") setEditing(false);
             }}
-            className="w-full resize-none rounded bg-discord-deep px-3 py-2 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+            className="w-full resize-none overflow-y-auto rounded bg-discord-deep px-3 py-2 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
           />
         ) : (
           message.content && (
@@ -358,6 +366,8 @@ function MessageItem({
         )}
       </div>
 
+      {/* Quick actions on hover (desktop). Everything else — copy, pin,
+          bookmark, delete… — is on right-click. */}
       {hover && !editing && !menu && (
         <div className="absolute right-3 top-0 flex items-center gap-1 rounded bg-discord-rail shadow ring-1 ring-black/30">
           <button onClick={() => setPicker((p) => !p)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Add reaction">😀</button>
@@ -365,7 +375,6 @@ function MessageItem({
           {mine && (
             <button onClick={() => { setDraft(message.content); setEditing(true); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Edit">✏️</button>
           )}
-          <button onClick={(e) => openMenuAt(e.currentTarget)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="More">⋯</button>
         </div>
       )}
 

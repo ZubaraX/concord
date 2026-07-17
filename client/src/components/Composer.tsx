@@ -209,6 +209,14 @@ export default function Composer({
     }
   }
 
+  // Grow the input to fit the text as you type (up to a cap, then it scrolls).
+  useEffect(() => {
+    const el = textarea.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 200) + "px";
+  }, [value]);
+
   // ── voice messages (MediaRecorder → upload as audio attachment) ──────────
   const [rec, setRec] = useState<{ recorder: MediaRecorder; startedAt: number } | null>(null);
   const [, recTick] = useState(0);
@@ -360,7 +368,7 @@ export default function Composer({
           onPaste={onPaste}
           onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0)}
           placeholder=""
-          className="max-h-48 min-w-0 flex-1 resize-none bg-transparent py-2 text-discord-text outline-none placeholder:text-discord-faint"
+          className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-discord-text outline-none placeholder:text-discord-faint"
         />
         <button
           onClick={startRecording}

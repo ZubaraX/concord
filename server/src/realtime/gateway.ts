@@ -54,16 +54,29 @@ export function attachGateway(app: FastifyInstance) {
     const broadcastVoiceState = async (channelId: string) => {
       const channel = await prisma.channel.findUnique({
         where: { id: channelId },
-        select: { guildId: true, dmParticipants: { select: { id: true } } },
+        select: { guildId: true, dmParticipants: { select: { id: true, username: true, displayName: true } } },
       });
       if (!channel) return;
       const map = voiceParticipants.get(channelId);
-      const payload = { channelId, userIds: map ? [...new Set(map.values())] : [] };
+      const userIds = map ? [...new Set(map.values())] : [];
+      const payload = { channelId, userIds };
       if (channel.guildId) {
         io.to(guildRoom(channel.guildId)).emit("voice:state", payload);
       } else {
-        // DM call → notify both participants' personal rooms.
-        for (const p of channel.dmParticipants) io.to(userRoom(p.id)).emit("voice:state", payload);
+        // DM call → notify both participants' personal rooms. A dedicated
+        // notify:call event carries the caller's name so the recipient can ring
+        // WITHOUT already having this DM in their client-side cache (they might
+        // have only ever been in guilds).
+        for (const p of channel.dmParticipants) {
+          io.to(userRoom(p.id)).emit("voice:state", payload);
+          const inCall = userIds.includes(p.id);
+          const caller = channel.dmParticipants.find((o) => o.id !== p.id && userIds.includes(o.id));
+          if (userIds.length > 0 && !inCall && caller) {
+            io.to(userRoom(p.id)).emit("notify:call", { channelId, name: caller.displayName ?? caller.username, ringing: true });
+          } else {
+            io.to(userRoom(p.id)).emit("notify:call", { channelId, ringing: false });
+          }
+        }
       }
     };
 
