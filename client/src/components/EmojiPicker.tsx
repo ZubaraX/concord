@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { serverPath } from "../lib/serverUrl";
 import type { Guild } from "../types";
@@ -52,12 +53,12 @@ export default function EmojiPicker({
   const anchored = anchor
     ? {
         position: "fixed" as const,
-        left: Math.min(anchor.x, window.innerWidth - 300),
-        top: Math.min(anchor.y, window.innerHeight - 320),
+        left: Math.max(8, Math.min(anchor.x, window.innerWidth - 300)),
+        top: Math.max(8, Math.min(anchor.y, window.innerHeight - 320)),
       }
     : undefined;
 
-  return (
+  const body = (
     <div
       ref={ref}
       style={anchored}
@@ -97,4 +98,8 @@ export default function EmojiPicker({
       </div>
     </div>
   );
+
+  // Anchored mode renders into <body> — an ancestor's transform (swipe rows)
+  // or overflow clipping can never displace or hide it.
+  return anchored ? createPortal(body, document.body) : body;
 }

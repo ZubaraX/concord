@@ -97,24 +97,48 @@ function updateConnState() {
 }
 
 // ── mic ──────────────────────────────────────────────────────────────────────
-async function buildMic() {
+let rnnoiseDispose: (() => void) | null = null;
+
+function micConstraints() {
   const s = cfg();
-  const raw = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: s.inputDeviceId ? { exact: s.inputDeviceId } : undefined,
-      echoCancellation: s.echoCancellation,
-      noiseSuppression: s.noiseSuppression,
-      autoGainControl: s.autoGainControl,
-    },
-  });
+  return {
+    deviceId: s.inputDeviceId ? { exact: s.inputDeviceId } : undefined,
+    echoCancellation: s.echoCancellation,
+    // RNNoise replaces the browser's own suppressor — don't double-process.
+    noiseSuppression: s.rnnoise ? false : s.noiseSuppression,
+    autoGainControl: s.autoGainControl,
+  };
+}
+
+// Optionally pipe the raw mic through the RNNoise worklet. Falls back to the
+// raw track if the wasm/worklet fails to load (old WebView, blocked fetch).
+async function processedMicTrack(raw: MediaStreamTrack): Promise<MediaStreamTrack> {
+  rnnoiseDispose?.();
+  rnnoiseDispose = null;
+  if (!cfg().rnnoise) return raw;
+  try {
+    const { createRnnoiseTrack } = await import("./rnnoise");
+    const { track, dispose } = await createRnnoiseTrack(raw);
+    rnnoiseDispose = dispose;
+    return track;
+  } catch (e) {
+    console.warn("[voice] RNNoise unavailable — using the raw mic:", e);
+    return raw;
+  }
+}
+
+async function buildMic() {
+  const raw = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
   micRawTrack = raw.getAudioTracks()[0];
-  micStream.addTrack(micRawTrack);
+  micStream.addTrack(await processedMicTrack(micRawTrack));
   applyMicState();
 }
 function applyMicState() {
   if (!micRawTrack) return;
   const ptt = cfg().voiceMode === "ptt";
   // Deafen implies mute (you can't hear them — they shouldn't hear you).
+  // Toggling the RAW track works with RNNoise too: a disabled source feeds
+  // silence into the worklet, so the processed output goes silent as well.
   micRawTrack.enabled = !st().muted && !st().deafened && (!ptt || pttDown);
 }
 export function setInputVolume(percent: number) {
@@ -122,25 +146,19 @@ export function setInputVolume(percent: number) {
 }
 export async function refreshMic() {
   if (!st().channelId || !micRawTrack) return;
-  const old = micRawTrack;
-  const s = cfg();
-  const raw = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: s.inputDeviceId ? { exact: s.inputDeviceId } : undefined,
-      echoCancellation: s.echoCancellation,
-      noiseSuppression: s.noiseSuppression,
-      autoGainControl: s.autoGainControl,
-    },
-  });
-  const next = raw.getAudioTracks()[0];
-  micStream.removeTrack(old);
+  const oldRaw = micRawTrack;
+  const oldOut = micStream.getAudioTracks()[0] ?? oldRaw;
+  const raw = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
+  micRawTrack = raw.getAudioTracks()[0];
+  const next = await processedMicTrack(micRawTrack);
+  micStream.removeTrack(oldOut);
   micStream.addTrack(next);
-  micRawTrack = next;
   peers.forEach((p) => {
     const sender = p.pc.getSenders().find((se) => se.track?.kind === "audio");
     sender?.replaceTrack(next);
   });
-  old.stop();
+  oldRaw.stop();
+  if (oldOut !== oldRaw) oldOut.stop();
   applyMicState();
 }
 
@@ -439,6 +457,11 @@ export async function leaveVoice() {
   peers.clear();
   pendingTracks.length = 0;
   micStream.getTracks().forEach((t) => { t.stop(); micStream.removeTrack(t); });
+  // With RNNoise the raw mic track isn't in micStream — stop it explicitly so
+  // the mic indicator light actually goes off, and tear down the audio graph.
+  micRawTrack?.stop();
+  rnnoiseDispose?.();
+  rnnoiseDispose = null;
   micRawTrack = null;
   screenStream?.getTracks().forEach((t) => t.stop());
   cameraStream?.getTracks().forEach((t) => t.stop());

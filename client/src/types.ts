@@ -92,6 +92,7 @@ export interface Message {
   reactions?: { emoji: string; userId: string }[];
   embedsJson?: string | null;
   pollJson?: string | null;
+  threadId?: string | null; // id of the THREAD channel rooted at this message
 }
 
 export interface ScheduledMessage {

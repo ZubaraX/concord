@@ -66,7 +66,9 @@ export async function messageRoutes(app: FastifyInstance) {
 
     const messages = await prisma.message.findMany({
       where: {
-        ...(channelId ? { channelId } : { channel: { guildId } }),
+        // Guild scope skips THREAD channels — a search hit inside a hidden
+        // thread can't be jumped to from the main chat view.
+        ...(channelId ? { channelId } : { channel: { guildId, type: { not: "THREAD" } } }),
         AND,
       },
       include: messageInclude,
@@ -74,6 +76,50 @@ export async function messageRoutes(app: FastifyInstance) {
       take: 50,
     });
     return reply.send(messages);
+  });
+
+  // ── Threads ──────────────────────────────────────────────────────────────
+  // Create (or return) the discussion thread hanging off a message. A thread
+  // is a hidden channel of type THREAD in the same guild — all the existing
+  // message machinery (history, posting, reactions, sockets) works inside it.
+  app.post("/messages/:messageId/thread", async (req, reply) => {
+    const { messageId } = req.params as { messageId: string };
+    const msg = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: { channel: { select: { type: true, guildId: true } } },
+    });
+    if (!msg) return reply.code(404).send({ error: "Not found" });
+    if (!(await getAccessibleChannel(req.userId, msg.channelId))) {
+      return reply.code(403).send({ error: "No access to this channel" });
+    }
+    if (msg.channel.type !== "TEXT" || !msg.channel.guildId) {
+      return reply.code(400).send({ error: "Threads are only available in server text channels" });
+    }
+
+    // Already has one → return it (idempotent open).
+    if (msg.threadId) {
+      const existing = await prisma.channel.findUnique({ where: { id: msg.threadId } });
+      if (existing) return reply.send(existing);
+    }
+
+    const name = (msg.content || "").replace(/\s+/g, " ").trim().slice(0, 60) || "thread";
+    const thread = await prisma.channel.create({
+      data: {
+        guildId: msg.channel.guildId,
+        name,
+        type: "THREAD",
+        parentId: msg.channelId,
+        position: 100000, // sorted last; never shown in the sidebar anyway
+      },
+    });
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { threadId: thread.id },
+      include: messageInclude,
+    });
+    // Everyone viewing the parent channel sees the thread chip appear live.
+    getIO().to(channelRoom(msg.channelId)).emit("message:edit", updated);
+    return reply.send(thread);
   });
 
   // GET history (cursor-paginated, unlimited depth).

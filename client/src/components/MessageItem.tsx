@@ -57,11 +57,13 @@ function MessageItem({
   grouped,
   onReply,
   guildId,
+  inThread,
 }: {
   message: Message;
   grouped: boolean;
   onReply: (m: Message) => void;
   guildId?: string | null;
+  inThread?: boolean; // rendered inside a ThreadPanel — no nested threads
 }) {
   const { user } = useAuth();
   const { t } = useI18n();
@@ -156,11 +158,26 @@ function MessageItem({
     api(`/api/messages/${message.id}/pin`, { method: pinned ? "PUT" : "DELETE" }).catch(() => {});
   }
 
+  // Open the message's thread — creating it server-side first if needed
+  // (the POST is idempotent: an existing thread is just returned).
+  async function openThread() {
+    try {
+      const th = await api<{ id: string; name: string }>(`/api/messages/${message.id}/thread`, { method: "POST" });
+      useUI.getState().openThread({ id: th.id, title: th.name });
+    } catch {
+      /* no access / DM channel — nothing to open */
+    }
+  }
+
   const bookmarked = useBookmarks((s) => s.bookmarks.some((b) => b.id === message.id));
   const menuItems: MenuItem[] = [
     { label: t("profile.viewProfile"), icon: "👤", onClick: () => openProfile(message.author.id) },
     { label: t("msg.addReaction"), icon: "😀", onClick: () => { const r = rowRef.current?.getBoundingClientRect(); setPicker(r ? { x: Math.max(8, r.right - 288), y: r.top } : { x: 100, y: 100 }); } },
     { label: t("common.reply"), icon: "↩️", onClick: () => onReply(message) },
+    // Threads exist only in guild text channels, and never nested.
+    ...(guildId && !inThread
+      ? [{ label: message.threadId ? t("thread.open") : t("thread.start"), icon: "🧵", onClick: openThread }]
+      : []),
     { label: t("forward.title"), icon: "↪️", onClick: () => setForwarding(true) },
     { label: t("msg.copyText"), icon: "📋", onClick: () => copyMessageText(message.content) },
     ...(firstLink ? [{ label: t("msg.copyLink"), icon: "🔗", onClick: () => copyMessageText(firstLink) }] : []),
@@ -386,6 +403,21 @@ function MessageItem({
             ))}
           </div>
         )}
+
+        {/* Thread chip — the message has a discussion hanging off it. */}
+        {message.threadId && !inThread && (
+          <button
+            onClick={() =>
+              useUI.getState().openThread({
+                id: message.threadId!,
+                title: message.content.replace(/\s+/g, " ").trim().slice(0, 60) || "…",
+              })
+            }
+            className="mt-1 flex items-center gap-1.5 rounded-md bg-discord-card px-2 py-1 text-xs font-medium text-discord-link hover:bg-discord-hover"
+          >
+            🧵 {t("thread.open")}
+          </button>
+        )}
       </div>
 
       {/* Quick actions on hover (desktop). Everything else — copy, pin,
@@ -488,6 +520,7 @@ export default memo(MessageItem, (a, b) => {
     a.message.pinned === b.message.pinned &&
     a.message.embedsJson === b.message.embedsJson &&
     a.message.pollJson === b.message.pollJson &&
+    a.message.threadId === b.message.threadId &&
     a.grouped === b.grouped &&
     reactionSig(a.message) === reactionSig(b.message)
   );

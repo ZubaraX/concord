@@ -27,7 +27,9 @@ export async function guildRoutes(app: FastifyInstance) {
       include: {
         guild: {
           include: {
-            channels: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
+            // THREAD channels are hidden per-message discussions — never
+            // part of the sidebar/forward-picker channel lists.
+            channels: { where: { type: { not: "THREAD" } }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
           },
         },
       },
@@ -101,7 +103,7 @@ export async function guildRoutes(app: FastifyInstance) {
     const guild = await prisma.guild.findUnique({
       where: { id: guildId },
       include: {
-        channels: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
+        channels: { where: { type: { not: "THREAD" } }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
         roles: { orderBy: { position: "desc" } },
         emojis: { orderBy: { name: "asc" } },
         members: {

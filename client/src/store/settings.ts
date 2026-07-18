@@ -11,6 +11,7 @@ export interface SettingsState {
   inputVolume: number; // 0–200 (%)
   echoCancellation: boolean;
   noiseSuppression: boolean;
+  rnnoise: boolean; // neural noise suppression (RNNoise wasm) on the mic
   autoGainControl: boolean;
   micSensitivity: number; // 0–100; higher = picks up quieter sounds (less gating)
   voiceMode: VoiceMode;
@@ -56,6 +57,7 @@ export const useSettings = create<SettingsState>()(
       inputVolume: 100,
       echoCancellation: true,
       noiseSuppression: true,
+      rnnoise: false,
       autoGainControl: true,
       micSensitivity: 75,
       voiceMode: "vad",

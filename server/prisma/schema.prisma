@@ -1,7 +1,9 @@
 // Concord data model — SQLite (local file, zero external services).
 // SQLite keeps self-hosting trivial: one file, no Postgres/Redis to run.
 // Enum-like fields are plain strings (SQLite has no native enums).
-//   ChannelType:    TEXT | VOICE | CATEGORY | ANNOUNCEMENT | FORUM | STAGE
+//   ChannelType:    TEXT | VOICE | CATEGORY | ANNOUNCEMENT | FORUM | STAGE | THREAD
+//   (THREAD = a hidden per-message discussion channel; parentId = the text
+//    channel it hangs under, and the root Message points at it via threadId)
 //   PresenceStatus: ONLINE | IDLE | DND | OFFLINE
 
 generator client {
@@ -189,6 +191,7 @@ model Message {
   createdAt DateTime  @default(now())
   embedsJson String?  // JSON-encoded link-preview embeds (fetched server-side)
   pollJson   String?  // JSON: { question, options: [{id,label}], votes: {optionId:[userId,...]}, multi: bool }
+  threadId   String?  @unique // id of the THREAD channel rooted at this message
 
   attachments Attachment[]
   reactions   Reaction[]

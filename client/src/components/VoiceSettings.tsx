@@ -111,6 +111,8 @@ export default function VoiceSettings() {
         <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.processing")}</h3>
         <Toggle label={t("vset.echo")} checked={s.echoCancellation} onChange={(v) => onProcessingChange({ echoCancellation: v })} />
         <Toggle label={t("vset.noise")} checked={s.noiseSuppression} onChange={(v) => onProcessingChange({ noiseSuppression: v })} />
+        <Toggle label={t("vset.rnnoise")} checked={s.rnnoise} onChange={(v) => onProcessingChange({ rnnoise: v })} />
+        {s.rnnoise && <p className="text-xs text-discord-faint">{t("vset.rnnoiseHelp")}</p>}
         <Toggle label={t("vset.agc")} checked={s.autoGainControl} onChange={(v) => onProcessingChange({ autoGainControl: v })} />
         {s.noiseSuppression && (
           <>

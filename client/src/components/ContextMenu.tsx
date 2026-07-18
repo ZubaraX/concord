@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { isAndroidApp } from "../lib/platform";
 
 export interface MenuItem {
@@ -46,7 +47,8 @@ export default function ContextMenu({
   }, [onClose]);
 
   if (sheet) {
-    return (
+    // Portaled to <body>: ancestor transforms/overflow can't displace it.
+    return createPortal(
       <div className="fixed inset-0 z-[70] flex items-end bg-black/40" onClick={onClose} onContextMenu={(e) => e.preventDefault()}>
         <div
           ref={ref}
@@ -67,7 +69,8 @@ export default function ContextMenu({
             </button>
           ))}
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
@@ -77,7 +80,7 @@ export default function ContextMenu({
   const left = Math.max(8, Math.min(x, window.innerWidth - W - 8));
   const top = Math.max(8, Math.min(y, window.innerHeight - H - 8));
 
-  return (
+  return createPortal(
     <div
       ref={ref}
       style={{ left, top, width: W }}
@@ -102,6 +105,7 @@ export default function ContextMenu({
           <span className="truncate">{it.label}</span>
         </button>
       ))}
-    </div>
+    </div>,
+    document.body
   );
 }

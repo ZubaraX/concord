@@ -16,6 +16,7 @@ import { isAndroidApp } from "../lib/platform";
 import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon, MessageIcon, SpeakerIcon, XIcon, ArrowDownIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
+import ThreadPanel from "./ThreadPanel";
 import PinsModal from "./PinsModal";
 import BookmarksModal from "./BookmarksModal";
 import SearchModal from "./SearchModal";
@@ -546,6 +547,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       {showPins && <PinsModal channelId={channel.id} onClose={() => setShowPins(false)} />}
       {showBookmarks && <BookmarksModal onClose={() => setShowBookmarks(false)} />}
       {showSearch && <SearchModal guildId={channel.guildId} channelId={channel.id} onClose={() => setShowSearch(false)} />}
+      <ThreadPanel />{/* renders only while a thread is open */}
       {callMoreMenu && (
         <ContextMenu
           x={callMoreMenu.x}
