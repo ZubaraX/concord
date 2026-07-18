@@ -35,6 +35,14 @@ contextBridge.exposeInMainWorld("concord", {
     ipcRenderer.on("update:status", listener);
     return () => ipcRenderer.removeListener("update:status", listener);
   },
+  // "Playing …" activity: main pushes the currently-running known game (or
+  // null when it exits); the renderer mirrors it into the user's status.
+  onGameActivity: (cb) => {
+    const listener = (_e, game) => cb(game);
+    ipcRenderer.on("game:activity", listener);
+    return () => ipcRenderer.removeListener("game:activity", listener);
+  },
+
   // Placeholder channel for future native features (tray, notifications…).
   send: (channel, payload) => ipcRenderer.send(channel, payload),
 });

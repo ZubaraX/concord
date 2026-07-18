@@ -46,6 +46,7 @@ interface ConcordBridge {
   onOverlayData?: (cb: (data: { participants?: unknown[] } & Record<string, unknown>) => void) => () => void;
   getUpdateStatus?: () => UpdateStatus;
   onUpdate?: (cb: (status: UpdateStatus) => void) => () => void;
+  onGameActivity?: (cb: (game: string | null) => void) => () => void;
   send: (channel: string, payload?: unknown) => void;
 }
 

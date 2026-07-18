@@ -36,6 +36,7 @@ import { useShare } from "../store/share";
 import { useI18n } from "../lib/i18n";
 import { isMuted } from "../store/mutes";
 import { loadReadStates } from "../lib/lastRead";
+import { initGameActivity } from "../lib/gameActivity";
 import { MenuIcon, UsersIcon, GearIcon } from "../components/Icons";
 
 // Do-Not-Disturb: keep unread counters, but no sounds/toasts/popups.
@@ -83,9 +84,10 @@ export default function AppLayout() {
     socket.on("connect", restorePresence);
     if (socket.connected) restorePresence();
     loadReadStates(); // pull server-synced unread markers (cross-device)
+    initGameActivity(); // desktop: mirror the running game into the status
     initShareListener((s) => useShare.getState().set(s)); // Share → Concord
     // Invite link tapped outside the app → join the server right away.
-    initInviteListener(async (code) => {
+    const joinInvite = async (code: string) => {
       try {
         const r = await api<{ guild: Guild }>(`/api/invites/${code}`, { method: "POST" });
         qc.invalidateQueries({ queryKey: ["guilds"] });
@@ -94,7 +96,14 @@ export default function AppLayout() {
       } catch (e) {
         useNotify.getState().push({ title: "Приглашение", body: (e as Error).message });
       }
-    });
+    };
+    initInviteListener(joinInvite); // Android intent
+    // Web version: the SPA is served for /invite/CODE too — join and clean the URL.
+    const webInvite = /^\/invite\/([\w-]+)/.exec(window.location.pathname);
+    if (webInvite) {
+      history.replaceState(null, "", "/");
+      joinInvite(webInvite[1]);
+    }
     return () => {
       socket.off("connect", restorePresence);
       disconnectSocket();

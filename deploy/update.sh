@@ -26,6 +26,15 @@ npx prisma db push --skip-generate
 npx prisma generate
 cd ..
 
+# ── Web client: build client/dist so the server can serve Concord to any
+#    browser at https://DOMAIN. Electron's binary download is skipped — the
+#    dependency is only in the tree for desktop builds, never runs here.
+echo "▶ Web client build…"
+IP=$(echo "$DOMAIN" | sed 's/\.sslip\.io$//; s/-/./g')
+ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install --workspace client --no-fund --no-audit
+(cd client && VITE_API_URL="https://${DOMAIN}" VITE_API_URL_FALLBACK="http://${IP}" npx vite build) \
+  || echo "! web client build failed — API keeps running, web UI just won't update"
+
 # ── nginx: one :80 block (legacy clients use http://IP) and, once a Let's
 #    Encrypt cert exists, a :443 block for the sslip.io domain. sslip.io maps
 #    138-16-224-172.sslip.io → 138.16.224.172 with zero registration.

@@ -10,8 +10,8 @@ import jwt from "@fastify/jwt";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
-import { resolve } from "node:path";
-import { mkdirSync } from "node:fs";
+import { resolve, join } from "node:path";
+import { mkdirSync, existsSync } from "node:fs";
 import { config, isProd } from "./config.js";
 import { prisma } from "./lib/db.js";
 import { authRoutes } from "./routes/auth.js";
@@ -59,6 +59,24 @@ async function main() {
   const uploadDir = resolve(config.STORAGE_DIR);
   mkdirSync(uploadDir, { recursive: true });
   await app.register(fastifyStatic, { root: uploadDir, prefix: "/uploads/" });
+
+  // Web client: the VPS deploy builds client/dist next to the server — serve
+  // it at / so Concord works in any browser via the plain HTTPS link. Missing
+  // locally (dev uses Vite on :5173), so this is conditional.
+  const webDist = resolve(process.env.WEB_DIST ?? "../client/dist");
+  if (existsSync(join(webDist, "index.html"))) {
+    await app.register(fastifyStatic, { root: webDist, prefix: "/", decorateReply: false, index: ["index.html"] });
+    // SPA fallback: any unknown GET that isn't API/socket/uploads serves the
+    // app shell (e.g. /invite/CODE deep links — the client parses the path).
+    app.setNotFoundHandler((req, reply) => {
+      const url = req.raw.url ?? "";
+      if (req.method === "GET" && !url.startsWith("/api") && !url.startsWith("/socket.io") && !url.startsWith("/uploads")) {
+        return reply.sendFile("index.html", webDist);
+      }
+      return reply.code(404).send({ error: "Not found" });
+    });
+    app.log.info(`Serving web client from ${webDist}`);
+  }
 
   app.get("/health", async () => ({ status: "ok", ts: Date.now() }));
 

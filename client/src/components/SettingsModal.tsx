@@ -34,6 +34,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const lang = useSettings((s) => s.lang);
   const theme = useSettings((s) => s.theme);
   const effects = useSettings((s) => s.effects);
+  const gameActivity = useSettings((s) => s.gameActivity);
   const setSettings = useSettings((s) => s.set);
   const [tab, setTab] = useState<"profile" | "voice" | "app" | "security">("profile");
 
@@ -258,6 +259,23 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           </div>
+
+          {window.concord?.isDesktop && (
+            <>
+              <hr className="border-black/20" />
+              {/* "Playing …" game activity (desktop only) */}
+              <div>
+                <label className="text-xs font-bold uppercase text-discord-muted">{t("settings.gameActivity")}</label>
+                <p className="mb-2 mt-0.5 text-xs text-discord-faint">{t("settings.gameActivityDesc")}</p>
+                <button
+                  onClick={() => setSettings({ gameActivity: !gameActivity })}
+                  className={`rounded px-4 py-2 text-sm font-medium ${gameActivity ? "bg-discord-accent text-white" : "bg-discord-card text-discord-muted hover:text-white"}`}
+                >
+                  {gameActivity ? t("settings.gameActivityOn") : t("settings.gameActivityOff")}
+                </button>
+              </div>
+            </>
+          )}
 
           <hr className="border-black/20" />
 

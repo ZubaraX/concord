@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.18.0",
+    date: "2026-07-19",
+    items: [
+      "🎮 «Играет в …» на ПК: приложение видит запущенную игру (CS2, Dota 2, Valorant, GTA V, Minecraft и ещё ~45) и показывает её в вашем статусе; свой написанный статус никогда не затирается. Отключается в Настройки → Приложение",
+      "🌐 Веб-версия для всех устройств: откройте https://138-16-224-172.sslip.io в любом браузере — телефон, планшет, чужой компьютер. Ссылки-приглашения /invite/КОД тоже открываются прямо в браузере",
+    ],
+  },
+  {
     version: "0.17.0",
     date: "2026-07-19",
     items: [

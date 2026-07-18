@@ -41,6 +41,9 @@ export interface SettingsState {
   // essential transitions only, full = everything incl. message slide-ins.
   effects: EffectsLevel;
 
+  // Desktop: show the currently running game as the status ("Играет в …").
+  gameActivity: boolean;
+
   // In-call overlay (separate always-on-top window showing who's speaking).
   overlayEnabled: boolean;
   overlayCorner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -83,6 +86,8 @@ export const useSettings = create<SettingsState>()(
       theme: "blurple",
 
       effects: "full",
+
+      gameActivity: true,
 
       overlayEnabled: true,
       overlayCorner: "top-right",

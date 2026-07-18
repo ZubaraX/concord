@@ -3,6 +3,7 @@
 const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain, screen, nativeImage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { execFile } = require("node:child_process");
 const { autoUpdater } = require("electron-updater");
 
 // Expose the real installed version to the renderer (so the "What's New" screen
@@ -196,9 +197,90 @@ function wireScreenShare() {
   );
 }
 
+// ── "Playing …" activity ────────────────────────────────────────────────────
+// Scan running processes (Windows `tasklist`, no native deps) against a
+// curated exe → title map and push the current game to the renderer, which
+// reflects it into the user's status. Only sent on change.
+const GAME_TITLES = {
+  "cs2.exe": "Counter-Strike 2",
+  "csgo.exe": "CS:GO",
+  "dota2.exe": "Dota 2",
+  "valorant.exe": "VALORANT",
+  "valorant-win64-shipping.exe": "VALORANT",
+  "r5apex.exe": "Apex Legends",
+  "r5apex_dx12.exe": "Apex Legends",
+  "fortniteclient-win64-shipping.exe": "Fortnite",
+  "tslgame.exe": "PUBG",
+  "gta5.exe": "GTA V",
+  "gta5_enhanced.exe": "GTA V",
+  "rdr2.exe": "Red Dead Redemption 2",
+  "rustclient.exe": "Rust",
+  "minecraft.windows.exe": "Minecraft",
+  "league of legends.exe": "League of Legends",
+  "wow.exe": "World of Warcraft",
+  "overwatch.exe": "Overwatch 2",
+  "rocketleague.exe": "Rocket League",
+  "eldenring.exe": "Elden Ring",
+  "witcher3.exe": "The Witcher 3",
+  "cyberpunk2077.exe": "Cyberpunk 2077",
+  "factorio.exe": "Factorio",
+  "terraria.exe": "Terraria",
+  "stardewvalley.exe": "Stardew Valley",
+  "among us.exe": "Among Us",
+  "phasmophobia.exe": "Phasmophobia",
+  "deadbydaylight-win64-shipping.exe": "Dead by Daylight",
+  "escapefromtarkov.exe": "Escape from Tarkov",
+  "aces.exe": "War Thunder",
+  "worldoftanks.exe": "World of Tanks",
+  "wot.exe": "Мир танков",
+  "lesta.exe": "Мир танков",
+  "genshinimpact.exe": "Genshin Impact",
+  "starrail.exe": "Honkai: Star Rail",
+  "zenlesszonezero.exe": "Zenless Zone Zero",
+  "robloxplayerbeta.exe": "Roblox",
+  "helldivers2.exe": "Helldivers 2",
+  "bg3.exe": "Baldur's Gate 3",
+  "bg3_dx11.exe": "Baldur's Gate 3",
+  "palworld-win64-shipping.exe": "Palworld",
+  "sonsoftheforest.exe": "Sons of the Forest",
+  "factorygame.exe": "Satisfactory",
+  "valheim.exe": "Valheim",
+  "hades2.exe": "Hades II",
+  "hades.exe": "Hades",
+  "hollow_knight.exe": "Hollow Knight",
+  "left4dead2.exe": "Left 4 Dead 2",
+  "brawlhalla.exe": "Brawlhalla",
+  "standoff2.exe": "Standoff 2",
+};
+let lastGame = null;
+function scanGames() {
+  if (process.platform !== "win32" || !win || win.isDestroyed()) return;
+  execFile(
+    "tasklist",
+    ["/fo", "csv", "/nh"],
+    { maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+    (err, out) => {
+      if (err || !out) return;
+      let found = null;
+      for (const line of out.split("\n")) {
+        const exe = line.split('","')[0]?.replace(/^"/, "").trim().toLowerCase();
+        if (exe && GAME_TITLES[exe]) { found = GAME_TITLES[exe]; break; }
+      }
+      if (found !== lastGame) {
+        lastGame = found;
+        if (win && !win.isDestroyed()) win.webContents.send("game:activity", found);
+      }
+    }
+  );
+}
+
 app.whenReady().then(() => {
   wireScreenShare();
   createWindow();
+
+  // "Playing …": first scan shortly after launch, then every 45s.
+  setTimeout(scanGames, 12 * 1000);
+  setInterval(scanGames, 45 * 1000);
 
   // Auto-update from GitHub Releases. We want each launch to run the latest
   // build, so on startup we check, download, and — once downloaded — install
