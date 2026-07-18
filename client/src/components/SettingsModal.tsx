@@ -119,7 +119,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         <div className="space-y-4">
           {/* Live banner + avatar preview */}
           <div
-            className="relative mb-8 h-24 rounded-lg"
+            className="relative mb-8 aspect-[8/3] max-h-44 rounded-lg"
             style={{
               background: bannerUrl
                 ? `center/cover no-repeat url(${serverPath(bannerUrl)})`

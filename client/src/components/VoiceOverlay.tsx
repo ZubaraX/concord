@@ -139,6 +139,7 @@ function ExpandedView({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) ref.current.srcObject = entry.stream;
   }, [entry.stream]);
@@ -148,23 +149,30 @@ function ExpandedView({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Fullscreen the WRAPPER, never the <video> itself — Chromium overlays its
+  // own play/stop player controls on a fullscreened video element.
+  const goFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void wrapRef.current?.requestFullscreen?.();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onMouseDown={onClose}>
       <div className="flex items-center justify-between px-4 py-2 text-white" onMouseDown={(e) => e.stopPropagation()}>
         <span className="font-medium">{entry.label}</span>
         <div className="flex gap-2">
           <button
-            onClick={() => ref.current?.requestFullscreen?.()}
+            onClick={goFullscreen}
             className="flex items-center gap-1.5 rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
           >
-            <ExpandIcon size={15} /> Fullscreen
+            <ExpandIcon size={15} />
           </button>
           <button onClick={onClose} className="flex items-center gap-1.5 rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">
-            <XIcon size={15} /> Close
+            <XIcon size={15} />
           </button>
         </div>
       </div>
-      <div className="flex flex-1 items-center justify-center p-4" onMouseDown={(e) => e.stopPropagation()}>
+      <div ref={wrapRef} className="flex flex-1 items-center justify-center bg-black p-4 [&:fullscreen]:p-0" onMouseDown={(e) => e.stopPropagation()}>
         {/* Muted: any system audio plays through the dedicated audio sink. */}
         <video ref={ref} autoPlay playsInline muted className="max-h-full max-w-full" />
       </div>

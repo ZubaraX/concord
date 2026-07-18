@@ -91,6 +91,7 @@ export default function VoiceStage({
   const userIds = voice.occupancy[channelId] ?? [];
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [expanded, setExpanded] = useState<{ stream: MediaStream; label: string } | null>(null);
+  const expandWrapRef = useRef<HTMLDivElement>(null);
 
   // While the stage shows OUR live call, the floating mini-tiles are redundant.
   useEffect(() => {
@@ -260,13 +261,24 @@ export default function VoiceStage({
           <div className="flex items-center justify-between px-4 py-2 text-white" onMouseDown={(e) => e.stopPropagation()}>
             <span className="font-medium">{expanded.label}</span>
             <button
+              onClick={() => {
+                // Fullscreen the wrapper div — fullscreening the <video> makes
+                // Chromium draw its own start/stop player controls.
+                if (document.fullscreenElement) void document.exitFullscreen();
+                else void expandWrapRef.current?.requestFullscreen?.();
+              }}
+              className="mr-2 flex items-center gap-1.5 rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
+            >
+              <ExpandIcon size={15} />
+            </button>
+            <button
               onClick={() => setExpanded(null)}
               className="flex items-center gap-1.5 rounded bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20"
             >
               <XIcon size={15} /> {t("common.close")}
             </button>
           </div>
-          <div className="flex flex-1 items-center justify-center p-4" onMouseDown={(e) => e.stopPropagation()}>
+          <div ref={expandWrapRef} className="flex flex-1 items-center justify-center bg-black p-4 [&:fullscreen]:p-0" onMouseDown={(e) => e.stopPropagation()}>
             <VideoEl stream={expanded.stream} className="max-h-full max-w-full" />
           </div>
         </div>

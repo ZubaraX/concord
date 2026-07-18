@@ -1,4 +1,5 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../store/auth";
@@ -479,15 +480,19 @@ function MessageItem({
         />
       )}
 
-      {bursts.map((p) => (
-        <span
-          key={p.id}
-          className="cc-burst pointer-events-none fixed z-[90] text-base"
-          style={{ left: p.x, top: p.y, "--dx": `${p.dx}px`, "--dy": `${p.dy}px` } as React.CSSProperties}
-        >
-          {p.emoji}
-        </span>
-      ))}
+      {bursts.length > 0 &&
+        createPortal(
+          bursts.map((p) => (
+            <span
+              key={p.id}
+              className="cc-burst pointer-events-none fixed z-[90] text-base"
+              style={{ left: p.x, top: p.y, "--dx": `${p.dx}px`, "--dy": `${p.dy}px` } as React.CSSProperties}
+            >
+              {p.emoji}
+            </span>
+          )),
+          document.body
+        )}
 
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
       {forwarding && <ForwardModal message={message} onClose={() => setForwarding(false)} />}
@@ -518,7 +523,7 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
     return <video src={src} controls className="max-h-96 max-w-full rounded-lg" />;
   }
   if (isAudio) {
-    return <audio src={src} controls className="w-72 max-w-full" />;
+    return <AudioPlayer src={src} filename={attachment.filename} />;
   }
   return (
     <a
@@ -534,6 +539,103 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
         <span className="block text-xs text-discord-faint">{prettySize(attachment.size)}</span>
       </span>
     </a>
+  );
+}
+
+// Voice-message / audio player styled like the app (Telegram-style bubble):
+// round accent play button, a decorative waveform that doubles as a seek bar,
+// and a time readout — instead of the browser's default <audio> chrome.
+function AudioPlayer({ src, filename }: { src: string; filename: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [dur, setDur] = useState(0);
+  const [cur, setCur] = useState(0);
+
+  // Deterministic pseudo-random bar heights seeded by the filename, so the
+  // "waveform" is stable across re-renders and devices.
+  const bars = useMemo(() => {
+    let h = 2166136261;
+    for (let i = 0; i < filename.length; i++) {
+      h ^= filename.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return Array.from({ length: 30 }, () => {
+      h ^= h << 13; h ^= h >>> 17; h ^= h << 5; h |= 0;
+      return 0.25 + (Math.abs(h) % 100) / 133;
+    });
+  }, [filename]);
+
+  function toggle() {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playing) a.pause();
+    else a.play().catch(() => {});
+  }
+  function seek(e: React.MouseEvent<HTMLDivElement>) {
+    const a = audioRef.current;
+    if (!a || !isFinite(dur) || dur <= 0) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur;
+  }
+  const fmt = (s: number) =>
+    isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "0:00";
+
+  return (
+    <div className="flex w-80 max-w-full items-center gap-3 rounded-2xl bg-discord-card px-3 py-2.5">
+      <button
+        onClick={toggle}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-discord-accent text-white transition hover:brightness-110"
+      >
+        {playing ? (
+          <span className="flex gap-[3px]">
+            <span className="h-3.5 w-1 rounded-sm bg-white" />
+            <span className="h-3.5 w-1 rounded-sm bg-white" />
+          </span>
+        ) : (
+          <span className="ml-0.5 inline-block border-y-[7px] border-l-[11px] border-y-transparent border-l-white" />
+        )}
+      </button>
+
+      <div className="flex h-9 min-w-0 flex-1 cursor-pointer items-center gap-[2px]" onClick={seek}>
+        {bars.map((b, i) => (
+          <span
+            key={i}
+            className={`min-w-0 flex-1 rounded-full transition-colors ${
+              dur > 0 && i / bars.length <= cur / dur ? "bg-discord-accent" : "bg-discord-faint/40"
+            }`}
+            style={{ height: `${Math.round(b * 100)}%` }}
+          />
+        ))}
+      </div>
+
+      <span className="shrink-0 text-xs tabular-nums text-discord-muted">
+        {fmt(playing || cur > 0 ? cur : dur)}
+      </span>
+
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setCur(0); }}
+        onTimeUpdate={(e) => setCur(e.currentTarget.currentTime)}
+        onDurationChange={(e) => { const d = e.currentTarget.duration; if (isFinite(d)) setDur(d); }}
+        onLoadedMetadata={(e) => {
+          const a = e.currentTarget;
+          if (isFinite(a.duration)) { setDur(a.duration); return; }
+          // MediaRecorder webm quirk: duration stays Infinity until the
+          // element is seeked far past the end once.
+          const fix = () => {
+            if (isFinite(a.duration)) setDur(a.duration);
+            a.currentTime = 0;
+            a.removeEventListener("timeupdate", fix);
+          };
+          a.addEventListener("timeupdate", fix);
+          a.currentTime = 1e7;
+        }}
+      />
+    </div>
   );
 }
 

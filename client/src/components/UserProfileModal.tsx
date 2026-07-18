@@ -49,7 +49,7 @@ export default function UserProfileModal({ userId, onClose }: { userId: string; 
       ) : (
         <div>
           <div
-            className="-mx-5 -mt-5 h-24 overflow-hidden rounded-t-lg"
+            className="-mx-5 -mt-5 aspect-[8/3] max-h-44 overflow-hidden rounded-t-lg"
             onMouseMove={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               setPar({ x: (e.clientX - r.left) / r.width - 0.5, y: (e.clientY - r.top) / r.height - 0.5 });
