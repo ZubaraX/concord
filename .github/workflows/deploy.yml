@@ -10,6 +10,10 @@ on:
     paths:
       - "server/**"
       - "deploy/**"
+      # The VPS also builds and serves the WEB version of the client, so
+      # client releases must redeploy too — otherwise the browser version
+      # would lag behind desktop/Android until the next server change.
+      - "client/**"
       - ".github/workflows/deploy.yml"
 
 concurrency:
