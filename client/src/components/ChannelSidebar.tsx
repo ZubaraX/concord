@@ -513,7 +513,7 @@ function ChannelRow({
       <span className="truncate">{channel.name}</span>
       {muted && <BellOffIcon size={12} className="ml-auto shrink-0 text-discord-faint" />}
       {hasUnread && (
-        <span className="ml-auto rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white">{unread}</span>
+        <span className="cc-badge ml-auto rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white">{unread}</span>
       )}
     </button>
   );
@@ -586,7 +586,7 @@ function HomeSidebar({
                     <PhoneIcon size={13} className={ringing ? "animate-pulse" : undefined} />
                   </span>
                 )}
-                {n > 0 && <span className={clsx("rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white", inCall ? "ml-1" : "ml-auto")}>{n}</span>}
+                {n > 0 && <span className={clsx("cc-badge rounded-full bg-discord-danger px-1.5 text-xs font-bold text-white", inCall ? "ml-1" : "ml-auto")}>{n}</span>}
               </button>
 
               {/* Active DM call: show "calling…" while alone, else the participants. */}

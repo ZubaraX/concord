@@ -95,8 +95,11 @@ export default function VoiceSettings() {
     }
   };
 
+  // Two explicit columns (desktop) so cards stack tightly without the ragged
+  // gaps a plain auto-flow grid produces; single column on phones.
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div className="min-w-0 flex-1 space-y-3">
       <Card icon="🎤" title={t("vset.input")}>
         <Select
           value={s.inputDeviceId}
@@ -140,7 +143,9 @@ export default function VoiceSettings() {
           <Slider label={t("vset.micSensitivity")} unit="%" min={0} max={100} value={s.micSensitivity} onChange={(v) => s.set({ micSensitivity: v })} />
         )}
       </Card>
+      </div>
 
+      <div className="min-w-0 flex-1 space-y-3">
       <Card icon="🎙" title={t("vset.inputMode")}>
         <div className="flex gap-1.5">
           <Pill active={s.voiceMode === "vad"} onClick={() => s.set({ voiceMode: "vad" })}>{t("vset.voiceActivity")}</Pill>
@@ -210,13 +215,14 @@ export default function VoiceSettings() {
           )}
         </Card>
       )}
+      </div>
     </div>
   );
 }
 
 function Card({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-2.5 self-start rounded-lg bg-discord-card/40 p-3 ring-1 ring-black/20">
+    <section className="space-y-2.5 rounded-lg bg-discord-card/40 p-3 ring-1 ring-black/20">
       <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-discord-muted">
         <span className="text-sm leading-none">{icon}</span> {title}
       </h3>

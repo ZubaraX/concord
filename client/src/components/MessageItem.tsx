@@ -78,6 +78,9 @@ function MessageItem({
   const time = new Date(message.createdAt);
   const rowRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
+  // Slide-in animation (fx-full only) for messages that just arrived — not
+  // for history rendered on channel open. Decided once, on first render.
+  const [fresh] = useState(() => Date.now() - new Date(message.createdAt).getTime() < 4000);
 
   // Grow the edit box to fit its content (layout effect → no visible jitter).
   useLayoutEffect(() => {
@@ -279,7 +282,7 @@ function MessageItem({
         setMenu({ x: e.clientX, y: e.clientY }); // at the cursor (desktop) / bottom sheet (mobile)
       }}
       style={{ transform: swipeX ? `translateX(${swipeX}px)` : undefined, transition: swipeX ? "none" : "transform 0.2s ease" }}
-      className={`group relative flex scroll-mt-6 gap-4 px-4 hover:bg-black/10 ${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
+      className={`group relative flex scroll-mt-6 gap-4 px-4 hover:bg-black/10 ${fresh ? "cc-msg-in " : ""}${grouped ? "py-0.5" : "mt-3 py-0.5"} ${message.pinned ? "bg-yellow-500/5" : ""}`}
     >
       {/* Swipe-to-reply arrow, revealed as you pull the row left. */}
       {swipeX < 0 && (

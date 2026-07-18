@@ -261,6 +261,40 @@ body {
 .cc-lift:hover { transform: translateY(-2px); }
 .cc-lift:active { transform: translateY(0) scale(0.96); }
 
+/* ── Visual effects levels (Настройки → Приложение → Визуальные эффекты).
+   The settings store mirrors the level onto <html> as .fx-off/.fx-reduced/
+   .fx-full; "reduced" is the baseline (all rules above), the blocks below
+   subtract everything (off) or add extra life (full). ── */
+
+/* off: no animations or transitions anywhere — weak PCs / zero distraction. */
+.fx-off *,
+.fx-off *::before,
+.fx-off *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* full: fresh messages slide in. The class is applied only to messages that
+   are seconds old, so opening a channel doesn't animate the whole history. */
+@keyframes cc-msg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.fx-full .cc-msg-in { animation: cc-msg-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* full: everything clickable eases smoothly instead of snapping. */
+.fx-full button {
+  transition: background-color 0.15s ease, color 0.15s ease, filter 0.15s ease,
+    transform 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
+}
+
+/* full: unread badges breathe gently to catch the eye. */
+@keyframes cc-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.fx-full .cc-badge { animation: cc-badge-pulse 2.4s ease-in-out infinite; }
+
 /* ── Touch screens ─────────────────────────────────────────────────────────
    No hover and fat fingers: icon buttons (they all carry a `title`) get a
    comfortable ≥36px tap target, hover-revealed controls become always visible,

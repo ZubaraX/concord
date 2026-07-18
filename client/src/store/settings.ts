@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 export type ScreenResolution = "720p" | "1080p" | "1440p" | "4k" | "source";
 export type ScreenFps = 15 | 30 | 60 | 120 | 144;
 export type VoiceMode = "vad" | "ptt";
+export type EffectsLevel = "off" | "reduced" | "full";
 
 export interface SettingsState {
   // Audio input
@@ -35,6 +36,10 @@ export interface SettingsState {
 
   // Color theme.
   theme: "blurple" | "midnight" | "aurora" | "sunset" | "crimson" | "light";
+
+  // Visual effects level: off = no animations at all (weak PCs), reduced =
+  // essential transitions only, full = everything incl. message slide-ins.
+  effects: EffectsLevel;
 
   // In-call overlay (separate always-on-top window showing who's speaking).
   overlayEnabled: boolean;
@@ -77,6 +82,8 @@ export const useSettings = create<SettingsState>()(
 
       theme: "blurple",
 
+      effects: "full",
+
       overlayEnabled: true,
       overlayCorner: "top-right",
 
@@ -85,3 +92,13 @@ export const useSettings = create<SettingsState>()(
     { name: "concord.settings" }
   )
 );
+
+// Mirror the effects level onto <html> so plain CSS can gate animations
+// app-wide (.fx-off / .fx-reduced / .fx-full — see index.css).
+function applyFx(level: EffectsLevel) {
+  const el = document.documentElement;
+  el.classList.remove("fx-off", "fx-reduced", "fx-full");
+  el.classList.add(`fx-${level}`);
+}
+applyFx(useSettings.getState().effects);
+useSettings.subscribe((s) => applyFx(s.effects));

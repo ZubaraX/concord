@@ -33,6 +33,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   const lang = useSettings((s) => s.lang);
   const theme = useSettings((s) => s.theme);
+  const effects = useSettings((s) => s.effects);
   const setSettings = useSettings((s) => s.set);
   const [tab, setTab] = useState<"profile" | "voice" | "app" | "security">("profile");
 
@@ -234,6 +235,25 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span className="truncate text-sm" style={{ color: th.fg }}>
                     {t(`theme.${th.id}` as never)}
                   </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <hr className="border-black/20" />
+
+          {/* Visual effects level */}
+          <div>
+            <label className="text-xs font-bold uppercase text-discord-muted">{t("settings.effects")}</label>
+            <p className="mb-2 mt-0.5 text-xs text-discord-faint">{t("settings.effectsDesc")}</p>
+            <div className="flex flex-wrap gap-2">
+              {(["off", "reduced", "full"] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  onClick={() => setSettings({ effects: lvl })}
+                  className={`rounded px-4 py-2 text-sm font-medium ${effects === lvl ? "bg-discord-accent text-white" : "bg-discord-card text-discord-muted hover:text-white"}`}
+                >
+                  {t(`settings.fx.${lvl}` as never)}
                 </button>
               ))}
             </div>

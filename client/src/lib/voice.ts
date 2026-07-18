@@ -425,10 +425,10 @@ export async function joinVoice(channelId: string) {
     return;
   }
   st().set({ channelId, connecting: false, muted: false, connState: "connecting", joinedAt: Date.now(), speakerOn: true });
-  if (isAndroidApp()) {
-    setSpeakerphone(true); // calls default to the loudspeaker
-    setProximityScreenOff(true); // screen blanks when held to the ear
-  }
+  // Calls default to the loudspeaker; the proximity screen-off is armed only
+  // in earpiece mode (see toggleSpeaker) — on speaker the phone lies on the
+  // table and the screen must NOT blank when something passes the sensor.
+  if (isAndroidApp()) setSpeakerphone(true);
   getSocket()?.emit(
     "voice:join",
     { channelId },
@@ -483,6 +483,9 @@ export function toggleSpeaker() {
   const speakerOn = !st().speakerOn;
   st().set({ speakerOn });
   setSpeakerphone(speakerOn);
+  // Earpiece mode = phone at the ear → blank the screen on proximity.
+  // Speaker mode → sensor disarmed so the screen stays on.
+  setProximityScreenOff(!speakerOn);
 }
 
 // Deafen: silence every incoming audio element (AudioSink reacts to the store)
