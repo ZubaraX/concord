@@ -16,7 +16,7 @@ import { playSound } from "./sound";
 import { pickScreenSource } from "../store/screenPicker";
 import { isAndroidApp } from "./platform";
 import { startAndroidScreenStream, stopAndroidScreenStream } from "./androidScreen";
-import { setSpeakerphone } from "./push";
+import { setSpeakerphone, setProximityScreenOff } from "./push";
 
 type Kind = "audio" | "screen" | "camera";
 
@@ -43,6 +43,7 @@ interface Peer {
   ignoreOffer: boolean;
   userId: string;
   pendingCandidates: RTCIceCandidateInit[]; // queued until remoteDescription is set
+  micKicked?: boolean; // one-time mic enable-transition after connect
 }
 const peers = new Map<string, Peer>();
 
@@ -191,6 +192,17 @@ function createPeer(socketId: string, userId: string): Peer {
   };
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === "failed") pc.restartIce();
+    // Some WebRTC stacks don't start pushing the mic until the track sees an
+    // enabled transition after the connection is up — which is why users had to
+    // manually toggle their mic to be heard. Do that toggle automatically once,
+    // imperceptibly, right after connecting.
+    if (pc.connectionState === "connected" && !peer.micKicked) {
+      peer.micKicked = true;
+      if (micRawTrack && !st().muted && !st().deafened) {
+        micRawTrack.enabled = false;
+        setTimeout(() => applyMicState(), 60);
+      }
+    }
     updateConnState();
   };
   pc.oniceconnectionstatechange = updateConnState;
@@ -394,7 +406,10 @@ export async function joinVoice(channelId: string) {
     return;
   }
   st().set({ channelId, connecting: false, muted: false, connState: "connecting", joinedAt: Date.now(), speakerOn: true });
-  if (isAndroidApp()) setSpeakerphone(true); // calls default to the loudspeaker
+  if (isAndroidApp()) {
+    setSpeakerphone(true); // calls default to the loudspeaker
+    setProximityScreenOff(true); // screen blanks when held to the ear
+  }
   getSocket()?.emit(
     "voice:join",
     { channelId },
@@ -414,6 +429,7 @@ export async function joinVoice(channelId: string) {
 export async function leaveVoice() {
   clearAloneTimer();
   stopStats();
+  if (isAndroidApp()) setProximityScreenOff(false);
   const channelId = st().channelId;
   if (channelId) {
     getSocket()?.emit("voice:leave", { channelId });

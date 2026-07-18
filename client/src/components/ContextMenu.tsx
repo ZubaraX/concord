@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { isAndroidApp } from "../lib/platform";
 
 export interface MenuItem {
   label: string;
@@ -22,9 +23,11 @@ export default function ContextMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [sheet] = useState(
-    () => typeof window !== "undefined" && (window.matchMedia?.("(pointer: coarse)").matches || window.innerWidth < 640)
-  );
+  // Bottom sheet only on real phones — a desktop with a touchscreen also
+  // reports pointer:coarse, which used to turn every menu into a bar at the
+  // bottom of the screen ("вне чата"). Gate on the Android app or a phone-width
+  // window instead.
+  const [sheet] = useState(() => typeof window !== "undefined" && (isAndroidApp() || window.innerWidth < 600));
 
   useEffect(() => {
     const close = () => onClose();
@@ -68,17 +71,19 @@ export default function ContextMenu({
     );
   }
 
-  // Desktop: keep the menu on-screen near the cursor.
-  const left = Math.min(x, window.innerWidth - 220);
-  const top = Math.min(y, window.innerHeight - items.length * 36 - 16);
+  // Desktop: a compact menu kept fully on-screen near the cursor/anchor.
+  const W = 190;
+  const H = items.length * 32 + 12;
+  const left = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+  const top = Math.max(8, Math.min(y, window.innerHeight - H - 8));
 
   return (
     <div
       ref={ref}
-      style={{ left, top }}
+      style={{ left, top, width: W }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
-      className="cc-pop fixed z-[70] w-52 rounded-md bg-discord-rail p-1.5 shadow-xl ring-1 ring-black/40"
+      className="cc-pop fixed z-[80] rounded-md bg-discord-rail p-1 shadow-xl ring-1 ring-black/40"
     >
       {items.map((it, i) => (
         <button
@@ -87,14 +92,14 @@ export default function ContextMenu({
             it.onClick();
             onClose();
           }}
-          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm ${
+          className={`flex w-full items-center gap-2 rounded px-2 py-1 text-sm ${
             it.danger
               ? "text-discord-danger hover:bg-discord-danger hover:text-white"
               : "text-discord-text hover:bg-discord-accent hover:text-white"
           }`}
         >
-          {it.icon && <span className="flex w-4 justify-center">{it.icon}</span>}
-          {it.label}
+          {it.icon && <span className="flex w-4 shrink-0 justify-center">{it.icon}</span>}
+          <span className="truncate">{it.label}</span>
         </button>
       ))}
     </div>

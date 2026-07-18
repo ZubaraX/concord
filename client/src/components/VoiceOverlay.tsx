@@ -78,7 +78,10 @@ function AudioSink({ stream, userId, volKey }: { stream: MediaStream; userId: st
   const deafened = useVoice((s) => s.deafened);
   const userVol = useVoiceVolumes((s) => s.volumes[volKey ?? userId] ?? 100);
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream;
+    if (ref.current) {
+      ref.current.srcObject = stream;
+      ref.current.play?.().catch(() => {}); // autoplay can silently no-op; force it
+    }
   }, [stream]);
   useEffect(() => {
     const el = ref.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;

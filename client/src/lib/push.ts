@@ -11,6 +11,7 @@ interface PushServicePlugin {
   start(opts: { url: string; token: string }): Promise<void>;
   stop(): Promise<void>;
   setSpeakerphone(opts: { on: boolean }): Promise<void>;
+  setProximity(opts: { on: boolean }): Promise<void>;
   getPendingShare(): Promise<{ text?: string; mimeType?: string; dataB64?: string }>;
   getPendingInvite(): Promise<{ code?: string }>;
   addListener(event: "share", cb: (d: { text?: string; mimeType?: string; dataB64?: string }) => void): Promise<unknown>;
@@ -24,6 +25,16 @@ export async function setSpeakerphone(on: boolean) {
   if (!isAndroidApp()) return;
   try {
     await PushService.setSpeakerphone({ on });
+  } catch {
+    /* old APK */
+  }
+}
+
+/** Enable the proximity sensor so the screen blanks when held to the ear. */
+export async function setProximityScreenOff(on: boolean) {
+  if (!isAndroidApp()) return;
+  try {
+    await PushService.setProximity({ on });
   } catch {
     /* old APK */
   }

@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.service.notification.StatusBarNotification;
 import android.util.Base64;
 import android.util.Log;
@@ -97,6 +98,28 @@ public class PushPlugin extends Plugin {
     AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
     am.setMode(AudioManager.MODE_IN_COMMUNICATION);
     am.setSpeakerphoneOn(on);
+    call.resolve();
+  }
+
+  // ── proximity screen-off during calls (screen blanks at the ear) ──
+  private PowerManager.WakeLock proximityLock;
+
+  @PluginMethod
+  public void setProximity(PluginCall call) {
+    boolean on = Boolean.TRUE.equals(call.getBoolean("on"));
+    PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+    try {
+      if (on) {
+        if (proximityLock == null && pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {
+          proximityLock = pm.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "concord:call");
+        }
+        if (proximityLock != null && !proximityLock.isHeld()) proximityLock.acquire(60 * 60 * 1000L);
+      } else if (proximityLock != null && proximityLock.isHeld()) {
+        proximityLock.release();
+      }
+    } catch (Exception e) {
+      Log.w("ConcordPush", "proximity: " + e);
+    }
     call.resolve();
   }
 

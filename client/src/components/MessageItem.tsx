@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../store/auth";
@@ -9,6 +9,7 @@ import { serverPath } from "../lib/serverUrl";
 import type { Attachment, Guild, LinkEmbed, Message } from "../types";
 import Avatar from "./Avatar";
 import { renderMarkdown, type EmojiMap } from "../lib/markdown";
+import { useI18n } from "../lib/i18n";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import InviteCard from "./InviteCard";
 import PollView from "./PollView";
@@ -63,9 +64,10 @@ function MessageItem({
   guildId?: string | null;
 }) {
   const { user } = useAuth();
+  const { t } = useI18n();
   const { openProfile, setChannel } = useUI();
   const [hover, setHover] = useState(false);
-  const [picker, setPicker] = useState(false);
+  const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
   const [forwarding, setForwarding] = useState(false);
@@ -73,6 +75,16 @@ function MessageItem({
   const mine = user?.id === message.author.id;
   const time = new Date(message.createdAt);
   const rowRef = useRef<HTMLDivElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // Grow the edit box to fit its content (layout effect → no visible jitter).
+  useLayoutEffect(() => {
+    const el = editRef.current;
+    if (editing && el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 320) + "px";
+    }
+  }, [editing, draft]);
 
   // Reuses the guild query already cached by ChannelSidebar/MemberList — no
   // extra fetch just to resolve :custom_emoji: tokens.
@@ -146,22 +158,22 @@ function MessageItem({
 
   const bookmarked = useBookmarks((s) => s.bookmarks.some((b) => b.id === message.id));
   const menuItems: MenuItem[] = [
-    { label: "View Profile", icon: "👤", onClick: () => openProfile(message.author.id) },
-    { label: "Add Reaction", icon: "😀", onClick: () => setPicker(true) },
-    { label: "Reply", icon: "↩️", onClick: () => onReply(message) },
-    { label: "Forward", icon: "↪️", onClick: () => setForwarding(true) },
-    { label: "Copy Text", icon: "📋", onClick: () => copyMessageText(message.content) },
-    ...(firstLink ? [{ label: "Copy Link", icon: "🔗", onClick: () => copyMessageText(firstLink) }] : []),
+    { label: t("profile.viewProfile"), icon: "👤", onClick: () => openProfile(message.author.id) },
+    { label: t("msg.addReaction"), icon: "😀", onClick: () => { const r = rowRef.current?.getBoundingClientRect(); setPicker(r ? { x: Math.max(8, r.right - 288), y: r.top } : { x: 100, y: 100 }); } },
+    { label: t("common.reply"), icon: "↩️", onClick: () => onReply(message) },
+    { label: t("forward.title"), icon: "↪️", onClick: () => setForwarding(true) },
+    { label: t("msg.copyText"), icon: "📋", onClick: () => copyMessageText(message.content) },
+    ...(firstLink ? [{ label: t("msg.copyLink"), icon: "🔗", onClick: () => copyMessageText(firstLink) }] : []),
     {
-      label: bookmarked ? "Remove Bookmark" : "Bookmark",
+      label: bookmarked ? t("msg.removeBookmark") : t("msg.bookmark"),
       icon: "🔖",
       onClick: () => useBookmarks.getState().toggle(message, useUI.getState().currentGuildId),
     },
-    { label: message.pinned ? "Unpin" : "Pin", icon: "📌", onClick: () => setPin(!message.pinned) },
+    { label: message.pinned ? t("common.unpin") : t("common.pin"), icon: "📌", onClick: () => setPin(!message.pinned) },
     ...(mine
       ? [
-          { label: "Edit", icon: "✏️", onClick: () => { setDraft(message.content); setEditing(true); } },
-          { label: "Delete", icon: "🗑", danger: true, onClick: () => api(`/api/messages/${message.id}`, { method: "DELETE" }).catch(() => {}) },
+          { label: t("common.edit"), icon: "✏️", onClick: () => { setDraft(message.content); setEditing(true); } },
+          { label: t("common.delete"), icon: "🗑", danger: true, onClick: () => api(`/api/messages/${message.id}`, { method: "DELETE" }).catch(() => {}) },
         ]
       : []),
   ];
@@ -213,7 +225,7 @@ function MessageItem({
   };
 
   function toggleReaction(emoji: string, at?: { x: number; y: number }) {
-    setPicker(false);
+    setPicker(null);
     const mineReacted = (message.reactions ?? []).some((r) => r.emoji === emoji && r.userId === user?.id);
     const enc = encodeURIComponent(emoji);
     api(`/api/messages/${message.id}/reactions/${enc}`, { method: mineReacted ? "DELETE" : "PUT" }).catch(() => {});
@@ -263,7 +275,7 @@ function MessageItem({
       )}
       <div className="w-10 shrink-0">
         {!grouped ? (
-          <button onClick={() => openProfile(message.author.id)} title="View profile" className="rounded-full">
+          <button onClick={() => openProfile(message.author.id)} title={t("msg.viewProfile")} className="rounded-full">
             <Avatar user={message.author} size={40} />
           </button>
         ) : (
@@ -294,7 +306,7 @@ function MessageItem({
           <button
             onClick={() => message.replyTo && jumpToMessage(message.replyTo.id)}
             className="mb-0.5 flex max-w-full items-center gap-1 truncate text-left text-xs text-discord-muted hover:text-discord-text"
-            title="Jump to message"
+            title={t("msg.jumpToMessage")}
           >
             <span className="text-discord-faint">↰</span>
             <strong>{message.replyTo.author.displayName ?? message.replyTo.author.username}</strong>{" "}
@@ -302,21 +314,14 @@ function MessageItem({
           </button>
         )}
 
-        {message.pinned && <div className="mb-0.5 text-[10px] font-semibold text-yellow-500">📌 Pinned</div>}
+        {message.pinned && <div className="mb-0.5 text-[10px] font-semibold text-yellow-500">📌 {t("msg.pinned")}</div>}
 
         {editing ? (
           <textarea
             autoFocus
             value={draft}
-            ref={(el) => {
-              // Auto-size to the content (grows as you type, up to a cap).
-              if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 320) + "px"; }
-            }}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = Math.min(e.target.scrollHeight, 320) + "px";
-            }}
+            ref={editRef}
+            onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
               if (e.key === "Escape") setEditing(false);
@@ -387,20 +392,21 @@ function MessageItem({
           bookmark, delete… — is on right-click. */}
       {hover && !editing && !menu && (
         <div className="absolute right-3 top-0 flex items-center gap-1 rounded bg-discord-rail shadow ring-1 ring-black/30">
-          <button onClick={() => setPicker((p) => !p)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Add reaction">😀</button>
-          <button onClick={() => onReply(message)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Reply">↩️</button>
+          <button onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setPicker(picker ? null : { x: Math.max(8, r.left - 240), y: r.bottom + 4 }); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title={t("msg.addReaction")}>😀</button>
+          <button onClick={() => onReply(message)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title={t("common.reply")}>↩️</button>
           {mine && (
-            <button onClick={() => { setDraft(message.content); setEditing(true); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title="Edit">✏️</button>
+            <button onClick={() => { setDraft(message.content); setEditing(true); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title={t("common.edit")}>✏️</button>
           )}
         </div>
       )}
 
       {picker && (
-        // Full emoji picker for reactions (unicode grid + search). No guildId →
-        // custom :emoji: are excluded, since a reaction stores the raw string.
+        // Full emoji picker for reactions (unicode grid + search), fixed &
+        // clamped so it's always fully visible.
         <EmojiPicker
-          onPick={(e) => { setPicker(false); toggleReaction(e); }}
-          onClose={() => setPicker(false)}
+          anchor={picker}
+          onPick={(e) => { setPicker(null); toggleReaction(e); }}
+          onClose={() => setPicker(null)}
         />
       )}
 

@@ -20,10 +20,12 @@ export default function EmojiPicker({
   onPick,
   onClose,
   guildId,
+  anchor,
 }: {
   onPick: (e: string) => void;
   onClose: () => void;
   guildId?: string | null;
+  anchor?: { x: number; y: number }; // when set, render fixed & clamped (reactions)
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // Reuses the guild query already cached elsewhere — no extra fetch.
@@ -31,22 +33,39 @@ export default function EmojiPicker({
   const customEmojis = guild?.emojis ?? [];
 
   useEffect(() => {
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: Event) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("mousedown", onDown);
+    // Defer so the very click that opened it doesn't immediately close it.
+    const id = setTimeout(() => window.addEventListener("pointerdown", onDown), 0);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("mousedown", onDown);
+      clearTimeout(id);
+      window.removeEventListener("pointerdown", onDown);
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
 
+  // Anchored (reaction) mode: fixed position clamped to the viewport, so it's
+  // always fully visible regardless of where the message is.
+  const anchored = anchor
+    ? {
+        position: "fixed" as const,
+        left: Math.min(anchor.x, window.innerWidth - 300),
+        top: Math.min(anchor.y, window.innerHeight - 320),
+      }
+    : undefined;
+
   return (
     <div
       ref={ref}
-      className="cc-pop absolute bottom-12 right-0 z-50 max-h-72 w-72 overflow-y-auto rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40"
+      style={anchored}
+      className={
+        anchored
+          ? "cc-pop z-[80] max-h-72 w-72 overflow-y-auto rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40"
+          : "cc-pop absolute bottom-12 right-0 z-50 max-h-72 w-72 overflow-y-auto rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40"
+      }
     >
       {customEmojis.length > 0 && (
         <>

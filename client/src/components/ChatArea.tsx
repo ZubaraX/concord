@@ -308,7 +308,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
     >
       {dragOver && (
         <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-xl border-4 border-dashed border-discord-accent bg-discord-accent/10 text-lg font-semibold text-white">
-          Drop files to upload (no size limit)
+          {t("msg.dropFiles")}
         </div>
       )}
       <header className="flex h-12 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
@@ -322,7 +322,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
           className={`-ml-1 shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${
             immersive || inStageCall ? "" : "md:hidden"
           }`}
-          title="Channels"
+          title={t("nav.servers")}
         >
           <MenuIcon size={20} />
         </button>
@@ -368,7 +368,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
         <button
           onClick={() => setShowBookmarks(true)}
           className={`shrink-0 rounded p-1.5 text-discord-muted hover:bg-discord-hover hover:text-white ${(isDM && inThisCall) || isVoice ? "max-sm:hidden" : ""}`}
-          title="Bookmarks"
+          title={t("bookmarks.title")}
         >
           <BookmarkIcon size={18} />
         </button>
@@ -488,7 +488,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                 {firstUnreadId === m.id && (
                   <div className="my-1 flex items-center gap-2 px-4">
                     <div className="h-px flex-1 bg-discord-danger/60" />
-                    <span className="rounded bg-discord-danger px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">New</span>
+                    <span className="rounded bg-discord-danger px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">{t("msg.new")}</span>
                   </div>
                 )}
                 <MessageItem message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} guildId={channel.guildId} />
