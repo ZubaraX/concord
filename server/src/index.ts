@@ -105,8 +105,11 @@ async function main() {
     return { iceServers };
   });
 
-  // Friendly landing page so opening the server URL in a browser isn't a 404.
+  // Root: the web app when client/dist is built (the normal case on the VPS);
+  // otherwise the old "API is running" landing page. NB: this explicit route
+  // outranks @fastify/static's wildcard, so it MUST serve index.html itself.
   app.get("/", async (_req, reply) => {
+    if (existsSync(join(webDist, "index.html"))) return reply.sendFile("index.html", webDist);
     reply.type("text/html").send(
       `<!doctype html><meta charset="utf-8"><title>Concord</title>
        <body style="font-family:system-ui;background:#313338;color:#dbdee1;display:grid;place-items:center;height:100vh;margin:0;text-align:center">
@@ -116,8 +119,10 @@ async function main() {
     );
   });
 
-  // Invite links open here; the desktop app joins by the code.
+  // Invite links: the web app handles /invite/CODE itself (auto-join); the
+  // static fallback below can't kick in because this route predates it.
   app.get("/invite/:code", async (req, reply) => {
+    if (existsSync(join(webDist, "index.html"))) return reply.sendFile("index.html", webDist);
     const { code } = req.params as { code: string };
     reply.type("text/html").send(
       `<!doctype html><meta charset="utf-8"><title>Concord invite</title>
