@@ -120,6 +120,7 @@ async function processedMicTrack(raw: MediaStreamTrack): Promise<MediaStreamTrac
     const { createRnnoiseTrack } = await import("./rnnoise");
     const { track, dispose } = await createRnnoiseTrack(raw);
     rnnoiseDispose = dispose;
+    console.info("[voice] RNNoise active on the outgoing mic");
     return track;
   } catch (e) {
     console.warn("[voice] RNNoise unavailable — using the raw mic:", e);
@@ -646,16 +647,25 @@ async function tuneVideoSender(pc: RTCPeerConnection, track: MediaStreamTrack | 
 // ── mic test (Settings) — monitor + level meter ──────────────────────────────────
 export async function startMicTest(onLevel: (level: number) => void): Promise<() => void> {
   const s = cfg();
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: s.inputDeviceId ? { exact: s.inputDeviceId } : undefined,
-      echoCancellation: s.echoCancellation,
-      noiseSuppression: s.noiseSuppression,
-      autoGainControl: s.autoGainControl,
-    },
-  });
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
+
+  // The monitor must run through the SAME processing chain as a real call —
+  // otherwise RNNoise is inaudible here and feels like it "does nothing".
+  let monitorTrack = stream.getAudioTracks()[0];
+  let disposeRnnoise: (() => void) | null = null;
+  if (s.rnnoise) {
+    try {
+      const { createRnnoiseTrack } = await import("./rnnoise");
+      const r = await createRnnoiseTrack(monitorTrack);
+      monitorTrack = r.track;
+      disposeRnnoise = r.dispose;
+    } catch (e) {
+      console.warn("[mic-test] RNNoise unavailable:", e);
+    }
+  }
+
   const ctx = new AudioContext();
-  const src = ctx.createMediaStreamSource(stream);
+  const src = ctx.createMediaStreamSource(new MediaStream([monitorTrack]));
   const gain = ctx.createGain();
   gain.gain.value = s.inputVolume / 100;
   const analyser = ctx.createAnalyser();
@@ -675,6 +685,7 @@ export async function startMicTest(onLevel: (level: number) => void): Promise<()
   loop();
   return () => {
     cancelAnimationFrame(raf);
+    disposeRnnoise?.();
     stream.getTracks().forEach((t) => t.stop());
     ctx.close().catch(() => {});
   };

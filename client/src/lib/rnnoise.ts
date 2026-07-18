@@ -21,6 +21,24 @@ function decodeDataUri(uri: string): ArrayBuffer {
   return buf.buffer;
 }
 
+/** Settings-page probe: can the model + worklet actually load on this device? */
+export async function probeRnnoise(): Promise<boolean> {
+  const ctx = new AudioContext({ sampleRate: 48000 });
+  try {
+    wasmBinary ??= decodeDataUri(rnnoiseWasmDataUri);
+    workletUrl ??= URL.createObjectURL(new Blob([workletCode], { type: "text/javascript" }));
+    await ctx.audioWorklet.addModule(workletUrl);
+    const node = new RnnoiseWorkletNode(ctx, { wasmBinary, maxChannels: 2 });
+    try { node.destroy(); } catch { /* fine */ }
+    return true;
+  } catch (e) {
+    console.warn("[rnnoise] probe failed:", e);
+    return false;
+  } finally {
+    void ctx.close();
+  }
+}
+
 export async function createRnnoiseTrack(
   raw: MediaStreamTrack
 ): Promise<{ track: MediaStreamTrack; dispose: () => void }> {

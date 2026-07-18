@@ -13,6 +13,8 @@ const RES_OPTIONS: { value: ScreenResolution; label: string }[] = [
   { value: "source", label: "Source (max)" },
 ];
 
+// Voice & sound settings: compact two-column card grid (single column on
+// phones) instead of the old endless vertical list.
 export default function VoiceSettings() {
   const s = useSettings();
   const { t } = useI18n();
@@ -21,6 +23,7 @@ export default function VoiceSettings() {
   const [level, setLevel] = useState(0);
   const [testing, setTesting] = useState(false);
   const [bindingPtt, setBindingPtt] = useState(false);
+  const [rnnoiseOk, setRnnoiseOk] = useState<boolean | null>(null); // null = probing
   const stopTest = useRef<(() => void) | null>(null);
 
   const refreshDevices = async () => {
@@ -33,6 +36,24 @@ export default function VoiceSettings() {
     refreshDevices();
     return () => stopTest.current?.();
   }, []);
+
+  // When RNNoise is on, verify the model actually loads on this device and
+  // show the result — a silent fallback used to feel like "no effect at all".
+  useEffect(() => {
+    if (!s.rnnoise) {
+      setRnnoiseOk(null);
+      return;
+    }
+    let alive = true;
+    setRnnoiseOk(null);
+    import("../lib/rnnoise")
+      .then((m) => m.probeRnnoise())
+      .then((ok) => alive && setRnnoiseOk(ok))
+      .catch(() => alive && setRnnoiseOk(false));
+    return () => {
+      alive = false;
+    };
+  }, [s.rnnoise]);
 
   // Capture the next key for push-to-talk.
   useEffect(() => {
@@ -66,116 +87,94 @@ export default function VoiceSettings() {
   const onProcessingChange = (patch: Partial<typeof s>) => {
     s.set(patch);
     refreshMic(); // re-acquire mic with new constraints if in a call
+    // The running mic test keeps its old chain — restart it transparently so
+    // toggling RNNoise etc. is audible immediately.
+    if (testing) {
+      stopTest.current?.();
+      startMicTest(setLevel).then((stop) => (stopTest.current = stop)).catch(() => setTesting(false));
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {/* INPUT */}
-      <section className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.input")}</h3>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Card icon="🎤" title={t("vset.input")}>
         <Select
-          label={t("vset.microphone")}
           value={s.inputDeviceId}
           onChange={(v) => onProcessingChange({ inputDeviceId: v })}
           options={[{ value: "", label: t("vset.default") }, ...inputs.map((d, i) => ({ value: d.deviceId, label: d.label || `${t("vset.microphone")} ${i + 1}` }))]}
         />
-        <Slider label={`${t("vset.inputVolume")} — ${s.inputVolume}%`} min={0} max={200} value={s.inputVolume} onChange={(v) => setInputVolume(v)} />
-
-        <div className="flex items-center gap-3">
+        <Slider label={t("vset.inputVolume")} unit="%" min={0} max={200} value={s.inputVolume} onChange={(v) => setInputVolume(v)} />
+        <div className="flex items-center gap-2.5">
           <button
             onClick={toggleTest}
-            className={`rounded px-4 py-2 text-sm font-medium ${testing ? "bg-discord-danger text-white" : "bg-discord-accent text-white hover:bg-discord-accentDark"}`}
+            className={`shrink-0 rounded px-3 py-1.5 text-xs font-medium ${testing ? "bg-discord-danger text-white" : "bg-discord-accent text-white hover:bg-discord-accentDark"}`}
           >
             {testing ? t("vset.stopTest") : t("vset.testMic")}
           </button>
-          <div className="h-3 flex-1 overflow-hidden rounded bg-discord-deep">
-            <div className="h-full bg-discord-green transition-[width] duration-75" style={{ width: `${Math.min(level * 140, 100)}%` }} />
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-discord-deep">
+            <div className="h-full rounded-full bg-discord-green transition-[width] duration-75" style={{ width: `${Math.min(level * 140, 100)}%` }} />
           </div>
         </div>
-      </section>
+      </Card>
 
-      {/* OUTPUT */}
-      <section className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.output")}</h3>
+      <Card icon="🔈" title={t("vset.output")}>
         <Select
-          label={t("vset.speaker")}
           value={s.outputDeviceId}
           onChange={(v) => s.set({ outputDeviceId: v })}
           options={[{ value: "", label: t("vset.default") }, ...outputs.map((d, i) => ({ value: d.deviceId, label: d.label || `${t("vset.output")} ${i + 1}` }))]}
         />
-        <Slider label={`${t("vset.outputVolume")} — ${s.outputVolume}%`} min={0} max={100} value={s.outputVolume} onChange={(v) => s.set({ outputVolume: v })} />
-      </section>
+        <Slider label={t("vset.outputVolume")} unit="%" min={0} max={100} value={s.outputVolume} onChange={(v) => s.set({ outputVolume: v })} />
+      </Card>
 
-      {/* PROCESSING */}
-      <section className="space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.processing")}</h3>
+      <Card icon="🎚" title={t("vset.processing")}>
         <Toggle label={t("vset.echo")} checked={s.echoCancellation} onChange={(v) => onProcessingChange({ echoCancellation: v })} />
         <Toggle label={t("vset.noise")} checked={s.noiseSuppression} onChange={(v) => onProcessingChange({ noiseSuppression: v })} />
         <Toggle label={t("vset.rnnoise")} checked={s.rnnoise} onChange={(v) => onProcessingChange({ rnnoise: v })} />
-        {s.rnnoise && <p className="text-xs text-discord-faint">{t("vset.rnnoiseHelp")}</p>}
+        {s.rnnoise && (
+          <p className={`text-xs ${rnnoiseOk === false ? "text-discord-danger" : rnnoiseOk ? "text-discord-green" : "text-discord-faint"}`}>
+            {rnnoiseOk === null ? "…" : rnnoiseOk ? `✓ ${t("vset.rnnoiseOk")}` : `⚠ ${t("vset.rnnoiseFail")}`}
+          </p>
+        )}
         <Toggle label={t("vset.agc")} checked={s.autoGainControl} onChange={(v) => onProcessingChange({ autoGainControl: v })} />
         {s.noiseSuppression && (
-          <>
-            <Slider
-              label={`${t("vset.micSensitivity")} — ${s.micSensitivity}%`}
-              min={0}
-              max={100}
-              value={s.micSensitivity}
-              onChange={(v) => s.set({ micSensitivity: v })}
-            />
-            <p className="text-xs text-discord-faint">{t("vset.micSensitivityHelp")}</p>
-          </>
+          <Slider label={t("vset.micSensitivity")} unit="%" min={0} max={100} value={s.micSensitivity} onChange={(v) => s.set({ micSensitivity: v })} />
         )}
-      </section>
+      </Card>
 
-      {/* INPUT MODE */}
-      <section className="space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.inputMode")}</h3>
-        <div className="flex gap-2">
+      <Card icon="🎙" title={t("vset.inputMode")}>
+        <div className="flex gap-1.5">
           <Pill active={s.voiceMode === "vad"} onClick={() => s.set({ voiceMode: "vad" })}>{t("vset.voiceActivity")}</Pill>
           <Pill active={s.voiceMode === "ptt"} onClick={() => s.set({ voiceMode: "ptt" })}>{t("vset.pushToTalk")}</Pill>
         </div>
         {s.voiceMode === "ptt" && (
           <button
             onClick={() => setBindingPtt(true)}
-            className="rounded bg-discord-card px-4 py-2 text-sm text-discord-text hover:bg-discord-hover"
+            className="w-full rounded bg-discord-deep px-3 py-1.5 text-left text-sm text-discord-text hover:bg-discord-hover"
           >
             {bindingPtt ? t("vset.pressKey") : `${t("vset.keybind")}: ${friendlyKey(s.pttKey)}`}
           </button>
         )}
-      </section>
+      </Card>
 
-      {/* SCREEN SHARE */}
-      <section className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.screenShare")}</h3>
-        <Select
-          label={t("vset.resolution")}
-          value={s.screenResolution}
-          onChange={(v) => s.set({ screenResolution: v as ScreenResolution })}
-          options={RES_OPTIONS}
-        />
-        <Select
-          label={t("vset.frameRate")}
-          value={String(s.screenFps)}
-          onChange={(v) => s.set({ screenFps: Number(v) as ScreenFps })}
-          options={FPS_OPTIONS.map((f) => ({ value: String(f), label: `${f} FPS` }))}
-        />
+      <Card icon="🖥" title={t("vset.screenShare")}>
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={s.screenResolution} onChange={(v) => s.set({ screenResolution: v as ScreenResolution })} options={RES_OPTIONS} />
+          <Select
+            value={String(s.screenFps)}
+            onChange={(v) => s.set({ screenFps: Number(v) as ScreenFps })}
+            options={FPS_OPTIONS.map((f) => ({ value: String(f), label: `${f} FPS` }))}
+          />
+        </div>
         <Toggle label={t("vset.shareSystemAudio")} checked={s.screenAudio} onChange={(v) => s.set({ screenAudio: v })} />
-        <p className="text-xs text-discord-faint">{t("vset.screenHelp")}</p>
-      </section>
+      </Card>
 
-      {/* SOUNDS */}
-      <section className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.sounds")}</h3>
-        <Toggle
-          label={t("vset.playSounds")}
-          checked={s.soundsEnabled}
-          onChange={(v) => s.set({ soundsEnabled: v })}
-        />
+      <Card icon="🔔" title={t("vset.sounds")}>
+        <Toggle label={t("vset.playSounds")} checked={s.soundsEnabled} onChange={(v) => s.set({ soundsEnabled: v })} />
         {s.soundsEnabled && (
           <>
             <Slider
-              label={`${t("vset.soundVolume")} — ${s.soundVolume}%`}
+              label={t("vset.soundVolume")}
+              unit="%"
               min={0}
               max={100}
               value={s.soundVolume}
@@ -184,7 +183,7 @@ export default function VoiceSettings() {
                 previewSound("peerJoin", v);
               }}
             />
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               <SoundPreview label={t("voice.call")} onClick={() => previewSound("voiceJoin", s.soundVolume)} />
               <SoundPreview label={t("voice.leave")} onClick={() => previewSound("voiceLeave", s.soundVolume)} />
               <SoundPreview label={t("voice.mute")} onClick={() => previewSound("mute", s.soundVolume)} />
@@ -192,16 +191,13 @@ export default function VoiceSettings() {
             </div>
           </>
         )}
-      </section>
+      </Card>
 
-      {/* CALL OVERLAY (desktop only) */}
       {window.concord?.isDesktop && (
-        <section className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wide text-discord-muted">{t("vset.overlay")}</h3>
+        <Card icon="📌" title={t("vset.overlay")}>
           <Toggle label={t("vset.overlayEnable")} checked={s.overlayEnabled} onChange={(v) => s.set({ overlayEnabled: v })} />
           {s.overlayEnabled && (
             <Select
-              label={t("vset.overlayPosition")}
               value={s.overlayCorner}
               onChange={(v) => s.set({ overlayCorner: v as typeof s.overlayCorner })}
               options={[
@@ -212,9 +208,20 @@ export default function VoiceSettings() {
               ]}
             />
           )}
-        </section>
+        </Card>
       )}
     </div>
+  );
+}
+
+function Card({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2.5 self-start rounded-lg bg-discord-card/40 p-3 ring-1 ring-black/20">
+      <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-discord-muted">
+        <span className="text-sm leading-none">{icon}</span> {title}
+      </h3>
+      {children}
+    </section>
   );
 }
 
@@ -222,7 +229,7 @@ function SoundPreview({ label, onClick }: { label: string; onClick: () => void }
   return (
     <button
       onClick={onClick}
-      className="rounded bg-discord-card px-3 py-1.5 text-xs text-discord-text hover:bg-discord-hover"
+      className="rounded bg-discord-deep px-2.5 py-1 text-xs text-discord-text hover:bg-discord-hover"
     >
       ▶ {label}
     </button>
@@ -234,42 +241,39 @@ function friendlyKey(code: string) {
 }
 
 function Select({
-  label,
   value,
   onChange,
   options,
 }: {
-  label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
 }) {
   return (
-    <label className="block">
-      <span className="text-xs font-bold uppercase text-discord-muted">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded bg-discord-deep px-3 py-2.5 text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full min-w-0 rounded bg-discord-deep px-2.5 py-1.5 text-sm text-discord-text outline-none focus:ring-1 focus:ring-discord-accent"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
 function Slider({
   label,
+  unit,
   min,
   max,
   value,
   onChange,
 }: {
   label: string;
+  unit?: string;
   min: number;
   max: number;
   value: number;
@@ -277,14 +281,17 @@ function Slider({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-bold uppercase text-discord-muted">{label}</span>
+      <span className="flex items-baseline justify-between text-xs text-discord-muted">
+        <span>{label}</span>
+        <span className="font-medium text-discord-text">{value}{unit}</span>
+      </span>
       <input
         type="range"
         min={min}
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-2 w-full accent-discord-accent"
+        className="mt-1 h-1.5 w-full accent-discord-accent"
       />
     </label>
   );
@@ -292,10 +299,16 @@ function Slider({
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between py-1">
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex w-full cursor-pointer items-center justify-between gap-3 py-0.5 text-left"
+    >
       <span className="text-sm text-discord-text">{label}</span>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-8 accent-discord-accent" />
-    </label>
+      <span className={`h-5 w-9 shrink-0 rounded-full transition ${checked ? "bg-discord-accent" : "bg-discord-deep"}`}>
+        <span className={`block h-4 w-4 translate-y-0.5 rounded-full bg-white shadow transition ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+      </span>
+    </button>
   );
 }
 
@@ -303,7 +316,7 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`rounded px-3 py-1.5 text-sm font-medium ${active ? "bg-discord-accent text-white" : "bg-discord-card text-discord-muted hover:text-white"}`}
+      className={`rounded px-3 py-1.5 text-sm font-medium ${active ? "bg-discord-accent text-white" : "bg-discord-deep text-discord-muted hover:text-white"}`}
     >
       {children}
     </button>

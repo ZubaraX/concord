@@ -73,6 +73,8 @@ const en = {
   "vset.noise": "Noise suppression",
   "vset.rnnoise": "AI noise suppression (RNNoise)",
   "vset.rnnoiseHelp": "Neural-net filter that removes keyboard, fan and background noise from your mic.",
+  "vset.rnnoiseOk": "Model loaded — active in calls and in the mic test",
+  "vset.rnnoiseFail": "The model failed to load on this device",
   "vset.agc": "Automatic gain control",
   "vset.micSensitivity": "Mic sensitivity",
   "vset.micSensitivityHelp":
@@ -419,6 +421,8 @@ const ru: Record<keyof typeof en, string> = {
   "vset.noise": "Подавление шума",
   "vset.rnnoise": "ИИ-шумоподавление (RNNoise)",
   "vset.rnnoiseHelp": "Нейросетевой фильтр: убирает клавиатуру, вентилятор и фоновый шум из микрофона.",
+  "vset.rnnoiseOk": "Модель загружена — работает в звонках и в проверке микрофона",
+  "vset.rnnoiseFail": "Не удалось загрузить модель на этом устройстве",
   "vset.agc": "Автоматическая регулировка усиления",
   "vset.micSensitivity": "Чувствительность микрофона",
   "vset.micSensitivityHelp":
