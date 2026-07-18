@@ -37,6 +37,28 @@ export function copyMessageText(fallback: string) {
     legacyCopy(text);
   }
 }
+// True when a message is nothing but emoji (unicode and/or :custom:) — such
+// messages render jumbo-sized, Discord-style. Capped at 8 so a wall of emoji
+// stays normal.
+function isEmojiOnly(content: string): boolean {
+  const t = content.trim();
+  if (!t || t.length > 200) return false;
+  // Custom-emoji-only: “:name: :name:” with nothing else between.
+  if (/^(:[a-z0-9_]+:\s*)+$/.test(t)) {
+    return (t.match(/:[a-z0-9_]+:/g) ?? []).length <= 8;
+  }
+  // Unicode-emoji-only: strip emoji constituents; anything left → not jumbo.
+  const stripped = t.replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}‍️\s]/gu, "");
+  if (stripped) return false;
+  try {
+    const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    const count = [...seg.segment(t)].filter((s) => s.segment.trim()).length;
+    return count > 0 && count <= 8;
+  } catch {
+    return t.length <= 16; // ancient WebView without Intl.Segmenter
+  }
+}
+
 function legacyCopy(text: string) {
   const ta = document.createElement("textarea");
   ta.value = text;
@@ -118,6 +140,9 @@ function MessageItem({
     setMenu({ x: r.left, y: r.bottom + 4 });
   }
 
+  // Emoji-only message (unicode or :custom:, up to 8) → rendered extra large.
+  const jumbo = useMemo(() => isEmojiOnly(message.content), [message.content]);
+
   // Parse markdown once per content change, not on every parent re-render.
   const body = useMemo(
     () =>
@@ -126,8 +151,9 @@ function MessageItem({
         channels: channelList,
         myUsername: user?.username,
         onChannelClick: setChannel,
+        jumbo,
       }),
-    [message.content, emojiMap, channelList, user?.username, setChannel]
+    [message.content, emojiMap, channelList, user?.username, setChannel, jumbo]
   );
 
   // Invite links become one-click join cards (no code pasting).
@@ -249,16 +275,24 @@ function MessageItem({
     const mineReacted = (message.reactions ?? []).some((r) => r.emoji === emoji && r.userId === user?.id);
     const enc = encodeURIComponent(emoji);
     api(`/api/messages/${message.id}/reactions/${enc}`, { method: mineReacted ? "DELETE" : "PUT" }).catch(() => {});
-    // Tiny celebratory burst where you clicked (only when adding).
-    if (!mineReacted && at) {
+    // Celebratory burst where you clicked (only when adding). Reactions picked
+    // from the emoji picker carry no cursor position — burst from the row.
+    if (!mineReacted) {
+      const r = rowRef.current?.getBoundingClientRect();
+      const origin = at ?? (r ? { x: r.left + Math.min(r.width / 2, 320), y: r.top + r.height / 2 } : null);
+      if (!origin) return;
+      // 🎉 goes full confetti; everything else gets the small pop.
+      const party = emoji === "🎉" || emoji === "🎊";
+      const pool = party ? ["🎉", "🎊", "✨", "🎈"] : [emoji];
+      const count = party ? 18 : 6;
       const now = Date.now();
-      const parts = Array.from({ length: 6 }, (_, i) => ({
+      const parts = Array.from({ length: count }, (_, i) => ({
         id: now + i,
-        x: at.x,
-        y: at.y,
-        emoji,
-        dx: Math.round((Math.random() - 0.5) * 90),
-        dy: -Math.round(30 + Math.random() * 60),
+        x: origin.x,
+        y: origin.y,
+        emoji: pool[i % pool.length],
+        dx: Math.round((Math.random() - 0.5) * (party ? 260 : 90)),
+        dy: -Math.round(30 + Math.random() * (party ? 160 : 60)),
       }));
       setBursts((prev) => [...prev, ...parts]);
       setTimeout(() => setBursts((prev) => prev.filter((p) => !parts.some((q) => q.id === p.id))), 800);
@@ -350,7 +384,7 @@ function MessageItem({
           />
         ) : (
           message.content && (
-            <div className="select-text whitespace-pre-wrap text-discord-text [-webkit-user-select:text] [overflow-wrap:anywhere]">
+            <div className={`select-text whitespace-pre-wrap text-discord-text [-webkit-user-select:text] [overflow-wrap:anywhere] ${jumbo ? "text-[2.5rem] leading-[1.15]" : ""}`}>
               {body}
               {message.editedAt && <span className="ml-1 text-[10px] text-discord-faint">(edited)</span>}
             </div>

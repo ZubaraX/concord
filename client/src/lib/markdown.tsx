@@ -7,6 +7,7 @@ export interface RenderContext {
   channels?: { id: string; name: string }[]; // guild channels, for #channel links
   myUsername?: string; // to highlight @mentions of me
   onChannelClick?: (id: string) => void;
+  jumbo?: boolean; // emoji-only message → render custom emojis extra large
 }
 
 // Minimal, safe Discord-flavored markdown (no dangerouslySetInnerHTML).
@@ -104,7 +105,7 @@ function renderBlocks(text: string, ctx: RenderContext): React.ReactNode[] {
 }
 
 function renderInline(text: string, ctx: RenderContext): React.ReactNode[] {
-  const { customEmojis, channels, myUsername, onChannelClick } = ctx;
+  const { customEmojis, channels, myUsername, onChannelClick, jumbo } = ctx;
   const pattern =
     /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(~~[^~]+~~)|(\|\|[^|]+\|\|)|(https?:\/\/[^\s]+)|(:[a-z0-9_]+:)|(@[\p{L}\p{N}_.]+)|(#[\p{L}\p{N}_-]+)/gu;
   const out: React.ReactNode[] = [];
@@ -126,7 +127,13 @@ function renderInline(text: string, ctx: RenderContext): React.ReactNode[] {
       const url = customEmojis?.[tok.slice(1, -1)];
       out.push(
         url ? (
-          <img key={key} src={url} alt={tok} title={tok} className="inline-block h-5 w-5 -translate-y-0.5 object-contain align-middle" />
+          <img
+            key={key}
+            src={url}
+            alt={tok}
+            title={tok}
+            className={`inline-block object-contain align-middle ${jumbo ? "h-11 w-11" : "h-5 w-5 -translate-y-0.5"}`}
+          />
         ) : (
           tok
         )

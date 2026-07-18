@@ -295,6 +295,32 @@ body {
 }
 .fx-full .cc-badge { animation: cc-badge-pulse 2.4s ease-in-out infinite; }
 
+/* full: switching chats gets a soft slide-fade (the scroll container is
+   re-keyed per channel, so this plays exactly once per switch). */
+@keyframes cc-chat-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+.fx-full .cc-chat-in { animation: cc-chat-in 0.16s ease-out both; }
+
+/* ── «Объём»: soft gradients + elevation on core surfaces. Overrides the flat
+   Tailwind color utilities app-wide, so every accent/danger button, card and
+   panel picks up depth without touching components. ── */
+.bg-discord-accent { background-image: linear-gradient(180deg, rgb(var(--c-accent)), rgb(var(--c-accentDark))); }
+.hover\:bg-discord-accentDark:hover { background-image: linear-gradient(180deg, rgb(var(--c-accentDark)), rgb(var(--c-accentDark))); }
+.bg-discord-danger { background-image: linear-gradient(180deg, rgb(var(--c-danger)), rgb(var(--c-dangerDark))); }
+.bg-discord-card { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04); }
+.bg-discord-rail { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.02), rgb(0 0 0 / 0.10)); }
+.bg-discord-deep { box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.2); }
+
+/* Slow floating blurred orbs behind the login card. */
+@keyframes cc-orb {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(36px, -44px) scale(1.15); }
+}
+.cc-orb { animation: cc-orb 11s ease-in-out infinite; }
+.cc-orb2 { animation: cc-orb 15s ease-in-out infinite reverse; }
+
 /* ── Touch screens ─────────────────────────────────────────────────────────
    No hover and fat fingers: icon buttons (they all carry a `title`) get a
    comfortable ≥36px tap target, hover-revealed controls become always visible,

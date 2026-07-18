@@ -469,6 +469,8 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
           )}
         >
           <div
+            /* key → remount per channel, so fx-full gets a gentle fade-in on switch */
+            key={currentChannelId}
             ref={scrollRef}
             onScroll={(e) => {
               const el = e.target as HTMLDivElement;
@@ -478,7 +480,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
               atBottomRef.current = near;
               setAtBottom(near);
             }}
-            className="relative flex-1 overflow-y-auto overflow-x-hidden py-4"
+            className="cc-chat-in relative flex-1 overflow-y-auto overflow-x-hidden py-4"
           >
             {!hasMore && <Welcome name={channel.name} isDM={isDM} />}
             {hasMore && messages.length > 0 && (
