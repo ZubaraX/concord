@@ -11,6 +11,9 @@ export default defineConfig({
   },
   // Relative base so the built app also loads correctly from file:// in Electron.
   base: "./",
+  // Treat .wasm as a plain asset so `?inline` works (RNNoise model is inlined
+  // as a data URI — fetch() of bundled files is blocked on file:// in Electron).
+  assetsInclude: ["**/*.wasm"],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },

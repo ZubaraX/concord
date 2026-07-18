@@ -20,6 +20,47 @@ interface SocketData {
 const voiceParticipants = new Map<string, Map<string, string>>();
 const voiceRoom = (channelId: string) => `voice:${channelId}`;
 
+// Call sessions, for the "📞 call ended · duration" chat log: started when the
+// first participant joins an empty channel, finalized when the last one leaves.
+const callSessions = new Map<string, { startedAt: number; starterId: string; participants: Set<string> }>();
+
+function fmtCallDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h) return `${h} ч ${m} мин`;
+  if (m) return `${m} мин ${sec} с`;
+  return `${sec} с`;
+}
+
+// Post the call summary into the channel's chat. Real conversations (2+
+// people ever) get a duration; a DM ring nobody answered logs a missed call
+// (which also lands as a push via broadcastNewMessage → notify:dm).
+function finishCallSession(channelId: string) {
+  const sess = callSessions.get(channelId);
+  if (!sess) return;
+  callSessions.delete(channelId);
+  const dur = Date.now() - sess.startedAt;
+  void (async () => {
+    try {
+      const channel = await prisma.channel.findUnique({
+        where: { id: channelId },
+        select: { guildId: true },
+      });
+      if (!channel) return;
+      let content: string | null = null;
+      if (sess.participants.size >= 2) content = `📞 Звонок завершён · ${fmtCallDuration(dur)}`;
+      else if (!channel.guildId && dur >= 3000) content = "📞 Пропущенный звонок";
+      if (!content) return;
+      const message = await createMessage({ channelId, authorId: sess.starterId, content });
+      await broadcastNewMessage(message);
+    } catch {
+      /* a missing call log must never break voice teardown */
+    }
+  })();
+}
+
 export function attachGateway(app: FastifyInstance) {
   const io = new Server<any, any, any, SocketData>(app.server, {
     cors: { origin: true, credentials: true }, // open: self-hosted, all-access
@@ -54,7 +95,7 @@ export function attachGateway(app: FastifyInstance) {
     const broadcastVoiceState = async (channelId: string) => {
       const channel = await prisma.channel.findUnique({
         where: { id: channelId },
-        select: { guildId: true, dmParticipants: { select: { id: true, username: true, displayName: true } } },
+        select: { guildId: true, dmParticipants: { select: { id: true, username: true, displayName: true, avatarUrl: true } } },
       });
       if (!channel) return;
       const map = voiceParticipants.get(channelId);
@@ -72,7 +113,12 @@ export function attachGateway(app: FastifyInstance) {
           const inCall = userIds.includes(p.id);
           const caller = channel.dmParticipants.find((o) => o.id !== p.id && userIds.includes(o.id));
           if (userIds.length > 0 && !inCall && caller) {
-            io.to(userRoom(p.id)).emit("notify:call", { channelId, name: caller.displayName ?? caller.username, ringing: true });
+            io.to(userRoom(p.id)).emit("notify:call", {
+              channelId,
+              name: caller.displayName ?? caller.username,
+              avatarUrl: caller.avatarUrl ?? null,
+              ringing: true,
+            });
           } else {
             io.to(userRoom(p.id)).emit("notify:call", { channelId, ringing: false });
           }
@@ -84,7 +130,10 @@ export function attachGateway(app: FastifyInstance) {
       const map = voiceParticipants.get(channelId);
       if (map) {
         map.delete(socket.id);
-        if (map.size === 0) voiceParticipants.delete(channelId);
+        if (map.size === 0) {
+          voiceParticipants.delete(channelId);
+          finishCallSession(channelId); // last one out → log the call in chat
+        }
       }
       socket.leave(voiceRoom(channelId));
       socket.to(voiceRoom(channelId)).emit("voice:peerLeft", { socketId: socket.id, userId });
@@ -157,6 +206,15 @@ export function attachGateway(app: FastifyInstance) {
         const peers = [...map.entries()].map(([socketId, uid]) => ({ socketId, userId: uid }));
         map.set(socket.id, userId);
         voiceParticipants.set(channelId, map);
+
+        // Call-log bookkeeping: first join opens the session, everyone who
+        // ever appears is counted (2+ distinct users = a real conversation).
+        let sess = callSessions.get(channelId);
+        if (!sess) {
+          sess = { startedAt: Date.now(), starterId: userId, participants: new Set() };
+          callSessions.set(channelId, sess);
+        }
+        sess.participants.add(userId);
 
         socket.to(voiceRoom(channelId)).emit("voice:peerJoined", { socketId: socket.id, userId });
         ack?.({ ok: true, peers });

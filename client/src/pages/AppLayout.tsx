@@ -47,7 +47,7 @@ export default function AppLayout() {
   const qc = useQueryClient();
   const initialized = useRef(false);
   const ringingChannels = useRef<Set<string>>(new Set());
-  const [incoming, setIncoming] = useState<{ channelId: string; name: string } | null>(null);
+  const [incoming, setIncoming] = useState<{ channelId: string; name: string; avatarUrl?: string | null } | null>(null);
   const [whatsNew, setWhatsNew] = useState<ChangelogEntry[]>([]);
   // Mobile: the rail + channel sidebar slide in as a drawer over the chat.
   const [navOpen, setNavOpen] = useState(false);
@@ -191,16 +191,15 @@ export default function AppLayout() {
 
     // Dedicated DM incoming-call signal (carries the caller's name, so it works
     // even when this DM was never in our cache — e.g. we've only been in guilds).
-    const onCall = (p: { channelId: string; name?: string; ringing: boolean }) => {
+    const onCall = (p: { channelId: string; name?: string; avatarUrl?: string | null; ringing: boolean }) => {
       const inThisCall = useVoice.getState().channelId === p.channelId;
       if (p.ringing && !inThisCall) {
         if (ringingChannels.current.has(p.channelId)) return;
         if (isDnd() || isMuted(p.channelId)) return; // no ringing on DND/muted
         ringingChannels.current.add(p.channelId);
-        setIncoming({ channelId: p.channelId, name: p.name ?? "Звонок" });
+        setIncoming({ channelId: p.channelId, name: p.name ?? "Звонок", avatarUrl: p.avatarUrl });
         desktopNotify("Входящий звонок", `${p.name ?? ""} звонит вам`);
-        playPing();
-        navigator.vibrate?.([200, 100, 200]);
+        navigator.vibrate?.([300, 150, 300, 150, 300]);
       } else if (!p.ringing) {
         ringingChannels.current.delete(p.channelId);
         setIncoming((cur) => (cur?.channelId === p.channelId ? null : cur));
@@ -305,6 +304,7 @@ export default function AppLayout() {
       {incoming && (
         <IncomingCallModal
           name={incoming.name}
+          avatarUrl={incoming.avatarUrl}
           onAccept={() => { openDM(incoming.channelId); joinVoice(incoming.channelId); setIncoming(null); }}
           onDecline={() => setIncoming(null)}
         />

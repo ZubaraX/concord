@@ -191,7 +191,11 @@ model Message {
   createdAt DateTime  @default(now())
   embedsJson String?  // JSON-encoded link-preview embeds (fetched server-side)
   pollJson   String?  // JSON: { question, options: [{id,label}], votes: {optionId:[userId,...]}, multi: bool }
-  threadId   String?  @unique // id of the THREAD channel rooted at this message
+  // id of the THREAD channel rooted at this message. One-per-message is
+  // enforced by the create route, NOT by a unique index — prisma db push
+  // refuses to add a unique constraint to an existing table without
+  // --accept-data-loss, which broke the v0.14.0 deploy.
+  threadId   String?
 
   attachments Attachment[]
   reactions   Reaction[]

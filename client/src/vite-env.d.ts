@@ -1,5 +1,12 @@
 /// <reference types="vite/client" />
 
+// `?inline` on binary assets returns a data-URI string (vite/client only
+// ships this for stylesheets, so declare the wasm variant ourselves).
+declare module "*.wasm?inline" {
+  const src: string;
+  export default src;
+}
+
 interface ImportMetaEnv {
   /** Build-time default server URL (optional; overridable in-app). */
   readonly VITE_API_URL?: string;

@@ -62,7 +62,7 @@ export default function RolesModal({ guildId, onClose }: { guildId: string; onCl
       <div className="flex flex-col gap-4 sm:flex-row">
         {/* Role list: a vertical column on desktop, a horizontal scroll strip
             on phones so it never blows out the modal width. */}
-        <div className="flex shrink-0 gap-1 overflow-x-auto pb-1 sm:w-40 sm:flex-col sm:overflow-visible sm:pb-0">
+        <div className="flex shrink-0 gap-1 overflow-x-auto pb-1 sm:max-h-96 sm:w-40 sm:flex-col sm:overflow-y-auto sm:overflow-x-visible sm:pb-0">
           {roles.map((r) => (
             <button
               key={r.id}

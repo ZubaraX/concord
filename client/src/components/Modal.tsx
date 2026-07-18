@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { XIcon } from "./Icons";
 
 export default function Modal({
@@ -18,7 +19,10 @@ export default function Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  // Portal to <body>: modals are opened from inside the sidebar/drawer, whose
+  // translate-x transform would otherwise turn `fixed` into "fixed relative to
+  // the drawer" and skew the whole overlay (the crooked roles panel on PC).
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onMouseDown={onClose}
@@ -35,6 +39,7 @@ export default function Modal({
         </div>
         <div className="max-h-[70vh] overflow-y-auto p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

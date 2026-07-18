@@ -2,12 +2,40 @@
 // are no binary assets to ship or license. Plus desktop notifications (works in
 // Electron and browsers that grant permission). All sounds respect the user's
 // settings (on/off + volume).
+//
+// The synth is deliberately "musical": every note is two slightly-detuned
+// oscillators (chorus warmth) plus quiet bell partials, run through a gentle
+// low-pass and a soft feedback-delay tail — instead of the old dry beeps.
 import { useSettings } from "../store/settings";
 
 let ctx: AudioContext | null = null;
+let dryBus: GainNode | null = null;
+let echoBus: GainNode | null = null;
+
 function audio(): AudioContext | null {
   try {
-    if (!ctx) ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!ctx) {
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Master buses: dry → out; echo send → delay (with feedback + damping) → out.
+      dryBus = ctx.createGain();
+      dryBus.gain.value = 1;
+      dryBus.connect(ctx.destination);
+
+      echoBus = ctx.createGain();
+      echoBus.gain.value = 1;
+      const delay = ctx.createDelay(1);
+      delay.delayTime.value = 0.12;
+      const feedback = ctx.createGain();
+      feedback.gain.value = 0.24;
+      const damp = ctx.createBiquadFilter();
+      damp.type = "lowpass";
+      damp.frequency.value = 2600;
+      echoBus.connect(delay);
+      delay.connect(damp);
+      damp.connect(feedback);
+      feedback.connect(delay); // feedback loop
+      damp.connect(ctx.destination);
+    }
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
     return ctx;
   } catch {
@@ -15,38 +43,92 @@ function audio(): AudioContext | null {
   }
 }
 
-// Master gain from settings (0 when sounds are disabled). 0.25 headroom so the
+// Master gain from settings (0 when sounds are disabled). 0.22 headroom so the
 // summed tones never clip.
 function masterGain(): number {
   const s = useSettings.getState();
   if (!s.soundsEnabled) return 0;
-  return (s.soundVolume / 100) * 0.25;
+  return (s.soundVolume / 100) * 0.22;
 }
 
-type Note = { f: number; t: number; d: number; type?: OscillatorType; g?: number };
+type Note = {
+  f: number; // fundamental, Hz
+  t: number; // start offset, s
+  d: number; // duration, s
+  type?: OscillatorType;
+  g?: number; // relative gain
+  glide?: number; // optional target frequency (mute/unmute swoops)
+  bell?: boolean; // add quiet inharmonic partials (bell timbre)
+};
 
-// A short attack/decay envelope keeps tones from clicking.
-function playNote(ac: AudioContext, master: number, n: Note, base: number) {
+function scheduleOsc(
+  ac: AudioContext,
+  out: GainNode,
+  freq: number,
+  detune: number,
+  type: OscillatorType,
+  start: number,
+  dur: number,
+  glide?: number
+) {
   const osc = ac.createOscillator();
-  const gain = ac.createGain();
-  osc.type = n.type ?? "sine";
-  osc.frequency.value = n.f;
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, start);
+  if (glide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, glide), start + dur * 0.85);
+  osc.detune.value = detune;
+  osc.connect(out);
+  osc.start(start);
+  osc.stop(start + dur + 0.05);
+}
+
+// One note = detuned pair + optional bell partials, private envelope + filter,
+// routed to the dry bus and (quietly) to the echo bus.
+function playNote(ac: AudioContext, master: number, n: Note, base: number) {
   const start = base + n.t;
   const peak = Math.max(master * (n.g ?? 1), 0.0002);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(peak, start + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + n.d);
-  osc.connect(gain);
-  gain.connect(ac.destination);
-  osc.start(start);
-  osc.stop(start + n.d + 0.03);
+
+  const env = ac.createGain();
+  env.gain.setValueAtTime(0.0001, start);
+  env.gain.exponentialRampToValueAtTime(peak, start + 0.01);
+  env.gain.exponentialRampToValueAtTime(0.0001, start + n.d);
+
+  const lp = ac.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 3200;
+  lp.Q.value = 0.6;
+
+  env.connect(lp);
+  lp.connect(dryBus!);
+  const send = ac.createGain();
+  send.gain.value = 0.28; // echo send level
+  lp.connect(send);
+  send.connect(echoBus!);
+
+  const type = n.type ?? "sine";
+  scheduleOsc(ac, env, n.f, -4, type, start, n.d, n.glide);
+  scheduleOsc(ac, env, n.f, +4, type, start, n.d, n.glide);
+  if (n.bell) {
+    // Quiet upper partials make it chime instead of beep.
+    const p1 = ac.createGain();
+    p1.gain.setValueAtTime(0.0001, start);
+    p1.gain.exponentialRampToValueAtTime(peak * 0.3, start + 0.008);
+    p1.gain.exponentialRampToValueAtTime(0.0001, start + n.d * 0.6);
+    p1.connect(lp);
+    scheduleOsc(ac, p1, n.f * 2, 0, "sine", start, n.d * 0.6);
+    const p2 = ac.createGain();
+    p2.gain.setValueAtTime(0.0001, start);
+    p2.gain.exponentialRampToValueAtTime(peak * 0.16, start + 0.006);
+    p2.gain.exponentialRampToValueAtTime(0.0001, start + n.d * 0.4);
+    p2.connect(lp);
+    scheduleOsc(ac, p2, n.f * 2.76, 0, "sine", start, n.d * 0.4);
+  }
 }
 
 function play(notes: Note[], master = masterGain()) {
   if (master <= 0) return;
   const ac = audio();
   if (!ac) return;
-  const base = ac.currentTime + 0.01;
+  const base = ac.currentTime + 0.02;
   for (const n of notes) playNote(ac, master, n, base);
 }
 
@@ -61,20 +143,22 @@ export type SoundName =
 
 const SOUNDS: Record<SoundName, Note[]> = {
   voiceJoin: [
-    { f: 523.25, t: 0, d: 0.13 }, // C5
-    { f: 783.99, t: 0.1, d: 0.18 }, // G5
+    { f: 523.25, t: 0, d: 0.16, bell: true, g: 0.8 }, // C5
+    { f: 659.25, t: 0.09, d: 0.16, bell: true, g: 0.85 }, // E5
+    { f: 783.99, t: 0.18, d: 0.32, bell: true }, // G5
   ],
   voiceLeave: [
-    { f: 659.25, t: 0, d: 0.13 }, // E5
-    { f: 440.0, t: 0.1, d: 0.2 }, // A4
+    { f: 783.99, t: 0, d: 0.14, g: 0.7 }, // G5
+    { f: 659.25, t: 0.09, d: 0.14, g: 0.7 }, // E5
+    { f: 523.25, t: 0.18, d: 0.28, g: 0.8 }, // C5
   ],
-  peerJoin: [{ f: 880.0, t: 0, d: 0.14, g: 0.6 }], // A5, gentle
-  peerLeave: [{ f: 587.33, t: 0, d: 0.16, g: 0.6 }], // D5, gentle
-  mute: [{ f: 277.18, t: 0, d: 0.09, type: "triangle", g: 0.8 }], // blip down
-  unmute: [{ f: 440.0, t: 0, d: 0.09, type: "triangle", g: 0.8 }], // blip up
+  peerJoin: [{ f: 659.25, t: 0, d: 0.22, bell: true, g: 0.55 }], // E5 chime
+  peerLeave: [{ f: 523.25, t: 0, d: 0.24, g: 0.5 }], // C5, gentle
+  mute: [{ f: 420, t: 0, d: 0.13, type: "triangle", g: 0.7, glide: 262 }], // swoop down
+  unmute: [{ f: 290, t: 0, d: 0.13, type: "triangle", g: 0.7, glide: 470 }], // swoop up
   message: [
-    { f: 987.77, t: 0, d: 0.1, g: 0.7 }, // B5
-    { f: 1318.51, t: 0.08, d: 0.12, g: 0.7 }, // E6
+    { f: 783.99, t: 0, d: 0.18, bell: true, g: 0.75 }, // G5
+    { f: 1046.5, t: 0.11, d: 0.3, bell: true, g: 0.85 }, // C6 — friendly "ding-dong"
   ],
 };
 
@@ -86,31 +170,35 @@ export function playSound(name: SoundName) {
 export function previewSound(name: SoundName, volumePercent: number) {
   const s = useSettings.getState();
   if (!s.soundsEnabled) return;
-  play(SOUNDS[name], (volumePercent / 100) * 0.25);
+  play(SOUNDS[name], (volumePercent / 100) * 0.22);
 }
 
 export function playPing() {
   playSound("message");
 }
 
-// Incoming-call ring (ignores the volume slider's low end so it's always
-// audible, but still silenced when sounds are turned off).
+// One cycle of the incoming-call melody (kept audible even at a low volume
+// slider, but silenced entirely when sounds are off).
 export function playRing() {
   const s = useSettings.getState();
   if (!s.soundsEnabled) return;
+  const vol = Math.max((s.soundVolume / 100) * 0.22, 0.1);
   play(
     [
-      { f: 660, t: 0, d: 0.2 },
-      { f: 880, t: 0.22, d: 0.22 },
+      { f: 783.99, t: 0, d: 0.16, bell: true, g: 0.85 }, // G5
+      { f: 1046.5, t: 0.18, d: 0.16, bell: true, g: 0.9 }, // C6
+      { f: 1318.51, t: 0.36, d: 0.42, bell: true }, // E6 — rising, expectant
+      { f: 783.99, t: 1.05, d: 0.14, bell: true, g: 0.6 }, // echo of the motif
+      { f: 1046.5, t: 1.21, d: 0.3, bell: true, g: 0.7 },
     ],
-    Math.max((s.soundVolume / 100) * 0.25, 0.12)
+    vol
   );
 }
 
 // Looping ring for incoming calls. Returns a stop function.
 export function startRing(): () => void {
   playRing();
-  const iv = setInterval(playRing, 2500);
+  const iv = setInterval(playRing, 2600);
   return () => clearInterval(iv);
 }
 
