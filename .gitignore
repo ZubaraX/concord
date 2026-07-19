@@ -22,3 +22,6 @@ client/release/
 release/
 
 # Keep client/build/ (icon source assets) tracked.
+
+# CI polling scratch file (background scripts)
+runs.json
