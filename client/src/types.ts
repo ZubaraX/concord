@@ -60,6 +60,13 @@ export interface GuildEmoji {
   url: string;
 }
 
+export interface GuildSticker {
+  id: string;
+  guildId: string;
+  name: string;
+  url: string;
+}
+
 export interface Guild {
   id: string;
   name: string;
@@ -71,6 +78,7 @@ export interface Guild {
   roles?: Role[];
   members?: GuildMember[];
   emojis?: GuildEmoji[];
+  stickers?: GuildSticker[];
 }
 
 export interface PollData {

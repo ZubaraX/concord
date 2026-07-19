@@ -509,13 +509,20 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
   const isAudio = attachment.mimeType?.startsWith("audio/");
 
   if (isImage) {
+    // Stickers (sent via the sticker picker) render smaller, like Discord.
+    const isSticker = attachment.filename.startsWith("sticker-");
     return (
       <button
         type="button"
         onClick={() => useLightbox.getState().open(src, attachment.filename)}
         className="block cursor-zoom-in"
       >
-        <img src={src} alt={attachment.filename} className="max-h-96 max-w-full rounded-lg object-contain" loading="lazy" />
+        <img
+          src={src}
+          alt={attachment.filename}
+          className={isSticker ? "h-40 w-40 rounded-lg object-contain" : "max-h-96 max-w-full rounded-lg object-contain"}
+          loading="lazy"
+        />
       </button>
     );
   }

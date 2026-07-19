@@ -13,6 +13,7 @@ import GifPicker from "./GifPicker";
 import Avatar from "./Avatar";
 import ContextMenu from "./ContextMenu";
 import PollComposeModal from "./PollComposeModal";
+import StickerModal from "./StickerModal";
 import ScheduleComposeModal from "./ScheduleComposeModal";
 
 // One row in the @mention / :emoji: autocomplete popup.
@@ -60,6 +61,7 @@ export default function Composer({
   const [showGif, setShowGif] = useState(false);
   const [attachMenu, setAttachMenu] = useState<{ x: number; y: number } | null>(null);
   const [showPoll, setShowPoll] = useState(false);
+  const [showStickers, setShowStickers] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const lastTyping = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -402,10 +404,16 @@ export default function Composer({
           onClose={() => setAttachMenu(null)}
           items={[
             { label: t("composer.uploadFile"), icon: <PaperclipIcon size={15} />, onClick: () => fileInput.current?.click() },
+            ...(currentGuildId
+              ? [{ label: t("sticker.title"), icon: "🩵", onClick: () => setShowStickers(true) }]
+              : []),
             { label: t("poll.create"), icon: <BarChartIcon size={15} />, onClick: () => setShowPoll(true) },
             { label: t("schedule.title"), icon: <ClockIcon size={15} />, onClick: () => setShowSchedule(true) },
           ]}
         />
+      )}
+      {showStickers && currentGuildId && (
+        <StickerModal guildId={currentGuildId} mode="pick" channelId={channelId} onClose={() => setShowStickers(false)} />
       )}
       {showPoll && <PollComposeModal channelId={channelId} onClose={() => setShowPoll(false)} />}
       {showSchedule && (

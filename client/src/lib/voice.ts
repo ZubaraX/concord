@@ -12,7 +12,7 @@ import { api } from "../api/client";
 import { useVoice, type RemoteEntry } from "../store/voice";
 import { useSettings } from "../store/settings";
 import { RES_MAP } from "../store/settings";
-import { playSound } from "./sound";
+import { playSound, playBoardSound, SOUNDBOARD } from "./sound";
 import { pickScreenSource } from "../store/screenPicker";
 import { isAndroidApp } from "./platform";
 import { startAndroidScreenStream, stopAndroidScreenStream } from "./androidScreen";
@@ -301,6 +301,13 @@ export function sendVoiceEmoji(emoji: string) {
   if (channelId) getSocket()?.emit("voice:emoji", { channelId, emoji });
 }
 
+// Soundboard: relay the id — everyone in the room (including us, via the
+// relay echo) synthesizes the sound locally.
+export function sendBoardSound(id: string) {
+  const channelId = st().channelId;
+  if (channelId) getSocket()?.emit("voice:sound", { channelId, sound: id });
+}
+
 /** Our live mic stream (for local speaking detection), or null when not in a call. */
 export function getMicStream(): MediaStream | null {
   return micRawTrack ? micStream : null;
@@ -341,6 +348,16 @@ export function initVoice() {
     const id = Date.now() + Math.random();
     st().set({ effects: [...st().effects, { id, emoji }] });
     setTimeout(() => st().set({ effects: st().effects.filter((e) => e.id !== id) }), 4500);
+  });
+  socket.on("voice:sound", ({ sound }: { sound: string }) => {
+    playBoardSound(sound);
+    // Show which sound flew by, using the same floating-emoji pipeline.
+    const meta = SOUNDBOARD.find((s) => s.id === sound);
+    if (meta) {
+      const id = Date.now() + Math.random();
+      st().set({ effects: [...st().effects, { id, emoji: meta.emoji }] });
+      setTimeout(() => st().set({ effects: st().effects.filter((e) => e.id !== id) }), 4500);
+    }
   });
 
   const onKey = (down: boolean) => (e: KeyboardEvent) => {

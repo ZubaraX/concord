@@ -89,6 +89,7 @@ model Guild {
   roles       Role[]
   invites     Invite[]
   emojis      GuildEmoji[]
+  stickers    GuildSticker[]
 
   @@index([ownerId])
 }
@@ -102,6 +103,18 @@ model GuildEmoji {
   createdAt DateTime @default(now())
 
   @@unique([guildId, name])
+  @@index([guildId])
+}
+
+// Sticker packs per guild — larger images sent as one-tap image messages.
+model GuildSticker {
+  id        String   @id @default(cuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+
   @@index([guildId])
 }
 

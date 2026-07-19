@@ -106,6 +106,7 @@ export async function guildRoutes(app: FastifyInstance) {
         channels: { where: { type: { not: "THREAD" } }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
         roles: { orderBy: { position: "desc" } },
         emojis: { orderBy: { name: "asc" } },
+        stickers: { orderBy: { name: "asc" } },
         members: {
           include: {
             user: {
@@ -269,6 +270,7 @@ export async function guildRoutes(app: FastifyInstance) {
 
   // ── Custom emoji ────────────────────────────────────────────────────────
   const EMOJI_MAX_BYTES = 2 * 1024 * 1024; // sanity cap distinct from the "no limit" attachment policy
+  const STICKER_MAX_BYTES = 4 * 1024 * 1024; // stickers are bigger images
 
   app.post("/:guildId/emojis", async (req, reply) => {
     const { guildId } = req.params as { guildId: string };
@@ -314,5 +316,105 @@ export async function guildRoutes(app: FastifyInstance) {
     await prisma.guildEmoji.delete({ where: { id: emojiId } });
     emitToGuild(guildId, "guild:channelsUpdate", { guildId });
     return reply.code(204).send();
+  });
+
+  // ── Stickers: per-guild packs, same permission as emojis. ────────────────
+  app.post("/:guildId/stickers", async (req, reply) => {
+    const { guildId } = req.params as { guildId: string };
+    if (!(await hasGuildPermission(req.userId, guildId, "MANAGE_EMOJIS"))) {
+      return reply.code(403).send({ error: "Missing MANAGE_EMOJIS permission" });
+    }
+    const data = await req.file();
+    if (!data) return reply.code(400).send({ error: "No file provided" });
+    if (!/^image\//.test(data.mimetype)) return reply.code(400).send({ error: "Must be an image" });
+
+    const { name: rawName } = req.query as { name?: string };
+    const name = (rawName ?? data.filename.replace(/\.[^.]+$/, "")).trim().slice(0, 40) || "sticker";
+
+    const dir = resolve(config.STORAGE_DIR);
+    mkdirSync(dir, { recursive: true });
+    const ext = data.mimetype.split("/")[1]?.replace("jpeg", "jpg") || "png";
+    const stored = `sticker_${nanoid(12)}.${ext}`;
+    const dest = join(dir, stored);
+    await pipeline(data.file, createWriteStream(dest));
+    if (data.file.truncated || statSync(dest).size > STICKER_MAX_BYTES) {
+      return reply.code(413).send({ error: "Sticker image is too large (max 4 MB)" });
+    }
+
+    const sticker = await prisma.guildSticker.create({ data: { guildId, name, url: `/uploads/${stored}` } });
+    emitToGuild(guildId, "guild:channelsUpdate", { guildId });
+    return reply.code(201).send(sticker);
+  });
+
+  app.delete("/:guildId/stickers/:stickerId", async (req, reply) => {
+    const { guildId, stickerId } = req.params as { guildId: string; stickerId: string };
+    if (!(await hasGuildPermission(req.userId, guildId, "MANAGE_EMOJIS"))) {
+      return reply.code(403).send({ error: "Missing MANAGE_EMOJIS permission" });
+    }
+    const sticker = await prisma.guildSticker.findUnique({ where: { id: stickerId } });
+    if (!sticker || sticker.guildId !== guildId) return reply.code(404).send({ error: "Not found" });
+    await prisma.guildSticker.delete({ where: { id: stickerId } });
+    emitToGuild(guildId, "guild:channelsUpdate", { guildId });
+    return reply.code(204).send();
+  });
+
+  // ── Server stats: totals, messages/day (14d), top authors (30d). ─────────
+  app.get("/:guildId/stats", async (req, reply) => {
+    const { guildId } = req.params as { guildId: string };
+    const member = await prisma.guildMember.findUnique({
+      where: { guildId_userId: { guildId, userId: req.userId } },
+    });
+    if (!member) return reply.code(403).send({ error: "Not a member of this guild" });
+
+    const channels = await prisma.channel.findMany({ where: { guildId }, select: { id: true } });
+    const channelIds = channels.map((c) => c.id);
+    const since14 = new Date(Date.now() - 14 * 86400_000);
+    const since30 = new Date(Date.now() - 30 * 86400_000);
+
+    const [totalMessages, memberCount, recent, top] = await Promise.all([
+      prisma.message.count({ where: { channelId: { in: channelIds } } }),
+      prisma.guildMember.count({ where: { guildId } }),
+      prisma.message.findMany({
+        where: { channelId: { in: channelIds }, createdAt: { gte: since14 } },
+        select: { createdAt: true },
+      }),
+      prisma.message.groupBy({
+        by: ["authorId"],
+        where: { channelId: { in: channelIds }, createdAt: { gte: since30 } },
+        _count: { authorId: true },
+        orderBy: { _count: { authorId: "desc" } },
+        take: 5,
+      }),
+    ]);
+
+    // Aggregate messages per day in JS (portable across SQLite date storage).
+    const perDay: { day: string; count: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400_000);
+      perDay.push({ day: d.toISOString().slice(0, 10), count: 0 });
+    }
+    const index = new Map(perDay.map((p, i) => [p.day, i]));
+    for (const m of recent) {
+      const key = m.createdAt.toISOString().slice(0, 10);
+      const i = index.get(key);
+      if (i !== undefined) perDay[i].count++;
+    }
+
+    const authors = await prisma.user.findMany({
+      where: { id: { in: top.map((t) => t.authorId) } },
+      select: { id: true, username: true, displayName: true, avatarUrl: true },
+    });
+    const topAuthors = top.map((t) => ({
+      count: t._count.authorId,
+      user: authors.find((a) => a.id === t.authorId) ?? null,
+    }));
+
+    return reply.send({
+      totalMessages,
+      memberCount,
+      channelCount: channelIds.length,
+      perDay,
+      topAuthors,
+    });
   });
 }

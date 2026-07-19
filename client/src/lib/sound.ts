@@ -202,6 +202,93 @@ export function startRing(): () => void {
   return () => clearInterval(iv);
 }
 
+// ── Soundboard: short fun sounds for voice channels, fully synthesized. ─────
+export const SOUNDBOARD: { id: string; emoji: string; nameRu: string }[] = [
+  { id: "airhorn", emoji: "📯", nameRu: "Горн" },
+  { id: "tada", emoji: "🎺", nameRu: "Фанфары" },
+  { id: "sadtrombone", emoji: "😢", nameRu: "Тромбон" },
+  { id: "badumtss", emoji: "🥁", nameRu: "Ба-дум-тсс" },
+  { id: "applause", emoji: "👏", nameRu: "Аплодисменты" },
+  { id: "boing", emoji: "🤪", nameRu: "Боинг" },
+  { id: "whistle", emoji: "😗", nameRu: "Свист" },
+  { id: "bell", emoji: "🔔", nameRu: "Колокол" },
+];
+
+// Short white-noise burst through a filter — claps, snares, cymbals.
+function noiseBurst(ac: AudioContext, master: number, start: number, dur: number, freq: number, g = 1) {
+  const len = Math.ceil(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const bp = ac.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = freq;
+  bp.Q.value = 0.9;
+  const env = ac.createGain();
+  env.gain.setValueAtTime(0.0001, start);
+  env.gain.exponentialRampToValueAtTime(Math.max(master * g, 0.0002), start + 0.008);
+  env.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  src.connect(bp);
+  bp.connect(env);
+  env.connect(dryBus!);
+  src.start(start);
+  src.stop(start + dur + 0.02);
+}
+
+/** Play a soundboard sound locally (already relayed to the room by the caller). */
+export function playBoardSound(id: string) {
+  const master = Math.max(masterGain(), useSettings.getState().soundsEnabled ? 0.1 : 0);
+  if (master <= 0) return;
+  const ac = audio();
+  if (!ac) return;
+  const t = ac.currentTime + 0.02;
+  const note = (n: Note) => playNote(ac, master, n, t);
+
+  switch (id) {
+    case "airhorn":
+      // Brash detuned sawtooth blast with a pitch dip.
+      for (const det of [0, 12, -9]) {
+        note({ f: 466 + det, t: 0, d: 0.75, type: "sawtooth", g: 0.5, glide: 440 + det });
+      }
+      break;
+    case "tada":
+      note({ f: 523.25, t: 0, d: 0.14, type: "square", g: 0.35 });
+      note({ f: 659.25, t: 0.12, d: 0.14, type: "square", g: 0.35 });
+      note({ f: 783.99, t: 0.24, d: 0.14, type: "square", g: 0.35 });
+      note({ f: 1046.5, t: 0.36, d: 0.5, type: "square", g: 0.4, bell: true });
+      break;
+    case "sadtrombone":
+      note({ f: 233, t: 0, d: 0.32, type: "triangle", g: 0.9, glide: 220 });
+      note({ f: 220, t: 0.34, d: 0.32, type: "triangle", g: 0.9, glide: 207 });
+      note({ f: 207, t: 0.68, d: 0.32, type: "triangle", g: 0.9, glide: 196 });
+      note({ f: 196, t: 1.02, d: 0.8, type: "triangle", g: 1, glide: 155 });
+      break;
+    case "badumtss":
+      note({ f: 110, t: 0, d: 0.12, type: "sine", g: 1.2, glide: 55 }); // ba
+      note({ f: 110, t: 0.16, d: 0.12, type: "sine", g: 1.2, glide: 55 }); // dum
+      noiseBurst(ac, master, t + 0.32, 0.5, 6000, 0.9); // tss
+      break;
+    case "applause":
+      for (let i = 0; i < 22; i++) {
+        noiseBurst(ac, master, t + Math.random() * 1.3, 0.05 + Math.random() * 0.05, 1500 + Math.random() * 2500, 0.5);
+      }
+      break;
+    case "boing":
+      note({ f: 320, t: 0, d: 0.5, type: "triangle", g: 1, glide: 90 });
+      note({ f: 480, t: 0.02, d: 0.35, type: "sine", g: 0.5, glide: 130 });
+      break;
+    case "whistle":
+      note({ f: 900, t: 0, d: 0.28, type: "sine", g: 0.8, glide: 1800 });
+      note({ f: 1800, t: 0.3, d: 0.35, type: "sine", g: 0.8, glide: 700 });
+      break;
+    case "bell":
+      note({ f: 660, t: 0, d: 1.2, bell: true, g: 1 });
+      break;
+  }
+}
+
 export function desktopNotify(title: string, body?: string) {
   try {
     if (typeof Notification === "undefined") return;

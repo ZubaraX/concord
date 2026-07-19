@@ -14,10 +14,12 @@ import {
   flipCamera,
   toggleSpeaker,
   sendVoiceEmoji,
+  sendBoardSound,
   getMicStream,
 } from "../lib/voice";
 import { useSpeaking, type SpeakStream } from "../lib/speaking";
 import { isAndroidApp, isTouchMobile, canShareScreen } from "../lib/platform";
+import { SOUNDBOARD } from "../lib/sound";
 import { useI18n } from "../lib/i18n";
 import type { Guild, User } from "../types";
 import Avatar from "./Avatar";
@@ -90,6 +92,7 @@ export default function VoiceStage({
   const inCall = voice.channelId === channelId;
   const userIds = voice.occupancy[channelId] ?? [];
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   const [expanded, setExpanded] = useState<{ stream: MediaStream; label: string } | null>(null);
   const expandWrapRef = useRef<HTMLDivElement>(null);
 
@@ -226,8 +229,11 @@ export default function VoiceStage({
                 <SpeakerIcon size={20} />
               </StageBtn>
             )}
-            <StageBtn active={emojiOpen} onClick={() => setEmojiOpen((v) => !v)} label={t("voice.react")}>
+            <StageBtn active={emojiOpen} onClick={() => { setEmojiOpen((v) => !v); setBoardOpen(false); }} label={t("voice.react")}>
               <SmileIcon size={20} />
+            </StageBtn>
+            <StageBtn active={boardOpen} onClick={() => { setBoardOpen((v) => !v); setEmojiOpen(false); }} label={t("voice.soundboard")}>
+              <span className="text-xl leading-none">🎵</span>
             </StageBtn>
             <button
               onClick={leaveVoice}
@@ -252,6 +258,25 @@ export default function VoiceStage({
                 className="rounded p-1 text-xl hover:bg-discord-hover"
               >
                 {e}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {boardOpen && (
+          <div className="absolute bottom-full mb-2 grid grid-cols-4 gap-1 rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40">
+            {SOUNDBOARD.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  sendBoardSound(s.id);
+                  setBoardOpen(false);
+                }}
+                className="flex w-16 flex-col items-center gap-0.5 rounded p-1.5 hover:bg-discord-hover"
+                title={s.nameRu}
+              >
+                <span className="text-xl">{s.emoji}</span>
+                <span className="w-full truncate text-center text-[10px] text-discord-muted">{s.nameRu}</span>
               </button>
             ))}
           </div>

@@ -253,6 +253,13 @@ export function attachGateway(app: FastifyInstance) {
       io.to(voiceRoom(channelId)).emit("voice:emoji", { emoji, userId, ts: Date.now() });
     });
 
+    // Soundboard: relay the sound id — every client synthesizes it locally
+    // (no audio bytes cross the wire).
+    socket.on("voice:sound", ({ channelId, sound }: { channelId: string; sound: string }) => {
+      if (typeof channelId !== "string" || typeof sound !== "string" || sound.length > 32) return;
+      io.to(voiceRoom(channelId)).emit("voice:sound", { sound, userId, ts: Date.now() });
+    });
+
     // ── Media relay (no WebRTC/TURN): forward audio/screen chunks to the
     //    rest of the voice room through this WebSocket. Works anywhere the
     //    server is reachable (incl. Codespaces), since there's no P2P. ──

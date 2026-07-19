@@ -21,6 +21,8 @@ import ContextMenu from "./ContextMenu";
 import { CallTimer } from "./VoiceStage";
 import RolesModal from "./RolesModal";
 import EmojiManageModal from "./EmojiManageModal";
+import StickerModal from "./StickerModal";
+import StatsModal from "./StatsModal";
 
 export const CALL_EMOJIS = ["👍", "❤️", "😂", "🎉", "😮", "🔥"];
 import type { Channel, DMSummary, Guild } from "../types";
@@ -43,6 +45,8 @@ export default function ChannelSidebar() {
   const [renameCtx, setRenameCtx] = useState<{ id: string; name: string } | null>(null);
   const [showRoles, setShowRoles] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [showStickers, setShowStickers] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [guildMenu, setGuildMenu] = useState<{ x: number; y: number } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -245,6 +249,8 @@ export default function ChannelSidebar() {
       )}
       {showRoles && currentGuildId && <RolesModal guildId={currentGuildId} onClose={() => setShowRoles(false)} />}
       {showEmojis && currentGuildId && <EmojiManageModal guildId={currentGuildId} onClose={() => setShowEmojis(false)} />}
+      {showStickers && currentGuildId && <StickerModal guildId={currentGuildId} mode="manage" onClose={() => setShowStickers(false)} />}
+      {showStats && currentGuildId && <StatsModal guildId={currentGuildId} onClose={() => setShowStats(false)} />}
 
       {voice.channelId && (
         <VoiceControlBar channelName={channels.find((c) => c.id === voice.channelId)?.name ?? "Voice"} />
@@ -291,6 +297,8 @@ export default function ChannelSidebar() {
             { label: t("chat.markAllRead"), icon: <CheckIcon size={15} />, onClick: () => { markAllRead(); useUnread.getState().clearAll(); } },
             ...(canManageRoles ? [{ label: t("roles.title"), icon: <ShieldIcon size={15} />, onClick: () => setShowRoles(true) }] : []),
             ...(canManageEmojis ? [{ label: t("emoji.title"), icon: <SmileIcon size={15} />, onClick: () => setShowEmojis(true) }] : []),
+            ...(canManageEmojis ? [{ label: t("sticker.title"), icon: "🩵", onClick: () => setShowStickers(true) }] : []),
+            { label: t("stats.title"), icon: "📊", onClick: () => setShowStats(true) },
             {
               label: mutes.guilds.includes(currentGuildId) ? t("mute.serverOff") : t("mute.server"),
               icon: mutes.guilds.includes(currentGuildId) ? <BellIcon size={15} /> : <BellOffIcon size={15} />,
