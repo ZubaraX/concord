@@ -12,7 +12,7 @@ import { useShare } from "../store/share";
 import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreen, toggleCamera, flipCamera, toggleSpeaker } from "../lib/voice";
 import type { Message as Msg } from "../types";
 import { useI18n } from "../lib/i18n";
-import { isAndroidApp } from "../lib/platform";
+import { isAndroidApp, isTouchMobile, canShareScreen } from "../lib/platform";
 import { PhoneIcon, PhoneOffIcon, MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PinIcon, MenuIcon, UsersIcon, BookmarkIcon, HeadphonesIcon, HeadphonesOffIcon, SearchIcon, MessageIcon, SpeakerIcon, XIcon, ArrowDownIcon } from "./Icons";
 import MessageItem from "./MessageItem";
 import Composer from "./Composer";
@@ -413,14 +413,16 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                 <HeaderBtn className="hidden sm:flex" active={voice.deafened} onClick={toggleDeafen} title={voice.deafened ? t("voice.undeafen") : t("voice.deafen")}>
                   {voice.deafened ? <HeadphonesOffIcon size={16} /> : <HeadphonesIcon size={16} />}
                 </HeaderBtn>
-                {isAndroidApp() && voice.cameraOn && (
+                {isTouchMobile() && voice.cameraOn && (
                   <HeaderBtn className="hidden sm:flex" onClick={flipCamera} title={t("voice.flipCamera")}>
                     <FlipCameraIcon size={16} />
                   </HeaderBtn>
                 )}
-                <HeaderBtn className="hidden sm:flex" active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
-                  <ScreenIcon size={16} />
-                </HeaderBtn>
+                {canShareScreen() && (
+                  <HeaderBtn className="hidden sm:flex" active={voice.screenOn} onClick={toggleScreen} title={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
+                    <ScreenIcon size={16} />
+                  </HeaderBtn>
+                )}
                 {isAndroidApp() && (
                   <HeaderBtn className="hidden sm:flex" active={!voice.speakerOn} onClick={toggleSpeaker} title={voice.speakerOn ? t("voice.speakerOn") : t("voice.speakerOff")}>
                     <SpeakerIcon size={16} />
@@ -561,11 +563,15 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
               icon: voice.deafened ? <HeadphonesOffIcon size={15} /> : <HeadphonesIcon size={15} />,
               onClick: toggleDeafen,
             },
-            {
-              label: voice.screenOn ? t("voice.stopShare") : t("voice.share"),
-              icon: <ScreenIcon size={15} />,
-              onClick: toggleScreen,
-            },
+            ...(canShareScreen()
+              ? [
+                  {
+                    label: voice.screenOn ? t("voice.stopShare") : t("voice.share"),
+                    icon: <ScreenIcon size={15} />,
+                    onClick: toggleScreen,
+                  },
+                ]
+              : []),
             ...(isAndroidApp()
               ? [
                   {
@@ -575,7 +581,7 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                   },
                 ]
               : []),
-            ...(isAndroidApp() && voice.cameraOn
+            ...(isTouchMobile() && voice.cameraOn
               ? [{ label: t("voice.flipCamera"), icon: <FlipCameraIcon size={15} />, onClick: flipCamera }]
               : []),
           ]}

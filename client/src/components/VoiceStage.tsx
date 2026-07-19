@@ -17,7 +17,7 @@ import {
   getMicStream,
 } from "../lib/voice";
 import { useSpeaking, type SpeakStream } from "../lib/speaking";
-import { isAndroidApp } from "../lib/platform";
+import { isAndroidApp, isTouchMobile, canShareScreen } from "../lib/platform";
 import { useI18n } from "../lib/i18n";
 import type { Guild, User } from "../types";
 import Avatar from "./Avatar";
@@ -211,14 +211,16 @@ export default function VoiceStage({
             <StageBtn active={voice.cameraOn} onClick={toggleCamera} label={t("voice.camera")}>
               <CameraIcon size={20} />
             </StageBtn>
-            {isAndroidApp() && voice.cameraOn && (
+            {isTouchMobile() && voice.cameraOn && (
               <StageBtn onClick={flipCamera} label={t("voice.flipCamera")}>
                 <FlipCameraIcon size={20} />
               </StageBtn>
             )}
-            <StageBtn active={voice.screenOn} onClick={toggleScreen} label={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
-              <ScreenIcon size={20} />
-            </StageBtn>
+            {canShareScreen() && (
+              <StageBtn active={voice.screenOn} onClick={toggleScreen} label={voice.screenOn ? t("voice.stopShare") : t("voice.share")}>
+                <ScreenIcon size={20} />
+              </StageBtn>
+            )}
             {isAndroidApp() && (
               <StageBtn active={!voice.speakerOn} onClick={toggleSpeaker} label={voice.speakerOn ? t("voice.speakerOn") : t("voice.speakerOff")}>
                 <SpeakerIcon size={20} />

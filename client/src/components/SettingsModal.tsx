@@ -89,6 +89,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         bio: bio.trim() || null,
         status,
       });
+      // Remember the presence choice — restorePresence re-asserts it on every
+      // (re)connect, and without this it would restore a stale value and the
+      // status picked here would "not save".
+      localStorage.setItem("concord.presence", status);
       setMsg(t("settings.saved"));
     } catch (e) {
       setMsg((e as Error).message);
