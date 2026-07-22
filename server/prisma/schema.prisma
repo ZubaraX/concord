@@ -184,6 +184,7 @@ model Channel {
   createdAt DateTime @default(now())
 
   messages  Message[]
+  rootedMessages Message[] @relation("MessageThread") // messages whose thread this channel is
 
   @@index([guildId])
   @@index([parentId])
@@ -209,6 +210,7 @@ model Message {
   // refuses to add a unique constraint to an existing table without
   // --accept-data-loss, which broke the v0.14.0 deploy.
   threadId   String?
+  thread     Channel? @relation("MessageThread", fields: [threadId], references: [id], onDelete: SetNull)
 
   attachments Attachment[]
   reactions   Reaction[]

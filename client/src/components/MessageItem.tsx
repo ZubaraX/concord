@@ -453,7 +453,9 @@ function MessageItem({
             }
             className="mt-1 flex items-center gap-1.5 rounded-md bg-discord-card px-2 py-1 text-xs font-medium text-discord-link hover:bg-discord-hover"
           >
-            🧵 {t("thread.open")}
+            🧵 {message.thread && message.thread._count.messages > 0
+              ? t("thread.replies", { n: message.thread._count.messages })
+              : t("thread.open")}
           </button>
         )}
       </div>
@@ -667,6 +669,7 @@ export default memo(MessageItem, (a, b) => {
     a.message.embedsJson === b.message.embedsJson &&
     a.message.pollJson === b.message.pollJson &&
     a.message.threadId === b.message.threadId &&
+    (a.message.thread?._count.messages ?? 0) === (b.message.thread?._count.messages ?? 0) &&
     a.grouped === b.grouped &&
     reactionSig(a.message) === reactionSig(b.message)
   );

@@ -4,6 +4,7 @@ import { api, uploadFile, type UploadedFile } from "../api/client";
 import { getSocket } from "../lib/socket";
 import { useUI } from "../store/ui";
 import { useVoice } from "../store/voice";
+import { useAuth } from "../store/auth";
 import { useUnread } from "../store/unread";
 import { getLastRead, setLastRead } from "../lib/lastRead";
 import { maybeCompressImage } from "../lib/imageCompress";
@@ -35,8 +36,11 @@ interface ChannelInfo {
 export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
   const { currentChannelId, toggleMembers, immersive, setImmersive } = useUI();
   const { t } = useI18n();
+  const { user } = useAuth();
   const voice = useVoice();
   const [messages, setMessages] = useState<Msg[]>([]);
+  // DM read receipt: newest lastReadAt among the other participant(s), ms.
+  const [seenAt, setSeenAt] = useState<number | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -188,11 +192,17 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       }, 4000);
     };
 
+    const onReceipt = (p: { channelId: string; userId: string; lastReadAt: string }) => {
+      if (p.channelId !== currentChannelId || p.userId === user?.id) return;
+      setSeenAt((cur) => Math.max(cur ?? 0, new Date(p.lastReadAt).getTime()));
+    };
+
     socket.on("message:new", onNew);
     socket.on("message:edit", onEdit);
     socket.on("message:delete", onDelete);
     socket.on("message:reaction", onReaction);
     socket.on("typing:start", onTyping);
+    socket.on("read:receipt", onReceipt);
     return () => {
       socket.emit("channel:unsubscribe", currentChannelId);
       socket.off("connect", subscribe);
@@ -201,8 +211,21 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       socket.off("message:delete", onDelete);
       socket.off("message:reaction", onReaction);
       socket.off("typing:start", onTyping);
+      socket.off("read:receipt", onReceipt);
     };
-  }, [currentChannelId]);
+  }, [currentChannelId, user?.id]);
+
+  // DM read receipt: load the other participant's last-read time on open.
+  useEffect(() => {
+    setSeenAt(null);
+    if (!currentChannelId || channel?.guildId) return;
+    api<{ readers: { userId: string; lastReadAt: string }[] }>(`/api/channels/${currentChannelId}/read-receipt`)
+      .then((r) => {
+        const newest = r.readers.reduce((mx, x) => Math.max(mx, new Date(x.lastReadAt).getTime()), 0);
+        if (newest) setSeenAt(newest);
+      })
+      .catch(() => {});
+  }, [currentChannelId, channel?.guildId]);
 
   // Reliable send: socket (fast) with ack, falling back to REST if the socket
   // is down or doesn't confirm — so messages never silently vanish.
@@ -499,6 +522,13 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
                 <MessageItem message={m} grouped={isGrouped(messages[i - 1], m)} onReply={setReplyingTo} guildId={channel.guildId} />
               </div>
             ))}
+            {/* DM read receipt under my newest message, once the other side has read it. */}
+            {isDM && messages.length > 0 && messages[messages.length - 1].author.id === user?.id &&
+              seenAt !== null && seenAt >= new Date(messages[messages.length - 1].createdAt).getTime() && (
+                <div className="px-4 pt-0.5 text-right text-[11px] text-discord-faint">
+                  ✓✓ {t("chat.seen")}
+                </div>
+              )}
             <div ref={bottomRef} />
           </div>
 

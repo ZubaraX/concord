@@ -101,6 +101,7 @@ export interface Message {
   embedsJson?: string | null;
   pollJson?: string | null;
   threadId?: string | null; // id of the THREAD channel rooted at this message
+  thread?: { _count: { messages: number } } | null; // reply count for the chip
 }
 
 export interface ScheduledMessage {

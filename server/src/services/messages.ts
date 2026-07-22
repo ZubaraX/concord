@@ -19,6 +19,8 @@ export const messageInclude = {
   attachments: true,
   reactions: { select: { emoji: true, userId: true } },
   replyTo: { include: { author: { select: authorSelect } } },
+  // Reply count for the "🧵 N replies" chip (the thread is a hidden channel).
+  thread: { select: { _count: { select: { messages: true } } } },
 } as const;
 
 export class MessageError extends Error {
@@ -118,8 +120,18 @@ export async function broadcastNewMessage(message: CreatedMessage) {
 
   const channel = await prisma.channel.findUnique({
     where: { id: message.channelId },
-    select: { guildId: true, dmParticipants: { select: { id: true } } },
+    select: { guildId: true, type: true, parentId: true, dmParticipants: { select: { id: true } } },
   });
+
+  // A reply landed inside a thread → refresh the "🧵 N replies" chip on the
+  // root message in the PARENT channel (live count, no refetch needed).
+  if (channel?.type === "THREAD" && channel.parentId) {
+    const root = await prisma.message.findFirst({
+      where: { threadId: message.channelId },
+      include: messageInclude,
+    });
+    if (root) io.to(channelRoom(channel.parentId)).emit("message:edit", root);
+  }
   const authorName = message.author.displayName ?? message.author.username;
   const preview = message.content?.slice(0, 160) || "📎 Вложение";
   if (channel?.guildId) {

@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { api, uploadFile, type UploadedFile } from "../api/client";
 import { getSocket } from "../lib/socket";
 import { useUI } from "../store/ui";
 import { useI18n } from "../lib/i18n";
+import { maybeCompressImage } from "../lib/imageCompress";
 import type { Message as Msg } from "../types";
 import MessageItem from "./MessageItem";
+import Composer from "./Composer";
 import { XIcon } from "./Icons";
 
 // Side panel with the discussion under one message (Discord-style thread).
-// A thread is just a hidden channel — history, sending, reactions and live
-// updates all reuse the regular message endpoints/events. Overlays the chat:
-// full-screen on phones, a right-hand column on desktop.
+// A thread is just a hidden channel — history, sending, reactions, replies,
+// attachments and live updates all reuse the regular message machinery.
+// Overlays the chat: full-screen on phones, a right-hand column on desktop.
 export default function ThreadPanel() {
   const { t } = useI18n();
   const thread = useUI((s) => s.thread);
@@ -20,10 +22,10 @@ export default function ThreadPanel() {
   const threadId = thread?.id ?? null;
 
   const [messages, setMessages] = useState<Msg[]>([]);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState<UploadedFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Msg | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const taRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: history } = useQuery<Msg[]>({
     queryKey: ["messages", threadId],
@@ -33,6 +35,12 @@ export default function ThreadPanel() {
   useEffect(() => {
     setMessages(history ?? []);
   }, [history, threadId]);
+
+  // Reset per-thread composer state when switching threads.
+  useEffect(() => {
+    setAttachments(() => []);
+    setReplyingTo(null);
+  }, [threadId]);
 
   // Live events for the thread channel (same protocol as the main chat).
   useEffect(() => {
@@ -77,33 +85,46 @@ export default function ThreadPanel() {
     bottomRef.current?.scrollIntoView();
   }, [messages.length, threadId]);
 
-  // Auto-grow the reply box like the main composer.
-  useEffect(() => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
-  }, [text]);
-
-  async function send() {
-    const content = text.trim();
-    if (!content || !threadId || sending) return;
-    setSending(true);
+  const addFiles = useCallback(async (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    if (!arr.length) return;
+    setUploading(true);
     try {
-      const m = await api<Msg>(`/api/channels/${threadId}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content }),
-      });
-      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
-      setText("");
-    } catch {
-      /* keep the draft so nothing is lost */
+      const compact = await Promise.all(arr.map(maybeCompressImage));
+      const up = await Promise.all(compact.map((f) => uploadFile(f)));
+      setAttachments((prev) => [...prev, ...up]);
+    } catch (e) {
+      alert((e as Error).message);
     } finally {
-      setSending(false);
+      setUploading(false);
     }
-  }
+  }, []);
 
-  if (!thread) return null;
+  // Send via socket (fast, with ack) falling back to REST — same as ChatArea.
+  const sendMessage = useCallback(
+    (payload: { channelId: string; content: string; attachments: UploadedFile[]; replyToId?: string }) => {
+      const socket = getSocket();
+      const addLocal = (m: Msg) => setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      const viaRest = () =>
+        api<Msg>(`/api/channels/${payload.channelId}/messages`, { method: "POST", body: JSON.stringify(payload) })
+          .then(addLocal)
+          .catch(() => {});
+      if (socket && socket.connected) {
+        let acked = false;
+        socket.emit("message:send", payload, (res: { ok?: boolean }) => {
+          acked = true;
+          if (!res?.ok) viaRest();
+        });
+        setTimeout(() => { if (!acked) viaRest(); }, 4000);
+      } else {
+        viaRest();
+      }
+      setReplyingTo(null);
+    },
+    []
+  );
+
+  if (!thread || !threadId) return null;
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-discord-bg sm:left-auto sm:w-[400px] sm:border-l sm:border-black/40 sm:shadow-2xl">
@@ -130,36 +151,25 @@ export default function ThreadPanel() {
             !!prev &&
             prev.author.id === m.author.id &&
             new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60 * 1000;
-          return <MessageItem key={m.id} message={m} grouped={grouped} onReply={() => {}} guildId={guildId} inThread />;
+          return (
+            <MessageItem key={m.id} message={m} grouped={grouped} onReply={setReplyingTo} guildId={guildId} inThread />
+          );
         })}
         <div ref={bottomRef} />
       </div>
 
       <div className="shrink-0 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 sm:pb-3">
-        <div className="flex items-end gap-1 rounded-lg bg-discord-card px-2 py-1">
-          <textarea
-            ref={taRef}
-            rows={1}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            placeholder={t("thread.placeholder")}
-            className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-sm text-discord-text outline-none placeholder:text-discord-faint"
-          />
-          <button
-            onClick={send}
-            disabled={!text.trim() || sending}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-discord-muted hover:text-white disabled:opacity-40"
-            title={t("thread.send")}
-          >
-            ➤
-          </button>
-        </div>
+        <Composer
+          channelId={threadId}
+          channelName={thread.title}
+          attachments={attachments}
+          setAttachments={setAttachments}
+          uploading={uploading}
+          addFiles={addFiles}
+          replyingTo={replyingTo}
+          onClearReply={() => setReplyingTo(null)}
+          onSend={sendMessage}
+        />
       </div>
     </div>
   );

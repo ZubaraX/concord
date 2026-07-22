@@ -300,7 +300,23 @@ export async function messageRoutes(app: FastifyInstance) {
       create: { userId: req.userId, channelId, lastReadAt: at },
       update: { lastReadAt: at },
     });
+    // DM read receipt: tell the room so the other side's "✓ Seen" updates live.
+    const ch = await prisma.channel.findUnique({ where: { id: channelId }, select: { guildId: true } });
+    if (ch && !ch.guildId) {
+      getIO().to(channelRoom(channelId)).emit("read:receipt", { channelId, userId: req.userId, lastReadAt: at });
+    }
     return reply.send({ ok: true, lastReadAt: at });
+  });
+
+  // Read receipts for a DM: other participants' last-read timestamps.
+  app.get("/channels/:channelId/read-receipt", async (req, reply) => {
+    const { channelId } = req.params as { channelId: string };
+    const channel = await getAccessibleChannel(req.userId, channelId);
+    if (!channel) return reply.code(404).send({ error: "Not found" });
+    if (channel.guildId) return reply.send({ readers: [] }); // DMs only
+    const otherIds = channel.dmParticipants.map((p) => p.id).filter((id) => id !== req.userId);
+    const states = await prisma.readState.findMany({ where: { channelId, userId: { in: otherIds } } });
+    return reply.send({ readers: states.map((s) => ({ userId: s.userId, lastReadAt: s.lastReadAt })) });
   });
 
   // Mark every accessible channel read (guild channels I'm a member of + my DMs).
