@@ -605,6 +605,10 @@ export async function leaveVoice() {
   micRawTrack = null;
   screenStream?.getTracks().forEach((t) => t.stop());
   cameraStream?.getTracks().forEach((t) => t.stop());
+  cameraFxDispose?.();
+  cameraFxDispose = null;
+  cameraRawTrack?.stop(); // the raw camera isn't in cameraStream when blurring
+  cameraRawTrack = null;
   screenStream = null;
   cameraStream = null;
   st().set({ channelId: null, remotes: [], screenOn: false, cameraOn: false, muted: false, deafened: false, pttActive: false, netStats: null, joinedAt: null, localScreen: null, localCamera: null, effects: [], connState: "idle" });
@@ -707,24 +711,68 @@ function cameraConstraints(facing: "user" | "environment"): MediaTrackConstraint
   return { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
 }
 
+// ── camera background effects ──────────────────────────────────────────────
+let cameraRawTrack: MediaStreamTrack | null = null;
+let cameraFxDispose: (() => void) | null = null;
+
+// Wrap the raw camera in the background effect when it's enabled; on any
+// failure (model can't load, weak device) fall back to the untouched camera.
+async function applyCameraEffect(raw: MediaStreamTrack): Promise<MediaStreamTrack> {
+  cameraFxDispose?.();
+  cameraFxDispose = null;
+  if (cfg().videoBackground !== "blur") return raw;
+  try {
+    const { createBlurredCameraTrack } = await import("./videoEffects");
+    const fx = await createBlurredCameraTrack(raw);
+    cameraFxDispose = fx.dispose;
+    return fx.track;
+  } catch (e) {
+    console.warn("[voice] background blur unavailable — sending the raw camera:", e);
+    return raw;
+  }
+}
+
+/** Re-apply the background setting to a live camera (called from Settings). */
+export async function refreshCameraEffect() {
+  if (!st().cameraOn || !cameraStream || !cameraRawTrack) return;
+  const oldOut = cameraStream.getVideoTracks()[0];
+  const next = await applyCameraEffect(cameraRawTrack);
+  if (next === oldOut) return;
+  cameraStream.removeTrack(oldOut);
+  cameraStream.addTrack(next);
+  if (oldOut !== cameraRawTrack) oldOut.stop();
+  peers.forEach((p) => {
+    const sender = p.pc.getSenders().find((se) => se.track === oldOut);
+    sender?.replaceTrack(next);
+  });
+  st().set({ localCamera: cameraStream }); // nudge the local preview
+}
+
 export async function toggleCamera() {
   if (st().cameraOn) {
     if (cameraStream) removeStreamFromPeers(cameraStream);
     cameraStream?.getTracks().forEach((t) => t.stop());
+    cameraFxDispose?.();
+    cameraFxDispose = null;
+    cameraRawTrack?.stop();
+    cameraRawTrack = null;
     cameraStream = null;
     st().set({ cameraOn: false, localCamera: null });
     broadcastStreamKinds();
     return;
   }
+  let rawCam: MediaStream;
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
+    rawCam = await navigator.mediaDevices.getUserMedia({
       video: cameraConstraints(cameraFacing),
       audio: false,
     });
   } catch {
     return;
   }
-  cameraStream.getVideoTracks()[0]?.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
+  cameraRawTrack = rawCam.getVideoTracks()[0];
+  cameraStream = new MediaStream([await applyCameraEffect(cameraRawTrack)]);
+  cameraRawTrack.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
   st().set({ cameraOn: true, localCamera: cameraStream, cameraFacing });
   broadcastStreamKinds();
   peers.forEach((p) => addStreamToPeer(p.pc, cameraStream!));
@@ -752,7 +800,10 @@ export async function flipCamera() {
   }
   cameraFacing = next;
   st().set({ cameraFacing: next });
-  const newTrack = raw.getVideoTracks()[0];
+  const oldRaw = cameraRawTrack;
+  cameraRawTrack = raw.getVideoTracks()[0];
+  // Rebuild the effect around the new camera (no-op when it's off).
+  const newTrack = await applyCameraEffect(cameraRawTrack);
   const oldTrack = cameraStream.getVideoTracks()[0];
   if (oldTrack) cameraStream.removeTrack(oldTrack);
   cameraStream.addTrack(newTrack);
@@ -760,8 +811,9 @@ export async function flipCamera() {
     const sender = p.pc.getSenders().find((s) => s.track === oldTrack);
     sender?.replaceTrack(newTrack).catch(() => {});
   });
-  oldTrack?.stop();
-  newTrack.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
+  if (oldTrack && oldTrack !== oldRaw) oldTrack.stop();
+  oldRaw?.stop();
+  cameraRawTrack.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
 }
 
 function screenBitrate(): number {

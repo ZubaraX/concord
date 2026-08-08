@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry whenever you bump the version.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.23.0",
+    date: "2026-07-22",
+    items: [
+      "🎥 Размытие фона камеры — как в Discord: вы остаётесь чёткими, комната позади размывается. Включается в Настройки → Голос → Камера, работает на ПК, Android и в браузере",
+      "📦 Модель нейросети не утяжеляет приложение — раздаётся вашим сервером и кешируется после первой загрузки",
+    ],
+  },
+  {
     version: "0.22.0",
     date: "2026-07-22",
     items: [

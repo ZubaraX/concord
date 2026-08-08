@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSettings, type ScreenFps, type ScreenResolution } from "../store/settings";
-import { listDevices, refreshMic, setInputVolume, startMicTest, gateThreshold } from "../lib/voice";
+import { listDevices, refreshMic, setInputVolume, startMicTest, gateThreshold, refreshCameraEffect } from "../lib/voice";
 import { previewSound } from "../lib/sound";
 import { useI18n } from "../lib/i18n";
 
@@ -176,6 +176,21 @@ export default function VoiceSettings() {
             {bindingPtt ? t("vset.pressKey") : `${t("vset.keybind")}: ${friendlyKey(s.pttKey)}`}
           </button>
         )}
+      </Card>
+
+      <Card icon="🎥" title={t("vset.camera")}>
+        <Select
+          value={s.videoBackground}
+          onChange={(v) => {
+            s.set({ videoBackground: v as "none" | "blur" });
+            refreshCameraEffect(); // apply to a live camera right away
+          }}
+          options={[
+            { value: "none", label: t("vset.bgNone") },
+            { value: "blur", label: t("vset.bgBlur") },
+          ]}
+        />
+        <p className="text-xs text-discord-faint">{t("vset.bgHelp")}</p>
       </Card>
 
       <Card icon="🖥" title={t("vset.screenShare")}>

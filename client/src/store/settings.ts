@@ -22,6 +22,9 @@ export interface SettingsState {
   outputDeviceId: string;
   outputVolume: number; // 0–200 (%)
 
+  // Camera: background processing for the outgoing video ("none" | "blur").
+  videoBackground: "none" | "blur";
+
   // Screen share
   screenResolution: ScreenResolution;
   screenFps: ScreenFps;
@@ -73,6 +76,8 @@ export const useSettings = create<SettingsState>()(
 
       outputDeviceId: "",
       outputVolume: 100,
+
+      videoBackground: "none",
 
       screenResolution: "1080p",
       screenFps: 60,
