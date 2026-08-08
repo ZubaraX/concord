@@ -196,6 +196,14 @@ export default function VoiceStage({
 
       {/* Bottom bar: join, or in-call controls (wraps on narrow phones). */}
       <div className="relative flex flex-wrap items-center justify-center gap-2 border-t border-black/30 bg-discord-deep px-2 py-3 max-sm:gap-1.5 sm:px-4">
+        {voice.speakingWhileMuted && inCall && (
+          <button
+            onClick={toggleMute}
+            className="absolute -top-9 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-discord-danger px-3 py-1.5 text-xs font-medium text-white shadow-lg"
+          >
+            <MicOffIcon size={13} /> {t("voice.mutedHint")}
+          </button>
+        )}
         {!inCall ? (
           <button
             onClick={() => joinVoice(channelId)}

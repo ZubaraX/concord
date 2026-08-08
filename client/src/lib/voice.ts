@@ -99,6 +99,25 @@ function updateConnState() {
 // ── mic ──────────────────────────────────────────────────────────────────────
 let rnnoiseDispose: (() => void) | null = null;
 
+// Outgoing mic processing chain (built once per call):
+//   device track → [RNNoise] → preGain(inputVolume) → gateGain → out track
+// An analyser taps the signal BEFORE the gate, so we can (a) run the noise
+// gate ("Чувствительность микрофона") and (b) still notice you talking while
+// muted — muting only disables the OUT track, the device track keeps running.
+interface MicChain {
+  ctx: AudioContext;
+  analyser: AnalyserNode;
+  data: Uint8Array<ArrayBuffer>;
+  preGain: GainNode;
+  gate: GainNode;
+  out: MediaStreamTrack;
+  dispose: () => void;
+}
+let micChain: MicChain | null = null;
+let gateTimer: ReturnType<typeof setInterval> | null = null;
+let lastLoudAt = 0;
+let lastMutedTalkAt = 0;
+
 function micConstraints() {
   const s = cfg();
   return {
@@ -110,48 +129,150 @@ function micConstraints() {
   };
 }
 
-// Optionally pipe the raw mic through the RNNoise worklet. Falls back to the
-// raw track if the wasm/worklet fails to load (old WebView, blocked fetch).
-async function processedMicTrack(raw: MediaStreamTrack): Promise<MediaStreamTrack> {
+/** Gate threshold (0–1 peak) from the sensitivity slider; 100% = gate off. */
+export function gateThreshold(): number {
+  const s = cfg().micSensitivity ?? 75;
+  return (1 - Math.min(100, Math.max(0, s)) / 100) * 0.12;
+}
+
+// Build the processing chain around the raw device track. Returns the track to
+// actually send; falls back to the raw track if Web Audio is unavailable.
+async function buildMicChain(raw: MediaStreamTrack): Promise<MediaStreamTrack> {
+  disposeMicChain();
+
+  // RNNoise first (its own AudioContext), then our gain/gate stage.
+  let source = raw;
+  if (cfg().rnnoise) {
+    try {
+      const { createRnnoiseTrack } = await import("./rnnoise");
+      const r = await createRnnoiseTrack(raw);
+      source = r.track;
+      rnnoiseDispose = r.dispose;
+      console.info("[voice] RNNoise active on the outgoing mic");
+    } catch (e) {
+      console.warn("[voice] RNNoise unavailable — using the raw mic:", e);
+    }
+  }
+
+  try {
+    const ctx = new AudioContext();
+    const src = ctx.createMediaStreamSource(new MediaStream([source]));
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    const preGain = ctx.createGain();
+    preGain.gain.value = Math.min(2, (cfg().inputVolume ?? 100) / 100);
+    const gate = ctx.createGain();
+    gate.gain.value = 1;
+    const dst = ctx.createMediaStreamDestination();
+    src.connect(preGain);
+    preGain.connect(analyser); // tap before the gate → sees speech even when muted
+    preGain.connect(gate);
+    gate.connect(dst);
+    void ctx.resume();
+    const out = dst.stream.getAudioTracks()[0];
+    micChain = {
+      ctx,
+      analyser,
+      data: new Uint8Array(analyser.frequencyBinCount),
+      preGain,
+      gate,
+      out,
+      dispose: () => {
+        try { src.disconnect(); preGain.disconnect(); gate.disconnect(); } catch { /* gone */ }
+        void ctx.close();
+      },
+    };
+    startGateLoop();
+    return out;
+  } catch (e) {
+    // No Web Audio (ancient WebView): send the source as-is. Mute then falls
+    // back to toggling the device track, exactly like before.
+    console.warn("[voice] mic processing chain unavailable:", e);
+    return source;
+  }
+}
+
+function disposeMicChain() {
+  if (gateTimer) { clearInterval(gateTimer); gateTimer = null; }
+  micChain?.dispose();
+  micChain = null;
   rnnoiseDispose?.();
   rnnoiseDispose = null;
-  if (!cfg().rnnoise) return raw;
-  try {
-    const { createRnnoiseTrack } = await import("./rnnoise");
-    const { track, dispose } = await createRnnoiseTrack(raw);
-    rnnoiseDispose = dispose;
-    console.info("[voice] RNNoise active on the outgoing mic");
-    return track;
-  } catch (e) {
-    console.warn("[voice] RNNoise unavailable — using the raw mic:", e);
-    return raw;
-  }
+  if (st().speakingWhileMuted) st().set({ speakingWhileMuted: false });
+}
+
+// Noise gate + "you're talking while muted" detection, ~30ms tick.
+function startGateLoop() {
+  if (gateTimer) clearInterval(gateTimer);
+  gateTimer = setInterval(() => {
+    const chain = micChain;
+    if (!chain) return;
+    chain.analyser.getByteTimeDomainData(chain.data);
+    let peak = 0;
+    for (const v of chain.data) peak = Math.max(peak, Math.abs(v - 128) / 128);
+
+    const now = performance.now();
+    const s = cfg();
+    const muted = st().muted || st().deafened;
+    const ptt = s.voiceMode === "ptt";
+    const thresh = gateThreshold();
+
+    // Talking into a muted mic → surface a hint (cleared after ~2s of quiet).
+    if (muted && peak > Math.max(thresh, 0.04)) lastMutedTalkAt = now;
+    const talkingMuted = muted && now - lastMutedTalkAt < 2000;
+    if (talkingMuted !== st().speakingWhileMuted) st().set({ speakingWhileMuted: talkingMuted });
+
+    // Gate: PTT gates by the key, voice-activity gates by level (with a hold
+    // so short pauses between words don't chop the tail off).
+    let open: boolean;
+    if (muted) open = false;
+    else if (ptt) open = pttDown;
+    else if (thresh <= 0) open = true; // sensitivity 100% = gate disabled
+    else {
+      if (peak > thresh) lastLoudAt = now;
+      open = now - lastLoudAt < 320;
+    }
+    const target = open ? 1 : 0;
+    if (Math.abs(chain.gate.gain.value - target) > 0.01) {
+      chain.gate.gain.setTargetAtTime(target, chain.ctx.currentTime, open ? 0.005 : 0.05);
+    }
+  }, 30);
 }
 
 async function buildMic() {
   const raw = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
   micRawTrack = raw.getAudioTracks()[0];
-  micStream.addTrack(await processedMicTrack(micRawTrack));
+  micStream.addTrack(await buildMicChain(micRawTrack));
   applyMicState();
 }
+
 function applyMicState() {
   if (!micRawTrack) return;
   const ptt = cfg().voiceMode === "ptt";
   // Deafen implies mute (you can't hear them — they shouldn't hear you).
-  // Toggling the RAW track works with RNNoise too: a disabled source feeds
-  // silence into the worklet, so the processed output goes silent as well.
-  micRawTrack.enabled = !st().muted && !st().deafened && (!ptt || pttDown);
+  const live = !st().muted && !st().deafened && (!ptt || pttDown);
+  if (micChain) {
+    // Hard mute at the sender; the device track stays live so the analyser can
+    // still tell you that you're talking into a muted mic.
+    micChain.out.enabled = live;
+    micRawTrack.enabled = true;
+  } else {
+    micRawTrack.enabled = live; // no chain → original behaviour
+  }
 }
+
 export function setInputVolume(percent: number) {
-  cfg().set({ inputVolume: percent }); // (gain only applies in the mic-test monitor)
+  cfg().set({ inputVolume: percent });
+  if (micChain) micChain.preGain.gain.value = Math.min(2, percent / 100);
 }
+
 export async function refreshMic() {
   if (!st().channelId || !micRawTrack) return;
   const oldRaw = micRawTrack;
   const oldOut = micStream.getAudioTracks()[0] ?? oldRaw;
   const raw = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
   micRawTrack = raw.getAudioTracks()[0];
-  const next = await processedMicTrack(micRawTrack);
+  const next = await buildMicChain(micRawTrack);
   micStream.removeTrack(oldOut);
   micStream.addTrack(next);
   peers.forEach((p) => {
@@ -217,8 +338,9 @@ function createPeer(socketId: string, userId: string): Peer {
     // imperceptibly, right after connecting.
     if (pc.connectionState === "connected" && !peer.micKicked) {
       peer.micKicked = true;
-      if (micRawTrack && !st().muted && !st().deafened) {
-        micRawTrack.enabled = false;
+      const sent = micChain?.out ?? micRawTrack;
+      if (sent && !st().muted && !st().deafened) {
+        sent.enabled = false;
         setTimeout(() => applyMicState(), 60);
       }
     }
@@ -475,11 +597,11 @@ export async function leaveVoice() {
   peers.clear();
   pendingTracks.length = 0;
   micStream.getTracks().forEach((t) => { t.stop(); micStream.removeTrack(t); });
-  // With RNNoise the raw mic track isn't in micStream — stop it explicitly so
-  // the mic indicator light actually goes off, and tear down the audio graph.
+  // The raw device track isn't in micStream (the chain's output is), so stop it
+  // explicitly — otherwise the mic indicator light stays on — and tear down the
+  // processing graph.
   micRawTrack?.stop();
-  rnnoiseDispose?.();
-  rnnoiseDispose = null;
+  disposeMicChain();
   micRawTrack = null;
   screenStream?.getTracks().forEach((t) => t.stop());
   cameraStream?.getTracks().forEach((t) => t.stop());

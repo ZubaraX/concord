@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSettings, type ScreenFps, type ScreenResolution } from "../store/settings";
-import { listDevices, refreshMic, setInputVolume, startMicTest } from "../lib/voice";
+import { listDevices, refreshMic, setInputVolume, startMicTest, gateThreshold } from "../lib/voice";
 import { previewSound } from "../lib/sound";
 import { useI18n } from "../lib/i18n";
 
@@ -114,8 +114,21 @@ export default function VoiceSettings() {
           >
             {testing ? t("vset.stopTest") : t("vset.testMic")}
           </button>
-          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-discord-deep">
-            <div className="h-full rounded-full bg-discord-green transition-[width] duration-75" style={{ width: `${Math.min(level * 140, 100)}%` }} />
+          {/* Level bar with the noise-gate threshold marked: below the mark the
+              mic doesn't transmit (voice-activity mode). */}
+          <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-discord-deep">
+            <div
+              className={`h-full rounded-full transition-[width] duration-75 ${
+                level > gateThreshold() ? "bg-discord-green" : "bg-discord-faint"
+              }`}
+              style={{ width: `${Math.min(level * 140, 100)}%` }}
+            />
+            {s.voiceMode === "vad" && gateThreshold() > 0 && (
+              <span
+                className="absolute inset-y-0 w-0.5 bg-white/70"
+                style={{ left: `${Math.min(gateThreshold() * 140, 100)}%` }}
+              />
+            )}
           </div>
         </div>
       </Card>
@@ -139,8 +152,12 @@ export default function VoiceSettings() {
           </p>
         )}
         <Toggle label={t("vset.agc")} checked={s.autoGainControl} onChange={(v) => onProcessingChange({ autoGainControl: v })} />
-        {s.noiseSuppression && (
-          <Slider label={t("vset.micSensitivity")} unit="%" min={0} max={100} value={s.micSensitivity} onChange={(v) => s.set({ micSensitivity: v })} />
+        {/* The gate only applies in voice-activity mode (PTT gates by the key). */}
+        {s.voiceMode === "vad" && (
+          <>
+            <Slider label={t("vset.micSensitivity")} unit="%" min={0} max={100} value={s.micSensitivity} onChange={(v) => s.set({ micSensitivity: v })} />
+            <p className="text-xs text-discord-faint">{t("vset.micSensitivityHelp")}</p>
+          </>
         )}
       </Card>
       </div>

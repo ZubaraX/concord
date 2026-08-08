@@ -77,6 +77,7 @@ function AudioSink({ stream, userId, volKey }: { stream: MediaStream; userId: st
   const { outputVolume, outputDeviceId } = useSettings();
   const deafened = useVoice((s) => s.deafened);
   const userVol = useVoiceVolumes((s) => s.volumes[volKey ?? userId] ?? 100);
+  const locallyMuted = useVoiceVolumes((s) => !!s.muted[userId]); // silenced just for me
   useEffect(() => {
     if (ref.current) {
       ref.current.srcObject = stream;
@@ -87,9 +88,9 @@ function AudioSink({ stream, userId, volKey }: { stream: MediaStream; userId: st
     const el = ref.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
     if (!el) return;
     // Combine the global output volume with this user's personal volume (local only).
-    el.volume = deafened ? 0 : Math.min((outputVolume / 100) * (userVol / 100), 1);
+    el.volume = deafened || locallyMuted ? 0 : Math.min((outputVolume / 100) * (userVol / 100), 1);
     if (outputDeviceId && el.setSinkId) el.setSinkId(outputDeviceId).catch(() => {});
-  }, [outputVolume, outputDeviceId, userVol, deafened]);
+  }, [outputVolume, outputDeviceId, userVol, deafened, locallyMuted]);
   return <audio ref={ref} autoPlay />;
 }
 

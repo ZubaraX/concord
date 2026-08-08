@@ -12,6 +12,8 @@ import Avatar from "./Avatar";
 import {
   SpeakerIcon,
   ScreenIcon,
+  MicIcon,
+  MicOffIcon,
   EyeIcon,
   EyeOffIcon,
   UserIcon,
@@ -47,6 +49,8 @@ export default function VoiceUserPopover({
 
   const volumes = useVoiceVolumes((s) => s.volumes);
   const setVolume = useVoiceVolumes((s) => s.setVolume);
+  const toggleMuted = useVoiceVolumes((s) => s.toggleMuted);
+  const locallyMuted = useVoiceVolumes((s) => !!s.muted[userId]);
   const voiceVol = volumes[userId] ?? 100;
   const screenVol = volumes[screenVolKey(userId)] ?? 100;
 
@@ -112,18 +116,32 @@ export default function VoiceUserPopover({
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{name}</span>
       </div>
 
+      {/* Local mute — silences this person for me only. */}
+      <button
+        onClick={() => toggleMuted(userId)}
+        className={`mb-2 flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs ${
+          locallyMuted
+            ? "bg-discord-danger/20 text-discord-danger"
+            : "bg-discord-card text-discord-text hover:bg-discord-hover"
+        }`}
+      >
+        {locallyMuted ? <MicOffIcon size={14} /> : <MicIcon size={14} />}
+        {locallyMuted ? t("voice.localUnmute") : t("voice.localMute")}
+      </button>
+
       {/* Voice volume */}
       <label className="flex items-center justify-between text-xs text-discord-muted">
         <span>{t("voice.userVolume")}</span>
-        <span className="tabular-nums">{voiceVol}%</span>
+        <span className="tabular-nums">{locallyMuted ? "—" : `${voiceVol}%`}</span>
       </label>
-      <div className="mb-2 flex items-center gap-2">
+      <div className={`mb-2 flex items-center gap-2 ${locallyMuted ? "opacity-40" : ""}`}>
         <SpeakerIcon size={13} className="shrink-0 text-discord-faint" />
         <input
           type="range"
           min={0}
           max={200}
           value={voiceVol}
+          disabled={locallyMuted}
           onChange={(e) => setVolume(userId, Number(e.target.value))}
           className="h-1.5 w-full accent-discord-accent"
         />

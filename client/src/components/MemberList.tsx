@@ -10,6 +10,7 @@ import { useNotify } from "../store/notify";
 import { useI18n } from "../lib/i18n";
 import type { Guild, GuildMember, PresenceStatus, User } from "../types";
 import { memberHasPermission, Permissions } from "../lib/permissions";
+import { roleColor, topRole } from "../lib/roles";
 import Avatar from "./Avatar";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import MemberRolesPopover from "./MemberRolesPopover";
@@ -44,6 +45,20 @@ export default function MemberList() {
   const withStatus = (m: GuildMember): PresenceStatus => presence[m.user.id] ?? m.user.status ?? "OFFLINE";
   const online = guild.members.filter((m) => withStatus(m) !== "OFFLINE");
   const offline = guild.members.filter((m) => withStatus(m) === "OFFLINE");
+
+  // Online members are grouped under their highest "hoisted" role (roles with
+  // "show separately" on), highest role first, then everyone else.
+  const hoisted = [...(guild.roles ?? [])]
+    .filter((r) => r.hoist && !r.isDefault)
+    .sort((a, b) => b.position - a.position);
+  const groups: { key: string; title: string; members: GuildMember[] }[] = [];
+  const placed = new Set<string>();
+  for (const role of hoisted) {
+    const members = online.filter((m) => !placed.has(m.id) && topRole(m.roles, { hoisted: true })?.id === role.id);
+    members.forEach((m) => placed.add(m.id));
+    if (members.length) groups.push({ key: role.id, title: `${role.name} — ${members.length}`, members });
+  }
+  const rest = online.filter((m) => !placed.has(m.id));
 
   async function openDMWith(u: User, call = false) {
     try {
@@ -102,7 +117,10 @@ export default function MemberList() {
         )}
       >
         <div className="flex-1 overflow-y-auto px-2 py-4">
-          <Section title={`${t("members.online")} — ${online.length}`} members={online} status={withStatus} onMenu={rowMenu} />
+          {groups.map((g) => (
+            <Section key={g.key} title={g.title} members={g.members} status={withStatus} onMenu={rowMenu} />
+          ))}
+          <Section title={`${t("members.online")} — ${rest.length}`} members={rest} status={withStatus} onMenu={rowMenu} />
           <Section title={`${t("members.offline")} — ${offline.length}`} members={offline} status={withStatus} onMenu={rowMenu} dim />
         </div>
         {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.user)} onClose={() => setMenu(null)} />}
@@ -138,7 +156,7 @@ function Section({
     <div className="mb-4">
       <div className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-discord-muted">{title}</div>
       {members.map((m) => {
-        const top = m.roles?.find((r) => !r.isDefault && r.color);
+        const color = roleColor(m.roles);
         return (
           <div
             key={m.id}
@@ -147,7 +165,7 @@ function Section({
             className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-discord-hover ${dim ? "opacity-50" : ""}`}
           >
             <Avatar user={m.user} size={32} status={status(m)} />
-            <span className="truncate text-sm font-medium" style={{ color: top?.color }}>
+            <span className="truncate text-sm font-medium" style={{ color }}>
               {m.nickname ?? m.user.displayName ?? m.user.username}
             </span>
           </div>

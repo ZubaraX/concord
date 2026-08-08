@@ -14,6 +14,7 @@ interface VoiceStore {
   muted: boolean;
   deafened: boolean; // silence ALL incoming audio (also forces mic off)
   pttActive: boolean; // push-to-talk key currently held
+  speakingWhileMuted: boolean; // you're talking but the mic is off → show a hint
   netStats: { rtt: number; loss: number } | null; // worst peer RTT (ms) + loss %
   joinedAt: number | null; // when we joined the call (for the duration timer)
   stageOpen: boolean; // the big voice-stage view is visible (hides floating tiles)
@@ -36,6 +37,7 @@ export const useVoice = create<VoiceStore>((set) => ({
   muted: false,
   deafened: false,
   pttActive: false,
+  speakingWhileMuted: false,
   netStats: null,
   joinedAt: null,
   stageOpen: false,

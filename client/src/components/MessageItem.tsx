@@ -10,6 +10,7 @@ import { serverPath } from "../lib/serverUrl";
 import type { Attachment, Guild, LinkEmbed, Message } from "../types";
 import Avatar from "./Avatar";
 import { renderMarkdown, type EmojiMap } from "../lib/markdown";
+import { roleColor } from "../lib/roles";
 import { useI18n } from "../lib/i18n";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import InviteCard from "./InviteCard";
@@ -125,6 +126,11 @@ function MessageItem({
   const channelList = useMemo(
     () => (guild?.channels ?? []).filter((c) => c.type === "TEXT").map((c) => ({ id: c.id, name: c.name })),
     [guild?.channels]
+  );
+  // Author name painted in their top role's color, like Discord.
+  const authorColor = useMemo(
+    () => roleColor(guild?.members?.find((m) => m.user.id === message.author.id)?.roles),
+    [guild?.members, message.author.id]
   );
 
   // Only real mice/trackpads trigger hover — touch taps synthesize a
@@ -343,7 +349,11 @@ function MessageItem({
       <div className="min-w-0 flex-1">
         {!grouped && (
           <div className="flex items-baseline gap-2">
-            <button onClick={() => openProfile(message.author.id)} className="font-medium text-white hover:underline">
+            <button
+              onClick={() => openProfile(message.author.id)}
+              style={authorColor ? { color: authorColor } : undefined}
+              className="font-medium text-white hover:underline"
+            >
               {message.author.displayName ?? message.author.username}
             </button>
             <span className="text-xs text-discord-faint">

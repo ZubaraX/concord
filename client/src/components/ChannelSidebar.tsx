@@ -346,7 +346,7 @@ const prettyKey = (code: string) => code.replace(/^Key|^Digit/, "");
 function VoiceControlBar({ channelName }: { channelName: string }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const { t } = useI18n();
-  const { connState: conn, muted, deafened, pttActive, netStats, screenOn, cameraOn } = useVoice();
+  const { connState: conn, muted, deafened, pttActive, netStats, screenOn, cameraOn, speakingWhileMuted } = useVoice();
   const { voiceMode, pttKey } = useSettings();
   const status =
     conn === "failed"
@@ -429,6 +429,17 @@ function VoiceControlBar({ channelName }: { channelName: string }) {
           <MicIcon size={12} />
           {pttActive ? "Передача…" : `PTT — ${prettyKey(pttKey)}`}
         </div>
+      )}
+
+      {/* "You're talking but your mic is off" — the analyser taps the mic
+          before the mute, so we can actually tell. */}
+      {speakingWhileMuted && (
+        <button
+          onClick={toggleMute}
+          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md bg-discord-danger/20 py-1 text-[11px] font-medium text-discord-danger"
+        >
+          <MicOffIcon size={12} /> {t("voice.mutedHint")}
+        </button>
       )}
 
       {emojiOpen && (

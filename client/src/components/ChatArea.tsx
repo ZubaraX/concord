@@ -513,6 +513,16 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
             )}
             {messages.map((m, i) => (
               <div key={m.id} className="cc-fade-up">
+                {/* Date divider whenever the calendar day changes. */}
+                {!sameDay(messages[i - 1]?.createdAt, m.createdAt) && (
+                  <div className="my-3 flex items-center gap-2 px-4">
+                    <div className="h-px flex-1 bg-white/10" />
+                    <span className="shrink-0 text-[11px] font-semibold text-discord-faint">
+                      {dayLabel(m.createdAt, t)}
+                    </span>
+                    <div className="h-px flex-1 bg-white/10" />
+                  </div>
+                )}
                 {firstUnreadId === m.id && (
                   <div className="my-1 flex items-center gap-2 px-4">
                     <div className="h-px flex-1 bg-discord-danger/60" />
@@ -648,6 +658,29 @@ function Welcome({ name, isDM }: { name: string; isDM: boolean }) {
       </p>
     </div>
   );
+}
+
+// ── Date dividers ──────────────────────────────────────────────────────────
+function sameDay(a: string | undefined, b: string): boolean {
+  if (!a) return false; // no previous message → always show the divider
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+  return (
+    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate()
+  );
+}
+
+function dayLabel(iso: string, t: (k: "chat.today" | "chat.yesterday") => string): string {
+  const d = new Date(iso);
+  const midnight = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((midnight(new Date()) - midnight(d)) / 86400_000);
+  if (days === 0) return t("chat.today");
+  if (days === 1) return t("chat.yesterday");
+  return d.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+  });
 }
 
 function isGrouped(prev: Msg | undefined, cur: Msg): boolean {
