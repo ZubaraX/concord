@@ -264,12 +264,32 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
       pendingInitialScroll.current = undefined;
       const jump = () => {
         const el = target ? document.getElementById(`msg-${target}`) : null;
-        if (el) el.scrollIntoView({ block: "start" });
+        if (el) {
+          el.scrollIntoView({ block: "start" });
+          return;
+        }
+        // Nothing unread → land on the true bottom. Setting scrollTop directly
+        // beats scrollIntoView on a sentinel: images/embeds finishing later
+        // grow the list, and this always re-pins to the very end.
+        const box = scrollRef.current;
+        if (box) box.scrollTop = box.scrollHeight;
         else bottomRef.current?.scrollIntoView();
       };
       requestAnimationFrame(jump);
       setTimeout(jump, 80);
       setTimeout(jump, 250);
+      setTimeout(jump, 600); // late-loading images/embeds
+      // Also re-pin as each image finishes loading, for the first second.
+      if (!target) {
+        const box = scrollRef.current;
+        const stopAt = Date.now() + 4000;
+        const onMedia = (e: Event) => {
+          if (Date.now() > stopAt || !atBottomRef.current) return;
+          if ((e.target as HTMLElement)?.tagName === "IMG" && box) box.scrollTop = box.scrollHeight;
+        };
+        box?.addEventListener("load", onMedia, true); // capture: <img> load doesn't bubble
+        setTimeout(() => box?.removeEventListener("load", onMedia, true), 4000);
+      }
       atBottomRef.current = true;
       setAtBottom(true);
       return;
@@ -335,7 +355,9 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
           {t("msg.dropFiles")}
         </div>
       )}
-      <header className="flex h-12 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
+      {/* key → the header re-mounts per channel so its title fades in together
+          with the message list, making the switch read as one movement. */}
+      <header key={currentChannelId} className="cc-head-in flex h-12 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
         <button
           onClick={() => {
             // Desktop in a stage call: toggle the hidden channel sidebar;

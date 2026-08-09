@@ -295,13 +295,29 @@ body {
 }
 .fx-full .cc-badge { animation: cc-badge-pulse 2.4s ease-in-out infinite; }
 
-/* full: switching chats gets a soft slide-fade (the scroll container is
-   re-keyed per channel, so this plays exactly once per switch). */
+/* Switching chats gets a soft slide-fade (the scroll container is re-keyed per
+   channel, so this plays exactly once per switch). Available at "reduced" too —
+   it's the transition that makes channel switching feel smooth rather than
+   snapping — and off entirely at "off". */
 @keyframes cc-chat-in {
-  from { opacity: 0; transform: translateX(10px); }
+  from { opacity: 0; transform: translate3d(14px, 0, 0); }
+  60% { opacity: 1; }
   to { opacity: 1; transform: none; }
 }
-.fx-full .cc-chat-in { animation: cc-chat-in 0.16s ease-out both; }
+.cc-chat-in {
+  animation: cc-chat-in 0.26s cubic-bezier(0.22, 0.7, 0.25, 1) both;
+  will-change: transform, opacity;
+}
+.fx-off .cc-chat-in { animation: none; }
+
+/* The channel header/title crossfades with the messages so the whole pane
+   reads as one movement instead of parts popping in separately. */
+@keyframes cc-head-in {
+  from { opacity: 0; transform: translate3d(0, -4px, 0); }
+  to { opacity: 1; transform: none; }
+}
+.cc-head-in { animation: cc-head-in 0.24s ease-out both; }
+.fx-off .cc-head-in { animation: none; }
 
 /* ── «Объём»: soft gradients + elevation on core surfaces. Overrides the flat
    Tailwind color utilities app-wide, so every accent/danger button, card and
