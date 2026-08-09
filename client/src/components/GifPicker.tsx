@@ -49,12 +49,15 @@ export default function GifPicker({
   const busy = useRef(false);
 
   useEffect(() => {
+    // Embedded (inside the phone sheet): the sheet's own backdrop closes it.
+    // Keeping this handler would close the whole sheet when you tap its tabs.
+    if (embedded) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
-  }, [onClose]);
+  }, [onClose, embedded]);
 
   const fetchPage = useCallback(async (query: string, pg: number, append: boolean) => {
     if (busy.current) return;

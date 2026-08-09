@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import { getSocket } from "../lib/socket";
@@ -417,10 +418,20 @@ export default function Composer({
         {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} guildId={currentGuildId} />}
         {showGif && <GifPicker onPick={sendGif} onClose={() => setShowGif(false)} />}
 
-        {/* Phones: emoji + GIF share one panel with tabs. */}
-        {mobilePick && (
-          <div className="cc-pop absolute bottom-12 right-0 z-50 flex h-[26rem] max-h-[60vh] w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-lg bg-discord-rail shadow-xl ring-1 ring-black/40 sm:hidden">
-            <div className="flex shrink-0 gap-1 border-b border-black/30 p-1.5">
+        {/* Phones: emoji + GIF share one sheet with tabs. Rendered through a
+            portal as a fixed bottom sheet — as an absolutely-positioned child
+            of the composer row it was laid out against the wrong ancestor, so
+            it drifted over the chat, and taps fell through to whatever was
+            underneath. The backdrop now swallows those taps. */}
+        {mobilePick &&
+          createPortal(
+            <>
+              <div
+                className="fixed inset-0 z-[88] bg-black/50 sm:hidden"
+                onClick={() => setMobilePick(null)}
+              />
+              <div className="cc-sheet fixed inset-x-0 bottom-0 z-[89] flex h-[60vh] max-h-[26rem] flex-col overflow-hidden rounded-t-2xl bg-discord-rail pb-[env(safe-area-inset-bottom)] shadow-2xl ring-1 ring-black/40 sm:hidden">
+                <div className="flex shrink-0 gap-1 border-b border-black/30 p-1.5">
               {(["emoji", "gif"] as const).map((k) => (
                 <button
                   key={k}
@@ -454,8 +465,10 @@ export default function Composer({
                 onClose={() => setMobilePick(null)}
               />
             )}
-          </div>
-        )}
+              </div>
+            </>,
+            document.body
+          )}
       </div>
 
       {attachMenu && (

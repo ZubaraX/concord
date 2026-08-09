@@ -517,11 +517,29 @@ function MessageItem({
       {/* Quick actions on hover (desktop). Everything else — copy, pin,
           bookmark, delete… — is on right-click. */}
       {hover && !editing && !menu && (
-        <div className="absolute right-3 top-0 flex items-center gap-1 rounded bg-discord-rail shadow ring-1 ring-black/30">
-          <button onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setPicker(picker ? null : { x: Math.max(8, r.left - 240), y: r.bottom + 4 }); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title={t("msg.addReaction")}>😀</button>
-          <button onClick={() => onReply(message)} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title={t("common.reply")}>↩️</button>
+        <div className="absolute right-3 top-0 flex items-center gap-0.5 rounded-md bg-discord-rail p-0.5 shadow ring-1 ring-black/30">
+          <button
+            onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setPicker(picker ? null : { x: Math.max(8, r.left - 240), y: r.bottom + 4 }); }}
+            className="flex h-7 w-7 items-center justify-center rounded text-discord-muted transition hover:bg-discord-hover hover:text-white"
+            title={t("msg.addReaction")}
+          >
+            <SmileIcon size={16} />
+          </button>
+          <button
+            onClick={() => onReply(message)}
+            className="flex h-7 w-7 items-center justify-center rounded text-discord-muted transition hover:bg-discord-hover hover:text-white"
+            title={t("common.reply")}
+          >
+            <ReplyIcon size={16} />
+          </button>
           {mine && (
-            <button onClick={() => { setDraft(message.content); setEditing(true); }} className="px-2 py-1 text-sm text-discord-muted hover:text-white" title={t("common.edit")}>✏️</button>
+            <button
+              onClick={() => { setDraft(message.content); setEditing(true); }}
+              className="flex h-7 w-7 items-center justify-center rounded text-discord-muted transition hover:bg-discord-hover hover:text-white"
+              title={t("common.edit")}
+            >
+              <PencilIcon size={16} />
+            </button>
           )}
         </div>
       )}

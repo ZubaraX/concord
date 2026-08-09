@@ -36,6 +36,9 @@ export default function EmojiPicker({
   const customEmojis = guild?.emojis ?? [];
 
   useEffect(() => {
+    // Embedded in the phone sheet → the sheet's backdrop owns closing, and this
+    // handler would fire when tapping the sheet's own tabs.
+    if (embedded) return;
     const onDown = (e: Event) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
@@ -48,7 +51,7 @@ export default function EmojiPicker({
       window.removeEventListener("pointerdown", onDown);
       window.removeEventListener("keydown", onKey);
     };
-  }, [onClose]);
+  }, [onClose, embedded]);
 
   // Anchored (reaction) mode: fixed position clamped to the viewport, so it's
   // always fully visible regardless of where the message is.
