@@ -6,6 +6,32 @@ const fs = require("node:fs");
 const { execFile } = require("node:child_process");
 const { autoUpdater } = require("electron-updater");
 
+// One running copy only. Without this a relaunch (update, or just opening the
+// app again while it sits in the tray) started a SECOND process: two tray
+// icons, and two clients rotating the same refresh token — which revoked it
+// and threw the user back to the login screen.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    // Someone launched us again → surface the window we already have.
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      if (!win.isVisible()) win.show();
+      win.focus();
+    } else {
+      createWindow();
+    }
+  });
+}
+
+// Quitting for real (update install, tray → Выйти, OS shutdown) must not be
+// intercepted by the "hide to tray" close handler.
+app.on("before-quit", () => {
+  app.isQuitting = true;
+});
+
 // Expose the real installed version to the renderer (so the "What's New" screen
 // matches the actual running build). Registered before any window loads.
 ipcMain.on("app:getVersion", (e) => {
@@ -411,6 +437,8 @@ app.whenReady().then(() => {
       // install silently and relaunch into the new version.
       setTimeout(() => {
         try {
+          app.isQuitting = true; // let the window actually close (tray handler)
+          tray?.destroy(); // otherwise the old icon lingers next to the new one
           autoUpdater.quitAndInstall(true, true);
         } catch {
           installing = false;
