@@ -1,6 +1,6 @@
 // Concord desktop shell (Electron). Loads the built React app and connects to
 // whatever server URL the user configures in-app (e.g. a Codespaces URL).
-const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain, screen, nativeImage } = require("electron");
+const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain, screen, nativeImage, Menu, MenuItem } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFile } = require("node:child_process");
@@ -163,7 +163,36 @@ function createWindow() {
       nodeIntegration: false,
       // Required for getUserMedia/getDisplayMedia in the renderer.
       backgroundThrottling: false,
+      // Red squiggles + suggestions while typing messages.
+      spellcheck: true,
     },
+  });
+
+  // Spell-check the languages the app is actually used in.
+  try {
+    const langs = win.webContents.session.availableSpellCheckerLanguages ?? [];
+    const wanted = ["ru", "en-US"].filter((l) => langs.includes(l));
+    if (wanted.length) win.webContents.session.setSpellCheckerLanguages(wanted);
+  } catch (e) {
+    console.warn("[spellcheck] unavailable:", e);
+  }
+
+  // Right-click inside a text field → dictionary suggestions + "add to
+  // dictionary", appended to whatever the web app shows.
+  win.webContents.on("context-menu", (_e, params) => {
+    if (!params.isEditable || !params.misspelledWord) return;
+    const menu = new Menu();
+    for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+      menu.append(new MenuItem({ label: suggestion, click: () => win.webContents.replaceMisspelling(suggestion) }));
+    }
+    if (params.dictionarySuggestions.length) menu.append(new MenuItem({ type: "separator" }));
+    menu.append(
+      new MenuItem({
+        label: "Добавить в словарь",
+        click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      })
+    );
+    menu.popup();
   });
 
   if (DEV_URL) {

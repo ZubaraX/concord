@@ -31,6 +31,10 @@ model User {
   pronouns      String?
   resetCode     String?
   resetExpires  DateTime?
+  // Device-independent app preferences (theme, language, sounds, voice mode…)
+  // so they follow the account across desktop/Android/web. Device pickers
+  // (mic/speaker ids) deliberately stay local.
+  settingsJson  String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

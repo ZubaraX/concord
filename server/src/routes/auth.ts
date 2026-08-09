@@ -184,6 +184,31 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ user: publicUser(user) });
   });
 
+  // ── Synced app settings ────────────────────────────────────────────────────
+  // Device-independent preferences follow the account across desktop/Android/
+  // web. Stored as an opaque JSON blob — the client owns the shape, so adding
+  // a preference never needs a migration.
+  app.get("/settings", { preHandler: authenticate }, async (req) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { settingsJson: true },
+    });
+    try {
+      return { settings: user?.settingsJson ? JSON.parse(user.settingsJson) : null };
+    } catch {
+      return { settings: null }; // corrupt blob → behave like "never synced"
+    }
+  });
+
+  app.put("/settings", { preHandler: authenticate }, async (req, reply) => {
+    const body = z.object({ settings: z.record(z.string(), z.unknown()) }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
+    const json = JSON.stringify(body.data.settings);
+    if (json.length > 20_000) return reply.code(413).send({ error: "Settings blob too large" });
+    await prisma.user.update({ where: { id: req.userId }, data: { settingsJson: json } });
+    return reply.send({ ok: true });
+  });
+
   // ── Active sessions (devices) ──────────────────────────────────────────────
   // Each live refresh token = one signed-in device. The client sends its own
   // refresh token in a header so we can mark "this device".

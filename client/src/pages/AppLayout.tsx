@@ -36,6 +36,7 @@ import { useShare } from "../store/share";
 import { useI18n } from "../lib/i18n";
 import { isMuted } from "../store/mutes";
 import { loadReadStates } from "../lib/lastRead";
+import { initSettingsSync } from "../lib/settingsSync";
 import { initGameActivity } from "../lib/gameActivity";
 import { MenuIcon, UsersIcon, GearIcon } from "../components/Icons";
 
@@ -84,6 +85,7 @@ export default function AppLayout() {
     socket.on("connect", restorePresence);
     if (socket.connected) restorePresence();
     loadReadStates(); // pull server-synced unread markers (cross-device)
+    initSettingsSync(); // preferences follow the account across devices
     initGameActivity(); // desktop: mirror the running game into the status
     initShareListener((s) => useShare.getState().set(s)); // Share → Concord
     // Invite link tapped outside the app → join the server right away.
