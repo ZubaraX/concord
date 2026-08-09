@@ -224,8 +224,20 @@ let tray = null;
 function createTray() {
   if (tray) return tray;
   try {
-    const image = fs.existsSync(ICON) ? nativeImage.createFromPath(ICON) : nativeImage.createEmpty();
-    tray = new Tray(image.isEmpty() ? image : image.resize({ width: 16, height: 16 }));
+    // build/icon.ico is NOT packaged (electron-builder only ships dist/ and
+    // dist-electron/), which made the tray icon come out empty/transparent.
+    // Vite copies public/icon.png into dist/, so that one always exists.
+    const candidates = [
+      path.join(__dirname, "..", "dist", "icon.png"),
+      path.join(__dirname, "..", "public", "icon.png"), // dev
+      ICON,
+    ];
+    const found = candidates.find((p) => fs.existsSync(p));
+    if (!found) throw new Error("no icon file found for the tray");
+    const image = nativeImage.createFromPath(found);
+    // 16px is the Windows tray slot; skip resizing .ico (it holds several
+    // sizes already and resizing can blank it out).
+    tray = new Tray(found.endsWith(".ico") ? image : image.resize({ width: 16, height: 16 }));
     tray.setToolTip("Concord");
     tray.setContextMenu(
       Menu.buildFromTemplate([

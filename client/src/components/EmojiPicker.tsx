@@ -22,11 +22,13 @@ export default function EmojiPicker({
   onClose,
   guildId,
   anchor,
+  embedded,
 }: {
   onPick: (e: string) => void;
   onClose: () => void;
   guildId?: string | null;
   anchor?: { x: number; y: number }; // when set, render fixed & clamped (reactions)
+  embedded?: boolean; // rendered inside the mobile combined picker
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // Reuses the guild query already cached elsewhere — no extra fetch.
@@ -63,7 +65,9 @@ export default function EmojiPicker({
       ref={ref}
       style={anchored}
       className={
-        anchored
+        embedded
+          ? "min-h-0 w-full flex-1 overflow-y-auto p-2"
+          : anchored
           ? "cc-pop z-[80] max-h-72 w-72 overflow-y-auto rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40"
           : "cc-pop absolute bottom-12 right-0 z-50 max-h-72 w-72 overflow-y-auto rounded-lg bg-discord-rail p-2 shadow-xl ring-1 ring-black/40"
       }

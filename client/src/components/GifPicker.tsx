@@ -27,7 +27,15 @@ const CATEGORIES: { emoji: string; term: string; key: TKey }[] = [
 
 // GIF search popover (KLIPY via the server proxy) with category browsing and
 // infinite scroll. Picking one sends it.
-export default function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; onClose: () => void }) {
+export default function GifPicker({
+  onPick,
+  onClose,
+  embedded,
+}: {
+  onPick: (url: string) => void;
+  onClose: () => void;
+  embedded?: boolean; // rendered inside the mobile combined picker
+}) {
   const { t } = useI18n();
   const [q, setQ] = useState("");
   const [gifs, setGifs] = useState<Gif[]>([]);
@@ -99,7 +107,11 @@ export default function GifPicker({ onPick, onClose }: { onPick: (url: string) =
   return (
     <div
       ref={ref}
-      className="cc-pop absolute bottom-12 right-0 z-50 flex h-[30rem] max-h-[70vh] w-[26rem] max-w-[calc(100vw-1.5rem)] flex-col rounded-lg bg-discord-rail p-3 shadow-xl ring-1 ring-black/40"
+      className={
+        embedded
+          ? "flex min-h-0 w-full flex-1 flex-col p-2"
+          : "cc-pop absolute bottom-12 right-0 z-50 flex h-[30rem] max-h-[70vh] w-[26rem] max-w-[calc(100vw-1.5rem)] flex-col rounded-lg bg-discord-rail p-3 shadow-xl ring-1 ring-black/40"
+      }
     >
       <input
         autoFocus

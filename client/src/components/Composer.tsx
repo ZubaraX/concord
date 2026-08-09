@@ -59,6 +59,8 @@ export default function Composer({
   const [value, setValue] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  // Phones: one button opens a tabbed emoji/GIF panel (keeps room for send).
+  const [mobilePick, setMobilePick] = useState<"emoji" | "gif" | null>(null);
   const [attachMenu, setAttachMenu] = useState<{ x: number; y: number } | null>(null);
   const [showPoll, setShowPoll] = useState(false);
   const [showStickers, setShowStickers] = useState(false);
@@ -379,16 +381,25 @@ export default function Composer({
         >
           <MicIcon size={20} />
         </button>
+        {/* Desktop: separate GIF and emoji buttons. Phones: one button with
+            tabs inside, so the row leaves room for the send button. */}
         <button
           onClick={() => setShowGif((v) => !v)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+          className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text sm:flex"
           title={t("composer.gif")}
         >
           GIF
         </button>
         <button
           onClick={() => setShowEmoji((v) => !v)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+          className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text sm:flex"
+          title={t("composer.emoji")}
+        >
+          <SmileIcon size={22} />
+        </button>
+        <button
+          onClick={() => setMobilePick((v) => (v ? null : "emoji"))}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg leading-none text-discord-muted hover:bg-discord-hover hover:text-discord-text sm:hidden"
           title={t("composer.emoji")}
         >
           <SmileIcon size={22} />
@@ -405,6 +416,46 @@ export default function Composer({
         </button>
         {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} guildId={currentGuildId} />}
         {showGif && <GifPicker onPick={sendGif} onClose={() => setShowGif(false)} />}
+
+        {/* Phones: emoji + GIF share one panel with tabs. */}
+        {mobilePick && (
+          <div className="cc-pop absolute bottom-12 right-0 z-50 flex h-[26rem] max-h-[60vh] w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-lg bg-discord-rail shadow-xl ring-1 ring-black/40 sm:hidden">
+            <div className="flex shrink-0 gap-1 border-b border-black/30 p-1.5">
+              {(["emoji", "gif"] as const).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setMobilePick(k)}
+                  className={`flex-1 rounded px-3 py-1.5 text-sm font-medium ${
+                    mobilePick === k ? "bg-discord-card text-white" : "text-discord-muted"
+                  }`}
+                >
+                  {k === "emoji" ? t("composer.emoji") : t("composer.gif")}
+                </button>
+              ))}
+              <button
+                onClick={() => setMobilePick(null)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-discord-muted hover:text-white"
+                aria-label={t("common.close")}
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+            {mobilePick === "emoji" ? (
+              <EmojiPicker
+                embedded
+                guildId={currentGuildId}
+                onPick={(e) => insertEmoji(e)}
+                onClose={() => setMobilePick(null)}
+              />
+            ) : (
+              <GifPicker
+                embedded
+                onPick={(url) => { sendGif(url); setMobilePick(null); }}
+                onClose={() => setMobilePick(null)}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {attachMenu && (
