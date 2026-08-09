@@ -298,7 +298,14 @@ function createPeer(socketId: string, userId: string): Peer {
   peers.set(socketId, peer);
 
   addStreamToPeer(pc, micStream);
-  if (screenStream) addStreamToPeer(pc, screenStream);
+  if (screenStream) {
+    addStreamToPeer(pc, screenStream);
+    // Someone joining mid-share otherwise stays on the default (low) bitrate
+    // and sees a blurry screen — only peers present at toggleScreen() time
+    // were being tuned.
+    const st0 = screenStream.getVideoTracks()[0];
+    setTimeout(() => tuneVideoSender(pc, st0, screenBitrate()), 400);
+  }
   if (cameraStream) addStreamToPeer(pc, cameraStream);
 
   pc.ontrack = (e) => {
@@ -604,10 +611,12 @@ export async function leaveVoice() {
   disposeMicChain();
   micRawTrack = null;
   screenStream?.getTracks().forEach((t) => t.stop());
+  // Android capture runs in a native foreground service — stopping the canvas
+  // track alone left MediaProjection (and its notification) running after the
+  // call ended.
+  if (screenStream && isAndroidApp()) stopAndroidScreenStream();
   cameraStream?.getTracks().forEach((t) => t.stop());
-  cameraFxDispose?.();
-  cameraFxDispose = null;
-  cameraRawTrack?.stop(); // the raw camera isn't in cameraStream when blurring
+  cameraRawTrack?.stop();
   cameraRawTrack = null;
   screenStream = null;
   cameraStream = null;
@@ -711,49 +720,15 @@ function cameraConstraints(facing: "user" | "environment"): MediaTrackConstraint
   return { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
 }
 
-// ── camera background effects ──────────────────────────────────────────────
+// The camera track is sent straight to the peers. (A MediaPipe background-blur
+// stage lived here in 0.23–0.28; it cost far more CPU than it was worth — the
+// whole app stuttered while it ran — so the camera is raw again.)
 let cameraRawTrack: MediaStreamTrack | null = null;
-let cameraFxDispose: (() => void) | null = null;
-
-// Wrap the raw camera in the background effect when it's enabled; on any
-// failure (model can't load, weak device) fall back to the untouched camera.
-async function applyCameraEffect(raw: MediaStreamTrack): Promise<MediaStreamTrack> {
-  cameraFxDispose?.();
-  cameraFxDispose = null;
-  if (cfg().videoBackground !== "blur") return raw;
-  try {
-    const { createBlurredCameraTrack } = await import("./videoEffects");
-    const fx = await createBlurredCameraTrack(raw);
-    cameraFxDispose = fx.dispose;
-    return fx.track;
-  } catch (e) {
-    console.warn("[voice] background blur unavailable — sending the raw camera:", e);
-    return raw;
-  }
-}
-
-/** Re-apply the background setting to a live camera (called from Settings). */
-export async function refreshCameraEffect() {
-  if (!st().cameraOn || !cameraStream || !cameraRawTrack) return;
-  const oldOut = cameraStream.getVideoTracks()[0];
-  const next = await applyCameraEffect(cameraRawTrack);
-  if (next === oldOut) return;
-  cameraStream.removeTrack(oldOut);
-  cameraStream.addTrack(next);
-  if (oldOut !== cameraRawTrack) oldOut.stop();
-  peers.forEach((p) => {
-    const sender = p.pc.getSenders().find((se) => se.track === oldOut);
-    sender?.replaceTrack(next);
-  });
-  st().set({ localCamera: cameraStream }); // nudge the local preview
-}
 
 export async function toggleCamera() {
   if (st().cameraOn) {
     if (cameraStream) removeStreamFromPeers(cameraStream);
     cameraStream?.getTracks().forEach((t) => t.stop());
-    cameraFxDispose?.();
-    cameraFxDispose = null;
     cameraRawTrack?.stop();
     cameraRawTrack = null;
     cameraStream = null;
@@ -771,7 +746,7 @@ export async function toggleCamera() {
     return;
   }
   cameraRawTrack = rawCam.getVideoTracks()[0];
-  cameraStream = new MediaStream([await applyCameraEffect(cameraRawTrack)]);
+  cameraStream = new MediaStream([cameraRawTrack]);
   cameraRawTrack.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
   st().set({ cameraOn: true, localCamera: cameraStream, cameraFacing });
   broadcastStreamKinds();
@@ -802,8 +777,7 @@ export async function flipCamera() {
   st().set({ cameraFacing: next });
   const oldRaw = cameraRawTrack;
   cameraRawTrack = raw.getVideoTracks()[0];
-  // Rebuild the effect around the new camera (no-op when it's off).
-  const newTrack = await applyCameraEffect(cameraRawTrack);
+  const newTrack = cameraRawTrack;
   const oldTrack = cameraStream.getVideoTracks()[0];
   if (oldTrack) cameraStream.removeTrack(oldTrack);
   cameraStream.addTrack(newTrack);

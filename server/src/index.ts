@@ -60,20 +60,6 @@ async function main() {
   mkdirSync(uploadDir, { recursive: true });
   await app.register(fastifyStatic, { root: uploadDir, prefix: "/uploads/" });
 
-  // Camera background blur: the MediaPipe model + wasm (~6 MB) are served
-  // straight out of node_modules instead of being bundled into the desktop /
-  // Android builds, which would bloat every release for an optional feature.
-  const mediapipeDir = resolve("../node_modules/@mediapipe/selfie_segmentation");
-  if (existsSync(join(mediapipeDir, "selfie_segmentation.js"))) {
-    await app.register(fastifyStatic, {
-      root: mediapipeDir,
-      prefix: "/mediapipe/",
-      decorateReply: false,
-      cacheControl: true,
-      maxAge: 604800_000, // a week — the files are versioned by the package
-    });
-  }
-
   // Web client: the VPS deploy builds client/dist next to the server — serve
   // it at / so Concord works in any browser via the plain HTTPS link. Missing
   // locally (dev uses Vite on :5173), so this is conditional.

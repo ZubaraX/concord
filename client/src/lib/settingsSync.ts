@@ -20,7 +20,6 @@ const SYNCED_KEYS = [
   "micSensitivity",
   "voiceMode",
   "pttKey",
-  "videoBackground",
   "screenResolution",
   "screenFps",
   "screenAudio",

@@ -1,6 +1,6 @@
 {
   "name": "@concord/client",
-  "version": "0.28.1",
+  "version": "0.29.0",
   "private": true,
   "description": "Concord desktop client",
   "author": "Concord",
@@ -44,8 +44,6 @@
     "zustand": "^5.0.2"
   },
   "dependencies": {
-    "@mediapipe/selfie_segmentation": "^0.1.1675465747",
-    "@mediapipe/tasks-vision": "^1.0.1",
     "@sapphi-red/web-noise-suppressor": "^0.3.5"
   }
 }
