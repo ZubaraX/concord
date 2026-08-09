@@ -24,7 +24,10 @@ export default function Modal({
   // the drawer" and skew the whole overlay (the crooked roles panel on PC).
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      /* Above the full-screen settings surface (z-60) — the crop dialog opens
+         from inside it, and at z-50 it was rendered underneath, which looked
+         like avatar/banner upload silently doing nothing. */
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
       onMouseDown={onClose}
     >
       <div

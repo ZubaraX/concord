@@ -5,7 +5,7 @@ import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n";
 import { useUI } from "../store/ui";
 import { searchEmoji } from "../lib/emojiNames";
-import { PaperclipIcon, SmileIcon, XIcon, MicIcon, BarChartIcon, ClockIcon, StickerIcon } from "./Icons";
+import { PaperclipIcon, SmileIcon, XIcon, MicIcon, BarChartIcon, ClockIcon, StickerIcon, SendIcon } from "./Icons";
 import type { UploadedFile } from "../api/client";
 import type { Guild, Message, ScheduledMessage } from "../types";
 import EmojiPicker from "./EmojiPicker";
@@ -392,6 +392,16 @@ export default function Composer({
           title={t("composer.emoji")}
         >
           <SmileIcon size={22} />
+        </button>
+        {/* Send button on every platform — Enter still works, but a visible
+            button is the obvious way to send on touch screens. */}
+        <button
+          onClick={send}
+          disabled={uploading || (!value.trim() && attachments.length === 0)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-discord-accent text-white transition hover:brightness-110 disabled:bg-transparent disabled:text-discord-faint"
+          title={t("composer.send")}
+        >
+          <SendIcon size={19} />
         </button>
         {showEmoji && <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} guildId={currentGuildId} />}
         {showGif && <GifPicker onPick={sendGif} onClose={() => setShowGif(false)} />}

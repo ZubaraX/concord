@@ -302,6 +302,14 @@ export const CopyIcon = ({ className, size }: P) =>
     </>
   ));
 
+export const SendIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4Z" />
+    </>
+  ));
+
 export const ReplyIcon = ({ className, size }: P) =>
   svg(size, className, (
     <>

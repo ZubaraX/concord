@@ -49,7 +49,7 @@ export default function ContextMenu({
   if (sheet) {
     // Portaled to <body>: ancestor transforms/overflow can't displace it.
     return createPortal(
-      <div className="fixed inset-0 z-[70] flex items-end bg-black/40" onClick={onClose} onContextMenu={(e) => e.preventDefault()}>
+      <div className="fixed inset-0 z-[85] flex items-end bg-black/40" onClick={onClose} onContextMenu={(e) => e.preventDefault()}>
         <div
           ref={ref}
           onClick={(e) => e.stopPropagation()}
@@ -86,7 +86,7 @@ export default function ContextMenu({
       style={{ left, top, width: W }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
-      className="cc-pop fixed z-[80] rounded-md bg-discord-rail p-1 shadow-xl ring-1 ring-black/40"
+      className="cc-pop fixed z-[85] rounded-md bg-discord-rail p-1 shadow-xl ring-1 ring-black/40"
     >
       {items.map((it, i) => (
         <button

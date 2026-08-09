@@ -552,7 +552,9 @@ export default function ChatArea({ onOpenNav }: { onOpenNav?: () => void }) {
             </button>
           )}
 
-          <div className="px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pb-6">
+          {/* Sits a little lower so the input isn't crowded against the last
+              message; the phone keeps its safe-area inset on top of that. */}
+          <div className="px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-4 sm:pb-7">
             {pendingShare && (
               <div className="mb-2 flex items-center gap-2 rounded-lg bg-discord-card px-3 py-2 text-sm">
                 <span className="shrink-0 text-discord-muted">📤 {t("share.received")}:</span>

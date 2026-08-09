@@ -81,9 +81,17 @@ export default function FriendsPage({ onOpenNav }: { onOpenNav?: () => void }) {
               {tab === "online" ? t("friends.online") : t("friends.all")} — {list.length}
             </h3>
             {list.map((f) => (
-              <div key={f.id} className="flex items-center gap-3 rounded px-2 py-2 hover:bg-discord-hover">
-                {/* The row itself opens the profile — the action buttons stop
-                    the click so they still do their own thing. */}
+              <div
+                key={f.id}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  openProfile(f.user.id); // right-click / long-press → profile
+                }}
+                className="flex items-center gap-2 rounded px-2 py-2 hover:bg-discord-hover sm:gap-3"
+              >
+                {/* The row itself opens the profile; the action buttons keep
+                    their own jobs. min-w-0 lets long names shrink instead of
+                    pushing the buttons off a phone screen. */}
                 <button
                   onClick={() => openProfile(f.user.id)}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
@@ -97,7 +105,11 @@ export default function FriendsPage({ onOpenNav }: { onOpenNav?: () => void }) {
                     </div>
                   </div>
                 </button>
-                <IconBtn title={t("profile.viewProfile")} onClick={() => openProfile(f.user.id)}><UserIcon size={16} /></IconBtn>
+                {/* On phones the row tap already opens the profile, so that
+                    button is desktop-only and the rest shrink. */}
+                <IconBtn title={t("profile.viewProfile")} onClick={() => openProfile(f.user.id)} className="max-sm:hidden">
+                  <UserIcon size={16} />
+                </IconBtn>
                 <IconBtn title={t("profile.message")} onClick={() => openOrCreateDM(f.user.id)}><MessageIcon size={16} /></IconBtn>
                 <IconBtn title={t("voice.call")} onClick={() => openOrCreateDM(f.user.id, true)}><PhoneIcon size={16} /></IconBtn>
               </div>
@@ -213,9 +225,23 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-function IconBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+function IconBtn({
+  title,
+  onClick,
+  children,
+  className = "",
+}: {
+  title: string;
+  onClick: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <button onClick={onClick} title={title} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-discord-rail text-discord-muted hover:text-white">
+    <button
+      onClick={onClick}
+      title={title}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-discord-rail text-discord-muted hover:text-white max-sm:h-8 max-sm:w-8 ${className}`}
+    >
       {children}
     </button>
   );
