@@ -304,6 +304,7 @@ function createPeer(socketId: string, userId: string): Peer {
     // and sees a blurry screen — only peers present at toggleScreen() time
     // were being tuned.
     const st0 = screenStream.getVideoTracks()[0];
+    if (st0) preferScreenCodec(pc, st0);
     setTimeout(() => tuneVideoSender(pc, st0, screenBitrate()), 400);
   }
   if (cameraStream) addStreamToPeer(pc, cameraStream);
@@ -702,12 +703,20 @@ export async function toggleScreen() {
   }
   const vt = screenStream.getVideoTracks()[0];
   if (vt) {
-    try { (vt as MediaStreamTrack & { contentHint: string }).contentHint = "detail"; } catch { /* ignore */ }
+    // "detail" keeps text crisp (slides, code); at 60fps+ the user is clearly
+    // sharing something moving (a game/video), where smoothness wins.
+    try {
+      (vt as MediaStreamTrack & { contentHint: string }).contentHint =
+        (cfg().screenFps ?? 30) >= 60 ? "motion" : "detail";
+    } catch { /* ignore */ }
     vt.addEventListener("ended", () => { if (st().screenOn) toggleScreen(); });
   }
   st().set({ screenOn: true, localScreen: screenStream });
   broadcastStreamKinds(); // announce kind BEFORE tracks arrive at peers
-  peers.forEach((p) => addStreamToPeer(p.pc, screenStream!));
+  peers.forEach((p) => {
+    addStreamToPeer(p.pc, screenStream!);
+    if (vt) preferScreenCodec(p.pc, vt); // before negotiation kicks in
+  });
   // Raise the screen-share bitrate cap so fullscreen stays sharp.
   setTimeout(() => peers.forEach((p) => tuneVideoSender(p.pc, vt, screenBitrate())), 300);
 }
@@ -790,15 +799,46 @@ export async function flipCamera() {
   cameraRawTrack.addEventListener("ended", () => { if (st().cameraOn) toggleCamera(); });
 }
 
+// Ceiling for the screen-share encoder. These are upper bounds, not targets:
+// WebRTC's congestion control always backs off to what the link can carry, so
+// a generous cap only removes an artificial limit on sharpness. Doubling the
+// frame rate roughly doubles the bits needed for the same clarity.
 function screenBitrate(): number {
-  switch (cfg().screenResolution) {
-    case "720p": return 4_000_000;
-    case "1080p": return 8_000_000;
-    case "1440p": return 16_000_000;
-    case "4k": return 32_000_000;
-    default: return 20_000_000;
+  const s = cfg();
+  const base =
+    s.screenResolution === "720p" ? 6_000_000 :
+    s.screenResolution === "1080p" ? 12_000_000 :
+    s.screenResolution === "1440p" ? 24_000_000 :
+    s.screenResolution === "4k" ? 45_000_000 :
+    30_000_000; // "source" — unknown size, assume large
+  const fps = s.screenFps ?? 30;
+  const fpsFactor = fps >= 120 ? 2 : fps >= 60 ? 1.6 : 1;
+  return Math.round(base * fpsFactor);
+}
+
+// Screen content compresses far better with VP9/AV1 than with VP8/H264 (sharp
+// text and flat areas), so ask for those first. Must run before the offer is
+// created — i.e. synchronously after addTrack.
+function preferScreenCodec(pc: RTCPeerConnection, track: MediaStreamTrack) {
+  try {
+    const caps = RTCRtpSender.getCapabilities?.("video");
+    if (!caps?.codecs?.length) return;
+    const rank = (mime: string) => {
+      const m = mime.toLowerCase();
+      if (m.endsWith("/vp9")) return 0; // best quality/CPU balance for screens
+      if (m.endsWith("/av1")) return 1;
+      if (m.endsWith("/vp8")) return 2;
+      if (m.endsWith("/h264")) return 3;
+      return 9; // rtx/red/ulpfec must stay in the list
+    };
+    const ordered = [...caps.codecs].sort((a, b) => rank(a.mimeType) - rank(b.mimeType));
+    const tr = pc.getTransceivers().find((t) => t.sender.track === track);
+    tr?.setCodecPreferences?.(ordered);
+  } catch {
+    /* older WebRTC stack — keep the browser's default order */
   }
 }
+
 async function tuneVideoSender(pc: RTCPeerConnection, track: MediaStreamTrack | undefined, maxBitrate: number) {
   if (!track) return;
   const sender = pc.getSenders().find((s) => s.track === track);
@@ -806,7 +846,13 @@ async function tuneVideoSender(pc: RTCPeerConnection, track: MediaStreamTrack | 
   try {
     const params = sender.getParameters();
     if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
-    params.encodings[0].maxBitrate = maxBitrate;
+    const enc = params.encodings[0];
+    enc.maxBitrate = maxBitrate;
+    enc.scaleResolutionDownBy = 1; // never send a downscaled copy
+    (enc as RTCRtpEncodingParameters & { networkPriority?: string }).networkPriority = "high";
+    (enc as RTCRtpEncodingParameters & { priority?: string }).priority = "high";
+    if (track === screenStream?.getVideoTracks()[0]) enc.maxFramerate = cfg().screenFps;
+    // Sharpness over smoothness: drop frames before shrinking the picture.
     params.degradationPreference = "maintain-resolution";
     await sender.setParameters(params);
   } catch { /* best effort */ }
