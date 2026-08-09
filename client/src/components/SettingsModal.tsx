@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../store/auth";
 import { useSettings } from "../store/settings";
 import { useI18n, LANGUAGES, type Lang } from "../lib/i18n";
@@ -8,7 +9,7 @@ import { getServerUrl, setServerUrl, serverPinned, serverPath } from "../lib/ser
 import { uploadFile } from "../api/client";
 import { maybeCompressImage } from "../lib/imageCompress";
 import type { PresenceStatus } from "../types";
-import Modal from "./Modal";
+import { XIcon } from "./Icons";
 import Avatar from "./Avatar";
 import VoiceSettings from "./VoiceSettings";
 import SecuritySettings from "./SecuritySettings";
@@ -106,15 +107,23 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     setMsg("Server URL saved — reconnect by reloading.");
   }
 
-  return (
-    <Modal title={t("settings.title")} onClose={onClose} wide>
-      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-black/20 pb-3">
-        <Tab active={tab === "profile"} onClick={() => setTab("profile")}>{t("settings.tab.profile")}</Tab>
-        <Tab active={tab === "voice"} onClick={() => setTab("voice")}>{t("settings.tab.voice")}</Tab>
-        <Tab active={tab === "app"} onClick={() => setTab("app")}>{t("settings.tab.app")}</Tab>
-        <Tab active={tab === "security"} onClick={() => setTab("security")}>{t("settings.tab.security")}</Tab>
-      </div>
+  const NAV: { id: typeof tab; icon: string; label: string }[] = [
+    { id: "profile", icon: "👤", label: t("settings.tab.profile") },
+    { id: "voice", icon: "🎙", label: t("settings.tab.voice") },
+    { id: "app", icon: "🎨", label: t("settings.tab.app") },
+    { id: "security", icon: "🔒", label: t("settings.tab.security") },
+  ];
 
+  // Full-screen settings (Discord-style): a section rail on the left, the
+  // scrollable pane on the right. Phones get the rail as a top strip.
+  return (
+    <SettingsShell
+      nav={NAV}
+      tab={tab}
+      setTab={setTab}
+      title={NAV.find((n) => n.id === tab)?.label ?? t("settings.title")}
+      onClose={onClose}
+    >
       {tab === "voice" ? (
         <VoiceSettings />
       ) : tab === "security" ? (
@@ -344,18 +353,75 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           }}
         />
       )}
-    </Modal>
+    </SettingsShell>
   );
 }
 
-function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 whitespace-nowrap rounded px-3 py-1.5 text-sm font-medium ${active ? "bg-discord-card text-white" : "text-discord-muted hover:text-white"}`}
-    >
-      {children}
-    </button>
+// Full-screen settings surface: section rail (left on desktop, top strip on
+// phones) + scrollable content, Esc to close — the Discord layout.
+function SettingsShell<T extends string>({
+  nav,
+  tab,
+  setTab,
+  title,
+  onClose,
+  children,
+}: {
+  nav: { id: T; icon: string; label: string }[];
+  tab: T;
+  setTab: (t: T) => void;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex flex-col bg-discord-bg sm:flex-row">
+      {/* Sections */}
+      <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-black/30 bg-discord-sidebar p-2 sm:w-56 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r sm:p-3 sm:pt-6">
+        <div className="hidden px-2 pb-2 text-[11px] font-bold uppercase tracking-wide text-discord-faint sm:block">
+          {title}
+        </div>
+        {nav.map((n) => (
+          <button
+            key={n.id}
+            onClick={() => setTab(n.id)}
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded px-3 py-2 text-left text-sm font-medium transition sm:w-full ${
+              tab === n.id
+                ? "bg-discord-active text-white"
+                : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
+            }`}
+          >
+            <span className="text-base leading-none">{n.icon}</span>
+            {n.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* Content */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-3xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10 sm:py-10">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <h2 className="text-xl font-bold text-white">{title}</h2>
+            <button
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-discord-faint/40 text-discord-muted transition hover:bg-discord-hover hover:text-white"
+              aria-label="Close"
+              title="Esc"
+            >
+              <XIcon size={18} />
+            </button>
+          </div>
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
