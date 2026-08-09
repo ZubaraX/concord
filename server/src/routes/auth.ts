@@ -12,6 +12,7 @@ import {
 import { config } from "../config.js";
 import { sendMail } from "../lib/mail.js";
 import { emitToGuild } from "../services/guilds.js";
+import { visibleStatus } from "../lib/presence.js";
 
 const credentials = z.object({
   email: z.string().email(),
@@ -55,6 +56,12 @@ function publicUser(u: AnyUser) {
     customStatus: u.customStatus ?? null,
     pronouns: u.pronouns ?? null,
     status: u.status ?? "OFFLINE",
+    // Your own pick, so the picker shows "Невидимка" instead of the OFFLINE
+    // everyone else sees. Sent back as OFFLINE to match the picker's options.
+    presenceChoice:
+      (u as { presenceChoice?: string }).presenceChoice === "INVISIBLE"
+        ? "OFFLINE"
+        : (u as { presenceChoice?: string }).presenceChoice ?? "ONLINE",
   };
 }
 
@@ -165,7 +172,16 @@ export async function authRoutes(app: FastifyInstance) {
       .safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
 
-    const user = await prisma.user.update({ where: { id: req.userId }, data: body.data });
+    // Picking a status stores the CHOICE (so it survives sign-out) and the
+    // visible value derived from it — "Не в сети" means invisible, i.e. the
+    // user stays connected but reads as offline to everyone else.
+    const { status: picked, ...profile } = body.data;
+    const data: Record<string, unknown> = { ...profile };
+    if (picked) {
+      data.presenceChoice = picked === "OFFLINE" ? "INVISIBLE" : picked;
+      data.status = visibleStatus(data.presenceChoice as string);
+    }
+    const user = await prisma.user.update({ where: { id: req.userId }, data });
 
     // Push the change to every guild the user is in so member lists update live.
     const memberships = await prisma.guildMember.findMany({
@@ -175,9 +191,10 @@ export async function authRoutes(app: FastifyInstance) {
     for (const m of memberships) emitToGuild(m.guildId, "user:update", { guildId: m.guildId });
     // A manual status change (e.g. DND) must also hit the live presence maps,
     // otherwise the connect-time ONLINE keeps overriding it in member lists.
-    if (body.data.status) {
+    if (picked) {
+      // Broadcast the visible value, not the raw pick (invisible → offline).
       for (const m of memberships) {
-        emitToGuild(m.guildId, "presence:update", { userId: req.userId, status: body.data.status });
+        emitToGuild(m.guildId, "presence:update", { userId: req.userId, status: user.status });
       }
     }
 

@@ -26,7 +26,12 @@ model User {
   bannerUrl     String?
   accentColor   String?
   bio           String?
+  // `status` = what everyone currently sees (maintained by the gateway:
+  // the chosen presence while connected, OFFLINE once the last socket drops).
+  // `presenceChoice` = what the user actually picked and keeps between
+  // sessions: ONLINE | IDLE | DND | INVISIBLE.
   status        String   @default("OFFLINE")
+  presenceChoice String  @default("ONLINE")
   customStatus  String?
   pronouns      String?
   resetCode     String?

@@ -30,11 +30,14 @@ export default function UserPanel() {
 
   const setStatus = (status: PresenceStatus) => {
     setStatusOpen(false);
-    // Remember the choice so it's restored on the next app launch (otherwise
-    // the disconnect-on-close flips everyone to OFFLINE/invisible).
-    localStorage.setItem("concord.presence", status);
+    // The server stores the choice (presenceChoice) and restores it on every
+    // connect, so nothing needs remembering on this device.
     updateProfile({ status }).catch(() => {});
   };
+
+  // Show what *you* picked: an invisible user must see "Невидимка", not the
+  // OFFLINE that everyone else sees.
+  const myChoice = (user.presenceChoice ?? user.status ?? "ONLINE") as PresenceStatus;
 
   const STATUSES: { value: PresenceStatus; dot: string; label: string }[] = [
     { value: "ONLINE", dot: "bg-discord-green", label: t("status.online") },
@@ -46,7 +49,7 @@ export default function UserPanel() {
   return (
     <div ref={ref} className="relative flex items-center gap-2 bg-discord-rail px-2 py-1.5">
       <button onClick={() => setStatusOpen((v) => !v)} title={t("status.online") + " / " + t("status.dnd")} className="rounded-full">
-        <Avatar user={user} size={32} status={user.status ?? "ONLINE"} />
+        <Avatar user={user} size={32} status={myChoice} />
       </button>
       <div className="min-w-0 flex-1 leading-tight">
         <div className="truncate text-sm font-semibold text-white">
@@ -71,7 +74,7 @@ export default function UserPanel() {
               key={s.value}
               onClick={() => setStatus(s.value)}
               className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm ${
-                (user.status ?? "ONLINE") === s.value ? "bg-discord-active text-white" : "text-discord-text hover:bg-discord-hover"
+                myChoice === s.value ? "bg-discord-active text-white" : "text-discord-text hover:bg-discord-hover"
               }`}
             >
               <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} />

@@ -20,7 +20,8 @@ export interface User {
   bio?: string | null;
   customStatus?: string | null;
   pronouns?: string | null;
-  status?: PresenceStatus;
+  status?: PresenceStatus; // what others see (OFFLINE while disconnected/invisible)
+  presenceChoice?: PresenceStatus; // your own pick — only present on /me
 }
 
 export interface Channel {

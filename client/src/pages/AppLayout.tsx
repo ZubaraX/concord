@@ -75,15 +75,9 @@ export default function AppLayout() {
     initVoice();
     requestNotifyPermission();
     startPushService(); // Android: background notifications (no-op elsewhere)
-    // Re-assert the user's last chosen status on every (re)connect — the
-    // server flips everyone to OFFLINE on disconnect, so without this a chosen
-    // "Online"/"DND"/"Invisible" would read as invisible on the next launch.
-    const restorePresence = () => {
-      const saved = localStorage.getItem("concord.presence");
-      if (saved) useAuth.getState().updateProfile({ status: saved as never }).catch(() => {});
-    };
-    socket.on("connect", restorePresence);
-    if (socket.connected) restorePresence();
+    // The server now remembers the chosen presence (User.presenceChoice) and
+    // restores it on connect, so the client no longer re-asserts it — that
+    // race is what made a chosen status flicker or reset between devices.
     loadReadStates(); // pull server-synced unread markers (cross-device)
     initSettingsSync(); // preferences follow the account across devices
     initGameActivity(); // desktop: mirror the running game into the status
@@ -107,7 +101,6 @@ export default function AppLayout() {
       joinInvite(webInvite[1]);
     }
     return () => {
-      socket.off("connect", restorePresence);
       disconnectSocket();
     };
   }, []);

@@ -30,6 +30,18 @@ export function isOnline(userId: string): boolean {
   return sockets.has(userId);
 }
 
+/**
+ * What other people should see, given the user's own choice. "Invisible" is a
+ * choice that reads as OFFLINE to everyone else — which is exactly why the
+ * choice can't be stored in `status` itself (an invisible user would be
+ * indistinguishable from a disconnected one and get flipped back to ONLINE on
+ * the next connect).
+ */
+export function visibleStatus(choice: string | null | undefined): string {
+  if (!choice || choice === "INVISIBLE") return "OFFLINE";
+  return choice;
+}
+
 export function onlineUserIds(): string[] {
   return [...sockets.keys()];
 }
