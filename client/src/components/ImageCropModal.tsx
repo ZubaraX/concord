@@ -44,6 +44,15 @@ export default function ImageCropModal({
   const drawnW = img ? img.naturalWidth * scale : 0;
   const drawnH = img ? img.naturalHeight * scale : 0;
 
+  // Start centered: without this the photo sat pinned to the top-left corner,
+  // so every avatar/banner needed manual dragging before it looked right.
+  useEffect(() => {
+    if (!img) return;
+    const w = img.naturalWidth * base;
+    const h = img.naturalHeight * base;
+    setOffset({ x: (FRAME_W - w) / 2, y: (FRAME_H - h) / 2 });
+  }, [img, base, FRAME_W, FRAME_H]);
+
   // Keep the image covering the frame (clamp the pan).
   function clamp(x: number, y: number) {
     const minX = FRAME_W - drawnW;

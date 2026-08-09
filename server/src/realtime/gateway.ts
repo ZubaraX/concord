@@ -50,10 +50,16 @@ function finishCallSession(channelId: string) {
       });
       if (!channel) return;
       let content: string | null = null;
-      if (sess.participants.size >= 2) content = `📞 Звонок завершён · ${fmtCallDuration(dur)}`;
-      else if (!channel.guildId && dur >= 3000) content = "📞 Пропущенный звонок";
-      if (!content) return;
-      const message = await createMessage({ channelId, authorId: sess.starterId, content });
+      let systemType: string | null = null;
+      if (sess.participants.size >= 2) {
+        content = `Звонок завершён · ${fmtCallDuration(dur)}`;
+        systemType = "CALL_ENDED";
+      } else if (!channel.guildId && dur >= 3000) {
+        content = "Пропущенный звонок";
+        systemType = "CALL_MISSED";
+      }
+      if (!content || !systemType) return;
+      const message = await createMessage({ channelId, authorId: sess.starterId, content, systemType });
       await broadcastNewMessage(message);
     } catch {
       /* a missing call log must never break voice teardown */
@@ -108,11 +114,16 @@ export function attachGateway(app: FastifyInstance) {
         // notify:call event carries the caller's name so the recipient can ring
         // WITHOUT already having this DM in their client-side cache (they might
         // have only ever been in guilds).
+        const session = callSessions.get(channelId);
         for (const p of channel.dmParticipants) {
           io.to(userRoom(p.id)).emit("voice:state", payload);
           const inCall = userIds.includes(p.id);
           const caller = channel.dmParticipants.find((o) => o.id !== p.id && userIds.includes(o.id));
-          if (userIds.length > 0 && !inCall && caller) {
+          // Ring only someone who hasn't taken part in THIS call yet. Without
+          // this, hanging up while the other side is still connected made the
+          // server re-announce an "incoming call" to the person who just left.
+          const alreadyParticipated = session?.participants.has(p.id) ?? false;
+          if (userIds.length > 0 && !inCall && !alreadyParticipated && caller) {
             io.to(userRoom(p.id)).emit("notify:call", {
               channelId,
               name: caller.displayName ?? caller.username,

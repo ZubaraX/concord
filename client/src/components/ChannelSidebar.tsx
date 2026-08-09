@@ -11,7 +11,7 @@ import { useSpeaking, type SpeakStream } from "../lib/speaking";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../store/auth";
 import { isAndroidApp } from "../lib/platform";
-import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon, ChevronDownIcon, UserPlusIcon, TrashIcon, PlusIcon, CheckIcon } from "./Icons";
+import { MicIcon, MicOffIcon, CameraIcon, FlipCameraIcon, ScreenIcon, PhoneOffIcon, PhoneIcon, SpeakerIcon, SmileIcon, HeadphonesIcon, HeadphonesOffIcon, BellIcon, BellOffIcon, ShieldIcon, GripIcon, ChevronDownIcon, UserPlusIcon, TrashIcon, PlusIcon, CheckIcon, StickerIcon, BarChartIcon } from "./Icons";
 import { markAllRead } from "../lib/lastRead";
 import Modal from "./Modal";
 import { useMutes } from "../store/mutes";
@@ -297,8 +297,8 @@ export default function ChannelSidebar() {
             { label: t("chat.markAllRead"), icon: <CheckIcon size={15} />, onClick: () => { markAllRead(); useUnread.getState().clearAll(); } },
             ...(canManageRoles ? [{ label: t("roles.title"), icon: <ShieldIcon size={15} />, onClick: () => setShowRoles(true) }] : []),
             ...(canManageEmojis ? [{ label: t("emoji.title"), icon: <SmileIcon size={15} />, onClick: () => setShowEmojis(true) }] : []),
-            ...(canManageEmojis ? [{ label: t("sticker.title"), icon: "🩵", onClick: () => setShowStickers(true) }] : []),
-            { label: t("stats.title"), icon: "📊", onClick: () => setShowStats(true) },
+            ...(canManageEmojis ? [{ label: t("sticker.title"), icon: <StickerIcon size={15} />, onClick: () => setShowStickers(true) }] : []),
+            { label: t("stats.title"), icon: <BarChartIcon size={15} />, onClick: () => setShowStats(true) },
             {
               label: mutes.guilds.includes(currentGuildId) ? t("mute.serverOff") : t("mute.server"),
               icon: mutes.guilds.includes(currentGuildId) ? <BellIcon size={15} /> : <BellOffIcon size={15} />,

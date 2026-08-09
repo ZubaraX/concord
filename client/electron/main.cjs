@@ -1,6 +1,6 @@
 // Concord desktop shell (Electron). Loads the built React app and connects to
 // whatever server URL the user configures in-app (e.g. a Codespaces URL).
-const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain, screen, nativeImage, Menu, MenuItem } = require("electron");
+const { app, BrowserWindow, globalShortcut, shell, desktopCapturer, session, ipcMain, screen, nativeImage, Menu, MenuItem, Tray } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFile } = require("node:child_process");
@@ -208,7 +208,58 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // Closing the window parks the app in the tray (calls/notifications keep
+  // running) — "Выйти" in the tray menu is the real quit.
+  win.on("close", (e) => {
+    if (!app.isQuitting && tray) {
+      e.preventDefault();
+      win.hide();
+    }
+  });
   win.on("closed", () => (win = null));
+}
+
+// ── Tray: a visible "Concord is running" indicator + quick actions. ─────────
+let tray = null;
+function createTray() {
+  if (tray) return tray;
+  try {
+    const image = fs.existsSync(ICON) ? nativeImage.createFromPath(ICON) : nativeImage.createEmpty();
+    tray = new Tray(image.isEmpty() ? image : image.resize({ width: 16, height: 16 }));
+    tray.setToolTip("Concord");
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: "Открыть Concord",
+          click: () => {
+            if (!win) return createWindow();
+            win.show();
+            win.focus();
+          },
+        },
+        { type: "separator" },
+        {
+          label: "Выйти",
+          click: () => {
+            app.isQuitting = true;
+            app.quit();
+          },
+        },
+      ])
+    );
+    // Click the icon → show/hide, like most chat apps.
+    tray.on("click", () => {
+      if (!win) return createWindow();
+      if (win.isVisible() && !win.isMinimized()) win.hide();
+      else {
+        win.show();
+        win.focus();
+      }
+    });
+  } catch (e) {
+    console.warn("[tray] unavailable:", e);
+  }
+  return tray;
 }
 
 // Captures whichever screen/window the renderer's picker selected (pendingSourceId),
@@ -306,6 +357,7 @@ function scanGames() {
 app.whenReady().then(() => {
   wireScreenShare();
   createWindow();
+  createTray();
 
   // "Playing …": first scan shortly after launch, then every 45s.
   setTimeout(scanGames, 12 * 1000);
@@ -380,5 +432,7 @@ app.whenReady().then(() => {
 app.on("will-quit", () => globalShortcut.unregisterAll());
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  // With a tray icon the app deliberately outlives its window (that's the
+  // point — it keeps receiving calls); quitting happens via the tray menu.
+  if (process.platform !== "darwin" && !tray) app.quit();
 });

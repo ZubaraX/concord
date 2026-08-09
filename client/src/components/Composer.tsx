@@ -5,7 +5,7 @@ import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n";
 import { useUI } from "../store/ui";
 import { searchEmoji } from "../lib/emojiNames";
-import { PaperclipIcon, SmileIcon, XIcon, MicIcon, BarChartIcon, ClockIcon } from "./Icons";
+import { PaperclipIcon, SmileIcon, XIcon, MicIcon, BarChartIcon, ClockIcon, StickerIcon } from "./Icons";
 import type { UploadedFile } from "../api/client";
 import type { Guild, Message, ScheduledMessage } from "../types";
 import EmojiPicker from "./EmojiPicker";
@@ -405,7 +405,7 @@ export default function Composer({
           items={[
             { label: t("composer.uploadFile"), icon: <PaperclipIcon size={15} />, onClick: () => fileInput.current?.click() },
             ...(currentGuildId
-              ? [{ label: t("sticker.title"), icon: "🩵", onClick: () => setShowStickers(true) }]
+              ? [{ label: t("sticker.title"), icon: <StickerIcon size={15} />, onClick: () => setShowStickers(true) }]
               : []),
             { label: t("poll.create"), icon: <BarChartIcon size={15} />, onClick: () => setShowPoll(true) },
             { label: t("schedule.title"), icon: <ClockIcon size={15} />, onClick: () => setShowSchedule(true) },

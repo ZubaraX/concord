@@ -302,6 +302,55 @@ export const CopyIcon = ({ className, size }: P) =>
     </>
   ));
 
+export const ReplyIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <polyline points="9 17 4 12 9 7" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </>
+  ));
+
+export const ForwardIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <polyline points="15 17 20 12 15 7" />
+      <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
+    </>
+  ));
+
+export const LinkIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+      <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+    </>
+  ));
+
+export const PencilIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+      <path d="m15 5 4 4" />
+    </>
+  ));
+
+export const StickerIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <path d="M15.5 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h5l9-9V7a4 4 0 0 0-4-4Z" />
+      <path d="M21 12h-5a4 4 0 0 0-4 4v5" />
+    </>
+  ));
+
+export const ThreadIcon = ({ className, size }: P) =>
+  svg(size, className, (
+    <>
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.2A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5Z" />
+      <path d="M8.5 11h8" />
+      <path d="M8.5 14.5h5" />
+    </>
+  ));
+
 export const EyeIcon = ({ className, size }: P) =>
   svg(size, className, (
     <>

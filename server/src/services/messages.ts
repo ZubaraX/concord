@@ -45,6 +45,7 @@ export async function createMessage(opts: {
   replyToId?: string;
   attachments?: AttachmentInput[];
   pollJson?: string; // a poll "message" rides with empty content, see routes/messages.ts
+  systemType?: string; // server-generated record (e.g. "CALL_ENDED") — immutable
 }) {
   const content = opts.content?.trim() ?? "";
   const attachments = opts.attachments ?? [];
@@ -64,6 +65,7 @@ export async function createMessage(opts: {
       content,
       replyToId: opts.replyToId,
       pollJson: opts.pollJson,
+      systemType: opts.systemType,
       attachments: attachments.length
         ? {
             create: attachments.map((a) => ({

@@ -178,6 +178,8 @@ export async function messageRoutes(app: FastifyInstance) {
     const existing = await prisma.message.findUnique({ where: { id: messageId } });
     if (!existing) return reply.code(404).send({ error: "Not found" });
     if (existing.authorId !== req.userId) return reply.code(403).send({ error: "Not your message" });
+    // Call logs and friends are a record of what happened — not editable.
+    if (existing.systemType) return reply.code(403).send({ error: "System messages can't be edited" });
 
     const updated = await prisma.message.update({
       where: { id: messageId },

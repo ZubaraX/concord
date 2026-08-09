@@ -13,6 +13,21 @@ import { renderMarkdown, type EmojiMap } from "../lib/markdown";
 import { roleColor } from "../lib/roles";
 import { useI18n } from "../lib/i18n";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
+import {
+  UserIcon,
+  SmileIcon,
+  ReplyIcon,
+  ForwardIcon,
+  ThreadIcon,
+  CopyIcon,
+  LinkIcon,
+  BookmarkIcon,
+  PinIcon,
+  PencilIcon,
+  TrashIcon,
+  PhoneIcon,
+  PhoneOffIcon,
+} from "./Icons";
 import InviteCard from "./InviteCard";
 import PollView from "./PollView";
 import EmojiPicker from "./EmojiPicker";
@@ -98,7 +113,10 @@ function MessageItem({
   const [editing, setEditing] = useState(false);
   const [forwarding, setForwarding] = useState(false);
   const [draft, setDraft] = useState(message.content);
-  const mine = user?.id === message.author.id;
+  // Legacy call logs (written before systemType existed) still carry the 📞
+  // prefix — treat them as system messages too.
+  const isSystem = !!message.systemType || /^📞\s/.test(message.content);
+  const mine = user?.id === message.author.id && !isSystem;
   const time = new Date(message.createdAt);
   const rowRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
@@ -206,27 +224,29 @@ function MessageItem({
   }
 
   const bookmarked = useBookmarks((s) => s.bookmarks.some((b) => b.id === message.id));
+  // One consistent line-icon set (Icons.tsx), not a mix of emoji.
+  const ICON = 15;
   const menuItems: MenuItem[] = [
-    { label: t("profile.viewProfile"), icon: "👤", onClick: () => openProfile(message.author.id) },
-    { label: t("msg.addReaction"), icon: "😀", onClick: () => { const r = rowRef.current?.getBoundingClientRect(); setPicker(r ? { x: Math.max(8, r.right - 288), y: r.top } : { x: 100, y: 100 }); } },
-    { label: t("common.reply"), icon: "↩️", onClick: () => onReply(message) },
+    { label: t("profile.viewProfile"), icon: <UserIcon size={ICON} />, onClick: () => openProfile(message.author.id) },
+    { label: t("msg.addReaction"), icon: <SmileIcon size={ICON} />, onClick: () => { const r = rowRef.current?.getBoundingClientRect(); setPicker(r ? { x: Math.max(8, r.right - 288), y: r.top } : { x: 100, y: 100 }); } },
+    { label: t("common.reply"), icon: <ReplyIcon size={ICON} />, onClick: () => onReply(message) },
     // Threads exist only in guild text channels, and never nested.
     ...(guildId && !inThread
-      ? [{ label: message.threadId ? t("thread.open") : t("thread.start"), icon: "🧵", onClick: openThread }]
+      ? [{ label: message.threadId ? t("thread.open") : t("thread.start"), icon: <ThreadIcon size={ICON} />, onClick: openThread }]
       : []),
-    { label: t("forward.title"), icon: "↪️", onClick: () => setForwarding(true) },
-    { label: t("msg.copyText"), icon: "📋", onClick: () => copyMessageText(message.content) },
-    ...(firstLink ? [{ label: t("msg.copyLink"), icon: "🔗", onClick: () => copyMessageText(firstLink) }] : []),
+    { label: t("forward.title"), icon: <ForwardIcon size={ICON} />, onClick: () => setForwarding(true) },
+    { label: t("msg.copyText"), icon: <CopyIcon size={ICON} />, onClick: () => copyMessageText(message.content) },
+    ...(firstLink ? [{ label: t("msg.copyLink"), icon: <LinkIcon size={ICON} />, onClick: () => copyMessageText(firstLink) }] : []),
     {
       label: bookmarked ? t("msg.removeBookmark") : t("msg.bookmark"),
-      icon: "🔖",
+      icon: <BookmarkIcon size={ICON} />,
       onClick: () => useBookmarks.getState().toggle(message, useUI.getState().currentGuildId),
     },
-    { label: message.pinned ? t("common.unpin") : t("common.pin"), icon: "📌", onClick: () => setPin(!message.pinned) },
+    { label: message.pinned ? t("common.unpin") : t("common.pin"), icon: <PinIcon size={ICON} />, onClick: () => setPin(!message.pinned) },
     ...(mine
       ? [
-          { label: t("common.edit"), icon: "✏️", onClick: () => { setDraft(message.content); setEditing(true); } },
-          { label: t("common.delete"), icon: "🗑", danger: true, onClick: () => api(`/api/messages/${message.id}`, { method: "DELETE" }).catch(() => {}) },
+          { label: t("common.edit"), icon: <PencilIcon size={ICON} />, onClick: () => { setDraft(message.content); setEditing(true); } },
+          { label: t("common.delete"), icon: <TrashIcon size={ICON} />, danger: true, onClick: () => api(`/api/messages/${message.id}`, { method: "DELETE" }).catch(() => {}) },
         ]
       : []),
   ];
@@ -304,6 +324,30 @@ function MessageItem({
       setBursts((prev) => [...prev, ...parts]);
       setTimeout(() => setBursts((prev) => prev.filter((p) => !parts.some((q) => q.id === p.id))), 800);
     }
+  }
+
+  // System records (call logs) aren't chat messages: no avatar, no author row,
+  // no hover actions, and the server refuses edits/deletes on them.
+  if (isSystem) {
+    const missed = message.systemType === "CALL_MISSED" || /Пропущен/i.test(message.content);
+    return (
+      <div id={`msg-${message.id}`} className="flex items-center gap-2.5 px-4 py-1 text-sm">
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+            missed ? "bg-discord-danger/15 text-discord-danger" : "bg-discord-green/15 text-discord-green"
+          }`}
+        >
+          {missed ? <PhoneOffIcon size={15} /> : <PhoneIcon size={15} />}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-discord-muted">
+          <span className="font-medium text-discord-text">{message.author.displayName ?? message.author.username}</span>{" "}
+          — {message.content.replace(/^📞\s*/, "")}
+        </span>
+        <span className="shrink-0 text-[11px] text-discord-faint">
+          {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </span>
+      </div>
+    );
   }
 
   return (

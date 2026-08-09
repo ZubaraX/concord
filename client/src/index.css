@@ -384,6 +384,21 @@ select {
   color-scheme: dark;
 }
 
+/* Long labels that don't fit slide gently instead of being cut off. Pauses at
+   both ends so the text is readable, and respects reduced-motion. */
+@keyframes cc-marquee {
+  0%, 18% { transform: translateX(0); }
+  50%, 68% { transform: translateX(var(--marquee-dx, 0)); }
+  100% { transform: translateX(0); }
+}
+.cc-marquee {
+  animation: cc-marquee 7s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-marquee { animation: none; }
+}
+.fx-off .cc-marquee { animation: none; }
+
 /* Text selection matches the theme accent. */
 ::selection {
   background: rgb(var(--c-accent) / 0.45);

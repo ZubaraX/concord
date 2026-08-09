@@ -10,6 +10,7 @@ import { uploadFile } from "../api/client";
 import { maybeCompressImage } from "../lib/imageCompress";
 import type { PresenceStatus } from "../types";
 import { XIcon } from "./Icons";
+import Marquee from "./Marquee";
 import Avatar from "./Avatar";
 import VoiceSettings from "./VoiceSettings";
 import SecuritySettings from "./SecuritySettings";
@@ -374,6 +375,7 @@ function SettingsShell<T extends string>({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const [hovered, setHovered] = useState<T | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -383,7 +385,7 @@ function SettingsShell<T extends string>({
   return createPortal(
     <div className="fixed inset-0 z-[60] flex flex-col bg-discord-bg sm:flex-row">
       {/* Sections */}
-      <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-black/30 bg-discord-sidebar p-2 sm:w-56 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r sm:p-3 sm:pt-6">
+      <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-black/30 bg-discord-sidebar p-2 text-[15px] sm:w-60 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r sm:p-3 sm:pt-6 xl:w-72">
         <div className="hidden px-2 pb-2 text-[11px] font-bold uppercase tracking-wide text-discord-faint sm:block">
           {title}
         </div>
@@ -391,23 +393,29 @@ function SettingsShell<T extends string>({
           <button
             key={n.id}
             onClick={() => setTab(n.id)}
-            className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded px-3 py-2 text-left text-sm font-medium transition sm:w-full ${
+            onMouseEnter={() => setHovered(n.id)}
+            onMouseLeave={() => setHovered(null)}
+            className={`flex shrink-0 items-center gap-2 rounded px-3 py-2 text-left text-sm font-medium transition sm:w-full sm:min-w-0 ${
               tab === n.id
                 ? "bg-discord-active text-white"
                 : "text-discord-muted hover:bg-discord-hover hover:text-discord-text"
             }`}
           >
-            <span className="text-base leading-none">{n.icon}</span>
-            {n.label}
+            <span className="shrink-0 text-base leading-none">{n.icon}</span>
+            {/* Long names ("Приложение / Подключение") scroll instead of being cut. */}
+            <Marquee active={tab === n.id || hovered === n.id} className="min-w-0 flex-1 max-sm:w-auto max-sm:flex-none">
+              {n.label}
+            </Marquee>
           </button>
         ))}
       </nav>
 
-      {/* Content */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10 sm:py-10">
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <h2 className="text-xl font-bold text-white">{title}</h2>
+      {/* Content — fills the window instead of hugging a narrow column, and
+          scales its type up a notch on big screens. */}
+      <div className="min-h-0 flex-1 overflow-y-auto text-[15px] xl:text-base">
+        <div className="mx-auto w-full max-w-6xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10 sm:py-10">
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <h2 className="text-2xl font-bold text-white xl:text-3xl">{title}</h2>
             <button
               onClick={onClose}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-discord-faint/40 text-discord-muted transition hover:bg-discord-hover hover:text-white"

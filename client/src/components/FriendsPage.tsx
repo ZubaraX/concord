@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { useUI } from "../store/ui";
 import { joinVoice } from "../lib/voice";
 import { useI18n } from "../lib/i18n";
-import { UsersIcon, MessageIcon, PhoneIcon, CheckIcon, XIcon, MenuIcon, UserPlusIcon } from "./Icons";
+import { UsersIcon, UserIcon, MessageIcon, PhoneIcon, CheckIcon, XIcon, MenuIcon, UserPlusIcon } from "./Icons";
 import type { Friend, User } from "../types";
 import Avatar from "./Avatar";
 
@@ -19,7 +19,7 @@ export default function FriendsPage({ onOpenNav }: { onOpenNav?: () => void }) {
   // offline friends and read as an empty list when nobody was online).
   const [tab, setTab] = useState<Tab>("all");
   const qc = useQueryClient();
-  const { openDM } = useUI();
+  const { openDM, openProfile } = useUI();
   const { t } = useI18n();
 
   const { data: friends = [] } = useQuery<Friend[]>({ queryKey: ["friends"], queryFn: () => api("/api/friends") });
@@ -82,13 +82,22 @@ export default function FriendsPage({ onOpenNav }: { onOpenNav?: () => void }) {
             </h3>
             {list.map((f) => (
               <div key={f.id} className="flex items-center gap-3 rounded px-2 py-2 hover:bg-discord-hover">
-                <Avatar user={f.user} size={36} status={f.user.status ?? "OFFLINE"} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium text-white">{f.user.displayName ?? f.user.username}</div>
-                  <div className="truncate text-xs text-discord-muted">
-                    {f.user.username}#{f.user.discriminator}
+                {/* The row itself opens the profile — the action buttons stop
+                    the click so they still do their own thing. */}
+                <button
+                  onClick={() => openProfile(f.user.id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  title={t("profile.viewProfile")}
+                >
+                  <Avatar user={f.user} size={36} status={f.user.status ?? "OFFLINE"} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium text-white">{f.user.displayName ?? f.user.username}</div>
+                    <div className="truncate text-xs text-discord-muted">
+                      {f.user.username}#{f.user.discriminator}
+                    </div>
                   </div>
-                </div>
+                </button>
+                <IconBtn title={t("profile.viewProfile")} onClick={() => openProfile(f.user.id)}><UserIcon size={16} /></IconBtn>
                 <IconBtn title={t("profile.message")} onClick={() => openOrCreateDM(f.user.id)}><MessageIcon size={16} /></IconBtn>
                 <IconBtn title={t("voice.call")} onClick={() => openOrCreateDM(f.user.id, true)}><PhoneIcon size={16} /></IconBtn>
               </div>
